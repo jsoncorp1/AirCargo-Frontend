@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import {
   BoxCubeIcon,
+  BoxIcon,
   CalenderIcon,
   ChevronDownIcon,
   GridIcon,
+  GroupIcon,
   HorizontaLDots,
   ListIcon,
   PageIcon,
@@ -16,6 +18,7 @@ import {
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
+  UserIcon,
 } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 
@@ -41,6 +44,21 @@ const navItems: NavItem[] = [
     icon: <UserCircleIcon />,
     name: "User Profile",
     path: "/profile",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Empresas",
+    path: "/empresas",
+  },
+  {
+    icon: <UserIcon />,
+    name: "Usuarios Proveedores",
+    path: "/usuarios-proveedores",
+  },
+  {
+    icon: <BoxIcon />,
+    name: "Artículos",
+    path: "/articulos",
   },
 
   {

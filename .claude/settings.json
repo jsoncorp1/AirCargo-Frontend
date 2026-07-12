@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(chromium-cli --help)",
+      "Bash(npx --version)",
+      "Bash(node -e \"console.log\\(process.platform\\)\")",
+      "Bash(timeout 45 bash -c 'until curl -sf http://localhost:3000 >/dev/null 2>&1; do sleep 1; done')",
+      "Bash(curl -s \"http://localhost:3000/usuarios-proveedores?empresa=emp-1\" -o /tmp/filtered.html -w \"HTTP %{http_code}\\\\n\")",
+      "Read(//tmp/**)",
+      "Bash(grep -o 'Luis Fernández\\\\|Karen Sánchez\\\\|Diego Ramos\\\\|María Gutiérrez\\\\|Andrés Quispe' /tmp/filtered.html | sort | uniq -c)",
+      "Bash(grep -o 'Luis Fernández\\\\|María Gutiérrez\\\\|Sofía Herrera\\\\|Franco Alvarado' /tmp/page.html | sort -u *)",
+      "Bash(npx --yes playwright@1 --version)",
+      "Bash(ls \"C:\\\\Users\\\\Microcom\\\\AppData\\\\Local\\\\ms-playwright\" 2>&1)",
+      "Read(//c/Users/Microcom/AppData/Local/ms-playwright/**)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Microcom\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--airCargo-aircargoFront\\\\efd5b235-3b9a-41c2-950c-e877367b956b\\\\scratchpad\\\\pwtmp\")",
+      "Bash(npm install *)",
+      "Bash(cp \"C:\\\\Users\\\\Microcom\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--airCargo-aircargoFront\\\\efd5b235-3b9a-41c2-950c-e877367b956b\\\\scratchpad\\\\pw-check.mjs\" \"C:\\\\Users\\\\Microcom\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--airCargo-aircargoFront\\\\efd5b235-3b9a-41c2-950c-e877367b956b\\\\scratchpad\\\\pwtmp\\\\pw-check.mjs\")",
+      "Bash(node pw-check.mjs)"
+    ]
+  }
+}
