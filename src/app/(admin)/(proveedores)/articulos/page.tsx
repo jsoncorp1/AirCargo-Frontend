@@ -1,24 +1,19 @@
-import React, { Suspense } from "react";
+import React from "react";
 import { Metadata } from "next";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import ComponentCard from "@/components/common/ComponentCard";
-import ArticulosTable from "@/components/proveedores/articulos/ArticulosTable";
+import ArticulosTable from "@/components/articulos/ArticulosTable";
 
 export const metadata: Metadata = {
-  title: "Artículos | AirCargo",
-  description: "Gestión de artículos de las empresas proveedoras",
+  title: "Catálogo de Artículos | AirCargo",
+  description: "Gestión del inventario de artículos de los proveedores",
 };
 
 export default function ArticulosPage() {
   return (
     <div>
-      <PageBreadcrumb pageTitle="Artículos" />
+      <PageBreadcrumb pageTitle="Catálogo de Artículos" />
       <div className="space-y-6">
-        <ComponentCard title="Artículos">
-          <Suspense fallback={null}>
-            <ArticulosTable />
-          </Suspense>
-        </ComponentCard>
+        <ArticulosTable />
       </div>
     </div>
   );

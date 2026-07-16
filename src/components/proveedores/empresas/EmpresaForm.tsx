@@ -19,7 +19,7 @@ interface EmpresaFormProps {
 
 const emptyData: EmpresaFormData = {
   nombre: "",
-  ruc: "",
+  nit: "",
   contacto: "",
   telefono: "",
   email: "",
@@ -59,9 +59,9 @@ export default function EmpresaForm({ mode, initialData, onSubmit, onCancel }: E
           <div>
             <Label>RUC / NIT</Label>
             <Input
-              defaultValue={data.ruc}
+              defaultValue={data.nit}
               disabled={readOnly}
-              onChange={(e) => set("ruc", e.target.value)}
+              onChange={(e) => set("nit", e.target.value)}
             />
           </div>
           <div>

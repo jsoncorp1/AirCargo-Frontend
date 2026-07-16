@@ -55,7 +55,7 @@ export default function EmpresasTable() {
     const term = searchTerm.trim().toLowerCase();
     return empresas.filter((e) => {
       const matchesSearch =
-        !term || e.nombre.toLowerCase().includes(term) || e.ruc.toLowerCase().includes(term);
+        !term || e.nombre.toLowerCase().includes(term) || e.nit.toLowerCase().includes(term);
       const matchesEstado = !estadoFilter || e.estado === estadoFilter;
       return matchesSearch && matchesEstado;
     });
@@ -174,7 +174,7 @@ export default function EmpresasTable() {
                       <AvatarText name={empresa.nombre} />
                       <div>
                         <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{empresa.nombre}</p>
-                        <span className="text-gray-500 text-theme-xs dark:text-gray-400">RUC {empresa.ruc}</span>
+                        <span className="text-gray-500 text-theme-xs dark:text-gray-400">NIT {empresa.nit}</span>
                       </div>
                     </div>
                   </TableCell>

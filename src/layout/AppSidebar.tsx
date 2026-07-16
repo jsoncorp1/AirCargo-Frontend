@@ -60,6 +60,16 @@ const navItems: NavItem[] = [
     name: "Artículos",
     path: "/articulos",
   },
+  {
+    icon: <UserCircleIcon />,
+    name: "Conductores",
+    path: "/conductores",
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Envíos",
+    path: "/envios",
+  },
 
   {
     name: "Forms",

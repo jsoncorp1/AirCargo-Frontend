@@ -1,41 +1,30 @@
 import type { Metadata } from "next";
-import { EcommerceMetrics } from "@/components/ecommerce/EcommerceMetrics";
 import React from "react";
-import MonthlyTarget from "@/components/ecommerce/MonthlyTarget";
-import MonthlySalesChart from "@/components/ecommerce/MonthlySalesChart";
-import StatisticsChart from "@/components/ecommerce/StatisticsChart";
-import RecentOrders from "@/components/ecommerce/RecentOrders";
-import DemographicCard from "@/components/ecommerce/DemographicCard";
+import { LogisticsMetrics } from "@/components/dashboard/LogisticsMetrics";
+import EnviosPorMesChart from "@/components/dashboard/EnviosPorMesChart";
+import EnviosRecientes from "@/components/dashboard/EnviosRecientes";
 
 export const metadata: Metadata = {
-  title:
-    "Next.js E-commerce Dashboard | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js Home for TailAdmin Dashboard Template",
+  title: "Dashboard Logístico | AirCargo",
+  description: "Torre de Control de Envíos",
 };
 
-export default function Ecommerce() {
+export default function Dashboard() {
   return (
     <div className="grid grid-cols-12 gap-4 md:gap-6">
-      <div className="col-span-12 space-y-6 xl:col-span-7">
-        <EcommerceMetrics />
-
-        <MonthlySalesChart />
-      </div>
-
-      <div className="col-span-12 xl:col-span-5">
-        <MonthlyTarget />
-      </div>
-
+      {/* Top Metrics */}
       <div className="col-span-12">
-        <StatisticsChart />
+        <LogisticsMetrics />
       </div>
 
-      <div className="col-span-12 xl:col-span-5">
-        <DemographicCard />
-      </div>
-
+      {/* Chart */}
       <div className="col-span-12 xl:col-span-7">
-        <RecentOrders />
+        <EnviosPorMesChart />
+      </div>
+
+      {/* Recent Orders / Envíos */}
+      <div className="col-span-12 xl:col-span-5">
+        <EnviosRecientes />
       </div>
     </div>
   );
