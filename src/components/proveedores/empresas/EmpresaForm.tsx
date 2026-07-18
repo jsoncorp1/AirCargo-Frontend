@@ -6,26 +6,20 @@ import Input from "@/components/form/input/InputField";
 import TextArea from "@/components/form/input/TextArea";
 import Switch from "@/components/form/switch/Switch";
 import Button from "@/components/ui/button/Button";
-import { Empresa, EmpresaEstado } from "@/data/mock/empresas";
+import { Supplier } from "@/services/supplierService";
 
-export type EmpresaFormData = Omit<Empresa, "id" | "fechaRegistro">;
+export type EmpresaFormData = Omit<Supplier, "id">;
 
 interface EmpresaFormProps {
   mode: "create" | "edit" | "view";
-  initialData: Empresa | null;
+  initialData: Supplier | null;
   onSubmit: (data: EmpresaFormData) => void;
   onCancel: () => void;
 }
 
 const emptyData: EmpresaFormData = {
-  nombre: "",
-  nit: "",
-  contacto: "",
-  telefono: "",
-  email: "",
-  ciudad: "",
-  direccion: "",
-  estado: "Activo",
+  name: "",
+  description: "",
 };
 
 export default function EmpresaForm({ mode, initialData, onSubmit, onCancel }: EmpresaFormProps) {
@@ -47,76 +41,27 @@ export default function EmpresaForm({ mode, initialData, onSubmit, onCancel }: E
         {titles[mode]}
       </h4>
       <div className="space-y-5">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5">
           <div>
-            <Label>Nombre de la empresa</Label>
+            <Label required>Nombre de la empresa</Label>
             <Input
-              defaultValue={data.nombre}
+              defaultValue={data.name}
               disabled={readOnly}
-              onChange={(e) => set("nombre", e.target.value)}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Ej. Acme Corp"
             />
           </div>
           <div>
-            <Label>RUC / NIT</Label>
-            <Input
-              defaultValue={data.nit}
+            <Label>Descripción</Label>
+            <TextArea
+              placeholder="Descripción o información adicional"
+              value={data.description ?? ""}
               disabled={readOnly}
-              onChange={(e) => set("nit", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Persona de contacto</Label>
-            <Input
-              defaultValue={data.contacto}
-              disabled={readOnly}
-              onChange={(e) => set("contacto", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Teléfono</Label>
-            <Input
-              defaultValue={data.telefono}
-              disabled={readOnly}
-              onChange={(e) => set("telefono", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Email</Label>
-            <Input
-              type="email"
-              defaultValue={data.email}
-              disabled={readOnly}
-              onChange={(e) => set("email", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Ciudad</Label>
-            <Input
-              defaultValue={data.ciudad}
-              disabled={readOnly}
-              onChange={(e) => set("ciudad", e.target.value)}
+              onChange={(value) => set("description", value)}
+              rows={4}
             />
           </div>
         </div>
-
-        <div>
-          <Label>Dirección</Label>
-          <TextArea
-            placeholder="Dirección de la empresa"
-            value={data.direccion}
-            disabled={readOnly}
-            onChange={(value) => set("direccion", value)}
-            rows={2}
-          />
-        </div>
-
-        <Switch
-          key={`estado-${data.estado}`}
-          label="Empresa activa"
-          defaultChecked={data.estado === "Activo"}
-          disabled={readOnly}
-          onChange={(checked) => set("estado", (checked ? "Activo" : "Inactivo") as EmpresaEstado)}
-        />
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 dark:border-gray-800">
           <Button variant="outline" onClick={onCancel}>

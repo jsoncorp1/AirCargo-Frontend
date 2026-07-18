@@ -20,46 +20,70 @@ import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
 import Pagination from "@/components/tables/Pagination";
 import StatCard from "@/components/proveedores/StatCard";
 import { useModal } from "@/hooks/useModal";
-import { useProveedoresData } from "@/context/ProveedoresContext";
+import { Supplier, supplierService, CreateSupplierRequest, UpdateSupplierRequest } from "@/services/supplierService";
+import { articleService } from "@/services/articleService";
+import { Empresa } from "@/data/mock/empresas"; // we will keep it for compatibility if needed, but we will mostly use Supplier
 import EmpresaForm, { EmpresaFormData } from "./EmpresaForm";
-import { Empresa } from "@/data/mock/empresas";
-import { GroupIcon, CheckCircleIcon, CloseLineIcon, PlusIcon, MoreDotIcon, EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
+import { GroupIcon, CheckCircleIcon, CloseLineIcon, PlusIcon, MoreDotIcon, EyeIcon, PencilIcon, TrashBinIcon, PlugInIcon } from "@/icons";
+import { useToast } from "@/context/ToastContext";
 
 const PAGE_SIZE = 8;
 
 export default function EmpresasTable() {
-  const { empresas, usuarios, articulos, addEmpresa, updateEmpresa, deleteEmpresa } =
-    useProveedoresData();
+  const { showToast } = useToast();
+  const [empresas, setEmpresas] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [articulosPorEmpresa, setArticulosPorEmpresa] = useState<Record<string, number>>({});
 
   const [searchTerm, setSearchTerm] = useState("");
   const [estadoFilter, setEstadoFilter] = useState<"" | "Activo" | "Inactivo">("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formMode, setFormMode] = useState<"create" | "edit" | "view">("create");
-  const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
-  const [empresaToDelete, setEmpresaToDelete] = useState<Empresa | null>(null);
+  const [selectedEmpresa, setSelectedEmpresa] = useState<Supplier | null>(null);
+  const [empresaToDelete, setEmpresaToDelete] = useState<Supplier | null>(null);
   const [openMenuRowId, setOpenMenuRowId] = useState<string | null>(null);
 
   const formModal = useModal();
   const deleteModal = useModal();
 
-  const counts = useMemo(() => {
-    const usuariosPorEmpresa: Record<string, number> = {};
-    const articulosPorEmpresa: Record<string, number> = {};
-    for (const u of usuarios) usuariosPorEmpresa[u.empresaId] = (usuariosPorEmpresa[u.empresaId] ?? 0) + 1;
-    for (const a of articulos) articulosPorEmpresa[a.empresaId] = (articulosPorEmpresa[a.empresaId] ?? 0) + 1;
-    return { usuariosPorEmpresa, articulosPorEmpresa };
-  }, [usuarios, articulos]);
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const [respSuppliers, respArticles] = await Promise.all([
+        supplierService.getSuppliers(),
+        articleService.getArticles(1, 1000)
+      ]);
+      setEmpresas(respSuppliers.data);
+
+      const counts: Record<string, number> = {};
+      respArticles.data.forEach(art => {
+        if (art.supplierId) {
+          counts[art.supplierId] = (counts[art.supplierId] || 0) + 1;
+        }
+      });
+      setArticulosPorEmpresa(counts);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    fetchAll();
+  }, []);
+
+
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return empresas.filter((e) => {
       const matchesSearch =
-        !term || e.nombre.toLowerCase().includes(term) || e.nit.toLowerCase().includes(term);
-      const matchesEstado = !estadoFilter || e.estado === estadoFilter;
+        !term || e.name.toLowerCase().includes(term) || (e.description && e.description.toLowerCase().includes(term));
+      const matchesEstado = true; // suppliers in backend don't have status yet
       return matchesSearch && matchesEstado;
     });
-  }, [empresas, searchTerm, estadoFilter]);
+  }, [empresas, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -67,8 +91,8 @@ export default function EmpresasTable() {
   const stats = useMemo(
     () => ({
       total: empresas.length,
-      activas: empresas.filter((e) => e.estado === "Activo").length,
-      inactivas: empresas.filter((e) => e.estado === "Inactivo").length,
+      activas: empresas.length,
+      inactivas: 0,
     }),
     [empresas]
   );
@@ -78,35 +102,50 @@ export default function EmpresasTable() {
     setSelectedEmpresa(null);
     formModal.openModal();
   };
-  const openEdit = (empresa: Empresa) => {
+  const openEdit = (empresa: Supplier) => {
     setFormMode("edit");
     setSelectedEmpresa(empresa);
     setOpenMenuRowId(null);
     formModal.openModal();
   };
-  const openView = (empresa: Empresa) => {
+  const openView = (empresa: Supplier) => {
     setFormMode("view");
     setSelectedEmpresa(empresa);
     setOpenMenuRowId(null);
     formModal.openModal();
   };
-  const askDelete = (empresa: Empresa) => {
+  const askDelete = (empresa: Supplier) => {
     setEmpresaToDelete(empresa);
     setOpenMenuRowId(null);
     deleteModal.openModal();
   };
 
-  const handleSubmit = (data: EmpresaFormData) => {
-    if (formMode === "create") {
-      addEmpresa(data);
-    } else if (formMode === "edit" && selectedEmpresa) {
-      updateEmpresa(selectedEmpresa.id, data);
+  const handleSubmit = async (data: EmpresaFormData) => {
+    try {
+      if (formMode === "create") {
+        await supplierService.createSupplier({ name: data.name, description: data.description });
+        showToast("success", "Empresa creada", `La empresa "${data.name}" se creó exitosamente.`);
+      } else if (formMode === "edit" && selectedEmpresa) {
+        await supplierService.updateSupplier(selectedEmpresa.id, { name: data.name, description: data.description });
+        showToast("success", "Empresa actualizada", `La empresa "${data.name}" se actualizó exitosamente.`);
+      }
+      await fetchAll();
+      formModal.closeModal();
+    } catch (e: any) {
+      showToast("error", "Error al guardar", e.message || "Ocurrió un error al guardar la empresa.");
     }
-    formModal.closeModal();
   };
 
-  const confirmDelete = () => {
-    if (empresaToDelete) deleteEmpresa(empresaToDelete.id);
+  const confirmDelete = async () => {
+    if (empresaToDelete) {
+      try {
+        await supplierService.deleteSupplier(empresaToDelete.id);
+        showToast("success", "Empresa eliminada", `La empresa fue eliminada.`);
+        await fetchAll();
+      } catch (e: any) {
+        showToast("error", "Error al eliminar", e.message || "No se pudo eliminar la empresa.");
+      }
+    }
     deleteModal.closeModal();
     setEmpresaToDelete(null);
   };
@@ -171,66 +210,69 @@ export default function EmpresasTable() {
                 <TableRow key={empresa.id}>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <AvatarText name={empresa.nombre} />
+                      <AvatarText name={empresa.name} />
                       <div>
-                        <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{empresa.nombre}</p>
-                        <span className="text-gray-500 text-theme-xs dark:text-gray-400">NIT {empresa.nit}</span>
+                        <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{empresa.name}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="px-5 py-4">
-                    <p className="text-gray-700 text-theme-sm dark:text-gray-300">{empresa.contacto}</p>
-                    <span className="text-gray-500 text-theme-xs dark:text-gray-400">{empresa.telefono}</span>
+                    <p className="text-gray-700 text-theme-sm dark:text-gray-300">{empresa.description || "-"}</p>
                   </TableCell>
-                  <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{empresa.ciudad}</TableCell>
+                  <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">-</TableCell>
                   <TableCell className="px-5 py-4">
-                    <Link
-                      href={`/usuarios-proveedores?empresa=${empresa.id}`}
-                      className="text-theme-sm font-medium text-brand-500 hover:underline"
-                    >
-                      {counts.usuariosPorEmpresa[empresa.id] ?? 0}{" "}
-                      {(counts.usuariosPorEmpresa[empresa.id] ?? 0) === 1 ? "usuario" : "usuarios"}
-                    </Link>
+                    <span className="text-gray-500 text-theme-sm dark:text-gray-400">N/A</span>
                   </TableCell>
                   <TableCell className="px-5 py-4">
-                    <Link
-                      href={`/articulos?empresa=${empresa.id}`}
-                      className="text-theme-sm font-medium text-brand-500 hover:underline"
-                    >
-                      {counts.articulosPorEmpresa[empresa.id] ?? 0}{" "}
-                      {(counts.articulosPorEmpresa[empresa.id] ?? 0) === 1 ? "artículo" : "artículos"}
-                    </Link>
+                    <span className="text-theme-sm font-medium text-brand-500">{articulosPorEmpresa[empresa.id] || 0}</span>
                   </TableCell>
                   <TableCell className="px-5 py-4">
-                    <Badge size="sm" color={empresa.estado === "Activo" ? "success" : "light"}>
-                      {empresa.estado}
+                    <Badge size="sm" color="success">
+                      Activo
                     </Badge>
                   </TableCell>
-                  <TableCell className="relative px-5 py-4 text-right">
-                    <button
-                      className="dropdown-toggle text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
-                      onClick={() => setOpenMenuRowId(openMenuRowId === empresa.id ? null : empresa.id)}
-                    >
-                      <MoreDotIcon />
-                    </button>
-                    <Dropdown isOpen={openMenuRowId === empresa.id} onClose={() => setOpenMenuRowId(null)} className="w-40 p-2">
-                      <DropdownItem onItemClick={() => openView(empresa)} className="flex items-center gap-2 rounded-lg">
+                  <TableCell className="px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openView(empresa)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
+                        title="Ver"
+                      >
                         <EyeIcon className="size-4" /> Ver
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => openEdit(empresa)} className="flex items-center gap-2 rounded-lg">
+                      </button>
+                      <button
+                        onClick={() => openEdit(empresa)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                        title="Editar"
+                      >
                         <PencilIcon className="size-4" /> Editar
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => askDelete(empresa)} className="flex items-center gap-2 rounded-lg text-error-500">
+                      </button>
+                      <button
+                        onClick={() => askDelete(empresa)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                        title="Eliminar"
+                      >
                         <TrashBinIcon className="size-4" /> Eliminar
-                      </DropdownItem>
-                    </Dropdown>
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {paginated.length === 0 && (
+              {paginated.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell className="px-5 py-8 text-center text-gray-500 text-theme-sm dark:text-gray-400">
-                    No se encontraron empresas con los filtros aplicados.
+                  <TableCell colSpan={7} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <PlugInIcon className="size-10 opacity-30" />
+                      <p className="text-sm font-medium">No se encontraron empresas</p>
+                      <p className="text-xs">Ajusta los filtros o crea una nueva empresa.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {loading && paginated.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="px-5 py-8 text-center text-gray-500 text-theme-sm dark:text-gray-400">
+                    Cargando...
                   </TableCell>
                 </TableRow>
               )}
@@ -256,7 +298,7 @@ export default function EmpresasTable() {
         <div className="p-6">
           <h4 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white/90">Eliminar empresa</h4>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            ¿Eliminar <strong>{empresaToDelete?.nombre}</strong>? Se eliminarán también sus usuarios y artículos asociados. Esta acción no se puede deshacer.
+            ¿Eliminar <strong>{empresaToDelete?.name}</strong>? Se eliminarán también sus usuarios y artículos asociados. Esta acción no se puede deshacer.
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={deleteModal.closeModal}>Cancelar</Button>

@@ -21,16 +21,13 @@ export default function AuthLayout({
               {/* <!-- ===== Common Grid Shape Start ===== --> */}
               <GridShape />
               <div className="flex flex-col items-center max-w-xs">
-                <Link href="/" className="block mb-4">
-                  <Image
-                    width={231}
-                    height={48}
-                    src="./images/logo/auth-logo.svg"
-                    alt="Logo"
-                  />
+                <Link href="/" className="block mb-6">
+                  <span className="text-4xl font-bold text-white">
+                    Air<span className="text-brand-300">Cargo</span>
+                  </span>
                 </Link>
                 <p className="text-center text-gray-400 dark:text-white/60">
-                  Free and Open-Source Tailwind CSS Admin Dashboard Template
+                  Plataforma de gestión de envíos y proveedores
                 </p>
               </div>
             </div>

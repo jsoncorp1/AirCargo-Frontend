@@ -16,10 +16,12 @@ import StatCard from "@/components/proveedores/StatCard";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
+import { Article, ArticlesPaginatedResponse, CreateArticleRequest, UpdateArticleRequest } from "@/services/articleService";
+// import { Supplier } from "@/services/supplierService"; // removed unused import
+import { articleService } from "@/services/articleService";
+import { Supplier, supplierService } from "@/services/supplierService";
 import { Articulo } from "@/data/mock/articulos";
 import { Empresa } from "@/data/mock/empresas";
-import { articuloService } from "@/services/articuloService";
-import { empresaService } from "@/services/empresaService";
 import {
   BoxCubeIcon,
   CheckCircleIcon,
@@ -29,16 +31,19 @@ import {
   EyeIcon,
   PencilIcon,
   TrashBinIcon,
+  PlugInIcon,
 } from "@/icons";
 import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
+import { useToast } from "@/context/ToastContext";
 
 const PAGE_SIZE = 10;
 
 export default function ArticulosTable() {
+  const { showToast } = useToast();
   const [articulos, setArticulos] = useState<Articulo[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresas, setEmpresas] = useState<Supplier[]>([]);
   const [empresaMap, setEmpresaMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
@@ -58,14 +63,27 @@ export default function ArticulosTable() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [artsData, empsData] = await Promise.all([
-      articuloService.getArticulos(),
-      empresaService.getEmpresas(),
+    const [articlesResp, suppliersResp] = await Promise.all([
+      articleService.getArticles(),
+      supplierService.getSuppliers(),
     ]);
-    setArticulos(artsData);
-    setEmpresas(empsData);
+    // Map backend Articles to UI Articulo shape
+    const mappedArticulos = articlesResp.data.map((a) => ({
+      id: a.id,
+      nombre: a.name,
+      sku: a.sku,
+      categoria: "Otros", // The backend Article type doesn't have category yet
+      empresaId: a.supplierId,
+      precio: a.price,
+      stock: a.count,
+      estado: "Activo" as "Activo", // Default status as backend doesn't provide one
+      fechaRegistro: a.fechaRegistro ?? "",
+    }));
+    setArticulos(mappedArticulos);
+    const suppliers = suppliersResp.data;
+    setEmpresas(suppliers);
     const map: Record<string, string> = {};
-    empsData.forEach(e => (map[e.id] = e.nombre));
+    suppliers.forEach((e) => (map[e.id] = e.name));
     setEmpresaMap(map);
     setLoading(false);
   }, []);
@@ -114,19 +132,30 @@ export default function ArticulosTable() {
   const askDelete = (art: Articulo) => { setArticuloToDelete(art); setOpenMenuRowId(null); deleteModal.openModal(); };
 
   const handleSubmit = async (data: ArticuloFormData) => {
-    if (formMode === "create") {
-      await articuloService.createArticulo(data);
-    } else if (formMode === "edit" && selectedArticulo) {
-      await articuloService.updateArticulo(selectedArticulo.id, data);
+    try {
+      if (formMode === "create") {
+        await articleService.createArticle(data);
+        showToast("success", "Artículo creado", `El artículo "${data.name}" se creó exitosamente.`);
+      } else if (formMode === "edit" && selectedArticulo) {
+        await articleService.updateArticle(selectedArticulo.id, data);
+        showToast("success", "Artículo actualizado", `El artículo "${data.name}" se actualizó exitosamente.`);
+      }
+      await fetchAll();
+      formModal.closeModal();
+    } catch (e: any) {
+      showToast("error", "Error al guardar", e.message || "Ocurrió un error al guardar el artículo.");
     }
-    await fetchAll();
-    formModal.closeModal();
   };
 
   const confirmDelete = async () => {
     if (articuloToDelete) {
-      await articuloService.deleteArticulo(articuloToDelete.id);
-      await fetchAll();
+      try {
+        await articleService.deleteArticle(articuloToDelete.id);
+        showToast("success", "Artículo eliminado", `El artículo "${articuloToDelete.nombre}" fue eliminado.`);
+        await fetchAll();
+      } catch (e: any) {
+        showToast("error", "Error al eliminar", e.message || "No se pudo eliminar el artículo.");
+      }
     }
     deleteModal.closeModal();
     setArticuloToDelete(null);
@@ -174,7 +203,7 @@ export default function ArticulosTable() {
           <div className="w-52">
             <SelectField
               placeholder="Todas las empresas"
-              options={empresas.map(e => ({ value: e.id, label: e.nombre }))}
+              options={empresas.map(e => ({ value: e.id, label: e.name }))}
               onChange={(val) => { setEmpresaFilter(val); setCurrentPage(1); }}
             />
           </div>
@@ -220,7 +249,7 @@ export default function ArticulosTable() {
                     </span>
                   </TableCell>
                   <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                    Bs {art.precio}
+                    {new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(art.precio)}
                   </TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-2">
@@ -233,31 +262,48 @@ export default function ArticulosTable() {
                       {art.estado}
                     </Badge>
                   </TableCell>
-                  <TableCell className="relative px-5 py-4 text-right">
-                    <button
-                      className="dropdown-toggle text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
-                      onClick={() => setOpenMenuRowId(openMenuRowId === art.id ? null : art.id)}
-                    >
-                      <MoreDotIcon />
-                    </button>
-                    <Dropdown isOpen={openMenuRowId === art.id} onClose={() => setOpenMenuRowId(null)} className="w-40 p-2 z-10">
-                      <DropdownItem onItemClick={() => openView(art)} className="flex items-center gap-2 rounded-lg">
+                  <TableCell className="px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openView(art)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
+                        title="Ver"
+                      >
                         <EyeIcon className="size-4" /> Ver
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => openEdit(art)} className="flex items-center gap-2 rounded-lg">
+                      </button>
+                      <button
+                        onClick={() => openEdit(art)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                        title="Editar"
+                      >
                         <PencilIcon className="size-4" /> Editar
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => askDelete(art)} className="flex items-center gap-2 rounded-lg text-error-500">
+                      </button>
+                      <button
+                        onClick={() => askDelete(art)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                        title="Eliminar"
+                      >
                         <TrashBinIcon className="size-4" /> Eliminar
-                      </DropdownItem>
-                    </Dropdown>
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {paginated.length === 0 && (
+              {paginated.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell className="px-5 py-10 text-center text-gray-500 text-theme-sm dark:text-gray-400">
-                    No se encontraron artículos con los filtros aplicados.
+                  <TableCell colSpan={7} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <PlugInIcon className="size-10 opacity-30" />
+                      <p className="text-sm font-medium">No se encontraron artículos</p>
+                      <p className="text-xs">Ajusta los filtros o crea un nuevo artículo.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {loading && paginated.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="px-5 py-8 text-center text-gray-500 text-theme-sm dark:text-gray-400">
+                    Cargando...
                   </TableCell>
                 </TableRow>
               )}
@@ -274,7 +320,13 @@ export default function ArticulosTable() {
         <ArticuloForm
           key={selectedArticulo?.id ?? "new"}
           mode={formMode}
-          initialData={selectedArticulo}
+          initialData={selectedArticulo ? {
+            name: selectedArticulo.nombre,
+            sku: selectedArticulo.sku,
+            count: selectedArticulo.stock,
+            price: selectedArticulo.precio,
+            supplierId: selectedArticulo.empresaId,
+          } : null}
           empresas={empresas}
           onSubmit={handleSubmit}
           onCancel={formModal.closeModal}

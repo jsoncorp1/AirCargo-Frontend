@@ -200,24 +200,30 @@ export default function ConductoresTable() {
                       {conductor.estado}
                     </Badge>
                   </TableCell>
-                  <TableCell className="relative px-5 py-4 text-right">
-                    <button
-                      className="dropdown-toggle text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
-                      onClick={() => setOpenMenuRowId(openMenuRowId === conductor.id ? null : conductor.id)}
-                    >
-                      <MoreDotIcon />
-                    </button>
-                    <Dropdown isOpen={openMenuRowId === conductor.id} onClose={() => setOpenMenuRowId(null)} className="w-40 p-2 z-10">
-                      <DropdownItem onItemClick={() => openView(conductor)} className="flex items-center gap-2 rounded-lg">
+                  <TableCell className="px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openView(conductor)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
+                        title="Ver"
+                      >
                         <EyeIcon className="size-4" /> Ver
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => openEdit(conductor)} className="flex items-center gap-2 rounded-lg">
+                      </button>
+                      <button
+                        onClick={() => openEdit(conductor)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                        title="Editar"
+                      >
                         <PencilIcon className="size-4" /> Editar
-                      </DropdownItem>
-                      <DropdownItem onItemClick={() => askDelete(conductor)} className="flex items-center gap-2 rounded-lg text-error-500">
+                      </button>
+                      <button
+                        onClick={() => askDelete(conductor)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                        title="Eliminar"
+                      >
                         <TrashBinIcon className="size-4" /> Eliminar
-                      </DropdownItem>
-                    </Dropdown>
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

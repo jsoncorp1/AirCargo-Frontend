@@ -47,7 +47,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
       <div className="space-y-5">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
-            <Label>Nombre Completo</Label>
+            <Label required>Nombre Completo</Label>
             <Input
               defaultValue={data.nombre}
               disabled={readOnly}
@@ -56,7 +56,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
             />
           </div>
           <div>
-            <Label>Teléfono</Label>
+            <Label required>Teléfono</Label>
             <Input
               defaultValue={data.telefono}
               disabled={readOnly}
@@ -65,7 +65,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
             />
           </div>
           <div>
-            <Label>Licencia de Conducir</Label>
+            <Label required>Licencia de Conducir</Label>
             <Input
               defaultValue={data.licencia}
               disabled={readOnly}
@@ -74,7 +74,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
             />
           </div>
           <div>
-            <Label>Placa del Vehículo</Label>
+            <Label required>Placa del Vehículo</Label>
             <Input
               defaultValue={data.placaVehiculo}
               disabled={readOnly}
@@ -83,7 +83,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
             />
           </div>
           <div>
-            <Label>Tipo de Vehículo</Label>
+            <Label required>Tipo de Vehículo</Label>
             <Input
               defaultValue={data.tipoVehiculo}
               disabled={readOnly}
@@ -103,7 +103,7 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
         </div>
 
         <div>
-          <Label>Estado del Conductor</Label>
+          <Label required>Estado del Conductor</Label>
           <SelectField
             placeholder="Seleccione el estado"
             options={[
