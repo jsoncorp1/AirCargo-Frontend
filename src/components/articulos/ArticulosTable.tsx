@@ -167,9 +167,6 @@ export default function ArticulosTable() {
     return <Badge size="sm" color="success">Disponible</Badge>;
   };
 
-  if (loading && articulos.length === 0) {
-    return <div className="p-10 text-center text-gray-500">Cargando inventario...</div>;
-  }
 
   return (
     <div className="space-y-5">
@@ -234,7 +231,37 @@ export default function ArticulosTable() {
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {paginated.map((art) => (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="px-5 py-4">
+                      <div className="space-y-2">
+                        <div className="h-4 w-36 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
+                        <div className="h-3 w-20 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-5 py-4"><div className="h-4 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
+                    <TableCell className="px-5 py-4"><div className="h-5 w-16 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
+                    <TableCell className="px-5 py-4"><div className="h-4 w-20 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
+                    <TableCell className="px-5 py-4"><div className="h-4 w-12 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
+                    <TableCell className="px-5 py-4"><div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" /></TableCell>
+                    <TableCell className="px-5 py-4"><div className="ml-auto h-7 w-44 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" /></TableCell>
+                  </TableRow>
+                ))
+              ) : paginated.length === 0 ? (
+                <TableRow>
+                  <TableCell className="px-5 py-16 text-center" colSpan={7}>
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
+                        <BoxCubeIcon className="size-7 text-gray-400" />
+                      </div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No se encontraron artículos</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Ajusta los filtros o registra un nuevo artículo.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+              paginated.map((art) => (
                 <TableRow key={art.id}>
                   <TableCell className="px-5 py-4">
                     <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{art.nombre}</p>
@@ -288,24 +315,7 @@ export default function ArticulosTable() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-              {paginated.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell colSpan={7} className="px-5 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2 text-gray-400">
-                      <PlugInIcon className="size-10 opacity-30" />
-                      <p className="text-sm font-medium">No se encontraron artículos</p>
-                      <p className="text-xs">Ajusta los filtros o crea un nuevo artículo.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-              {loading && paginated.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="px-5 py-8 text-center text-gray-500 text-theme-sm dark:text-gray-400">
-                    Cargando...
-                  </TableCell>
-                </TableRow>
+              ))
               )}
             </TableBody>
           </Table>

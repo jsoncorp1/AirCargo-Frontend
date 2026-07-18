@@ -85,13 +85,13 @@ export default function ArticuloForm({ mode, initialData, empresas, onSubmit, on
             />
           </div>
           <div>
-            <Label required>Stock Disponible</Label>
+            <Label>Stock Disponible</Label>
             <Input
               type="number"
-              defaultValue={String(data.count)}
-              disabled={readOnly}
-              onChange={(e) => set("count", parseInt(e.target.value) || 0)}
+              value={data.count}
+              disabled={true}
               placeholder="0"
+              hint="El stock se controla automáticamente mediante Recepciones de artículos."
             />
           </div>
         </div>

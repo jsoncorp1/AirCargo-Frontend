@@ -17,6 +17,7 @@ import {
   PieChartIcon,
   PlugInIcon,
   TableIcon,
+  TaskIcon,
   UserCircleIcon,
   UserIcon,
 } from "../icons/index";
@@ -48,6 +49,11 @@ const navItems: NavItem[] = [
     icon: <BoxIcon />,
     name: "Artículos",
     path: "/articulos",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Recepciones",
+    path: "/recepciones",
   },
   {
     icon: <UserCircleIcon />,

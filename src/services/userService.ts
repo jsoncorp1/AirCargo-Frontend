@@ -25,6 +25,7 @@ export interface CreateUserRequest {
   phoneNumber?: string;
   dni?: string;
   roleId: string;
+  supplierId?: string;
 }
 
 export const userService = {
