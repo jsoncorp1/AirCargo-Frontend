@@ -170,13 +170,13 @@ export default function ShipmentsTable({
                   >
                     <TableCell className="px-5 py-4">
                       <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        {shipment.numeroGuia}
+                        {shipment.waybillNumber}
                       </span>
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
                       <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {shipment.clienteNombreCompleto}
+                        {shipment.clientFullName}
                       </p>
                     </TableCell>
 
@@ -268,8 +268,8 @@ export default function ShipmentsTable({
           </p>
           {selectedBasic && (
             <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40">
-              <p className="font-medium text-gray-800 dark:text-white">Guía: {selectedBasic.numeroGuia}</p>
-              <p className="text-gray-500">Cliente: {selectedBasic.clienteNombreCompleto}</p>
+              <p className="font-medium text-gray-800 dark:text-white">Guía: {selectedBasic.waybillNumber}</p>
+              <p className="text-gray-500">Cliente: {selectedBasic.clientFullName}</p>
             </div>
           )}
           <p className="mb-6 text-xs text-error-500">Esta acción no se puede deshacer.</p>

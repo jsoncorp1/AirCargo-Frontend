@@ -15,10 +15,10 @@ export interface ShipmentDetailItem {
 export interface Shipment {
   id: string;
   orderDeliveryId: string;
-  numeroGuia: string;
-  clienteNombreCompleto: string;
-  clienteDireccion: string;
-  departamento: string;
+  waybillNumber: string;
+  clientFullName: string;
+  clientAddress: string;
+  department: string;
   totalWeight: number;
   shippingPrice: number;
   createdAt: string;
@@ -28,8 +28,8 @@ export interface Shipment {
 export interface ShipmentPaginatedItem {
   id: string;
   orderDeliveryId: string;
-  numeroGuia: string;
-  clienteNombreCompleto: string;
+  waybillNumber: string;
+  clientFullName: string;
   totalWeight: number;
   shippingPrice: number;
   createdAt: string;

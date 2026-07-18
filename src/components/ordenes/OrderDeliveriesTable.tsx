@@ -23,6 +23,11 @@ import { useAuth } from "@/context/AuthContext";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const DELIVERY_TYPE_LABELS: Record<string, string> = {
+  Prepaid: "Pagada",
+  CashOnDelivery: "Por Pagar",
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FormMode = "create" | "edit" | "view";
@@ -186,10 +191,10 @@ export default function OrderDeliveriesTable({
                   >
                     <TableCell className="px-5 py-4">
                       <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {order.clienteNombreCompleto}
+                        {order.clientFullName}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.departamento}
+                        {order.department}
                       </p>
                     </TableCell>
 
@@ -200,8 +205,8 @@ export default function OrderDeliveriesTable({
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.tipoEntrega === "Pagada" ? "success" : "warning"}>
-                        {order.tipoEntrega}
+                      <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
+                        {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
                       </Badge>
                     </TableCell>
 
@@ -297,8 +302,8 @@ export default function OrderDeliveriesTable({
           </p>
           {selectedOrderBasic && (
             <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40">
-              <p className="font-medium text-gray-800 dark:text-white">Cliente: {selectedOrderBasic.clienteNombreCompleto}</p>
-              <p className="text-gray-500">Destino: {selectedOrderBasic.departamento}</p>
+              <p className="font-medium text-gray-800 dark:text-white">Cliente: {selectedOrderBasic.clientFullName}</p>
+              <p className="text-gray-500">Destino: {selectedOrderBasic.department}</p>
             </div>
           )}
           <p className="mb-6 text-xs text-error-500">Esta acción no se puede deshacer y puede afectar los envíos asociados.</p>

@@ -17,11 +17,11 @@ export interface OrderDelivery {
   supplierName: string;
   userId: string;
   userName: string;
-  departamento: string;
-  clientePhone: string;
-  clienteNombreCompleto: string;
-  clienteDireccion: string;
-  tipoEntrega: string;
+  department: string;
+  clientPhone: string;
+  clientFullName: string;
+  clientAddress: string;
+  deliveryType: string;
   totalPrice: number;
   isAttended: boolean;
   createdAt: string;
@@ -32,9 +32,9 @@ export interface OrderDeliveryPaginatedItem {
   id: string;
   supplierId: string;
   supplierName: string;
-  clienteNombreCompleto: string;
-  departamento: string;
-  tipoEntrega: string;
+  clientFullName: string;
+  department: string;
+  deliveryType: string;
   totalPrice: number;
   isAttended: boolean;
   createdAt: string;
@@ -56,20 +56,20 @@ export interface CreateOrderDeliveryLineRequest {
 
 export interface CreateOrderDeliveryRequest {
   userId: string;
-  departamento: number;
-  clientePhone: string;
-  clienteNombreCompleto: string;
-  clienteDireccion: string;
-  tipoEntrega: number;
+  department: number;
+  clientPhone: string;
+  clientFullName: string;
+  clientAddress: string;
+  deliveryType: number;
   lines: CreateOrderDeliveryLineRequest[];
 }
 
 export interface UpdateOrderDeliveryRequest {
-  departamento: number;
-  clientePhone: string;
-  clienteNombreCompleto: string;
-  clienteDireccion: string;
-  tipoEntrega: number;
+  department: number;
+  clientPhone: string;
+  clientFullName: string;
+  clientAddress: string;
+  deliveryType: number;
   lines: CreateOrderDeliveryLineRequest[];
 }
 

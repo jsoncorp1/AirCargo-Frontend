@@ -186,7 +186,6 @@ export default function ArticulosTable() {
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Artículo</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Empresa</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Categoría</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Precio</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Stock</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
@@ -208,7 +207,6 @@ export default function ArticulosTable() {
                     </div>
                   </TableCell>
                   <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{empresaNombre(articulo.empresaId)}</TableCell>
-                  <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{articulo.categoria}</TableCell>
                   <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">{currency.format(articulo.precio)}</TableCell>
                   <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
                     {articulo.stock === 0 ? (

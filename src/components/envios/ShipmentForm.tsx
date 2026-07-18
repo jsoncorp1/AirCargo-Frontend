@@ -78,8 +78,8 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
     try {
       const shipment = await shipmentService.getShipmentById(shipmentId);
       setOrderDeliveryId(shipment.orderDeliveryId);
-      setGuia(shipment.numeroGuia);
-      setCliente(shipment.clienteNombreCompleto);
+      setGuia(shipment.waybillNumber);
+      setCliente(shipment.clientFullName);
       setLines(shipment.details.map(d => ({
         orderDeliveryDetailId: d.orderDeliveryDetailId, // Reusing field for mapping
         shipmentDetailId: d.id,
@@ -182,7 +182,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
                   <option value="" disabled>Seleccione una orden</option>
                   {orders.map((o) => (
                     <option key={o.id} value={o.id}>
-                      [{new Date(o.createdAt).toLocaleDateString()}] {o.clienteNombreCompleto} - {o.departamento}
+                      [{new Date(o.createdAt).toLocaleDateString()}] {o.clientFullName} - {o.department}
                     </option>
                   ))}
                 </select>

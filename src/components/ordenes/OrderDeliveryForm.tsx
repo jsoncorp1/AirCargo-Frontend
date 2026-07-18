@@ -16,7 +16,10 @@ import {
 } from "@/services/orderDeliveryService";
 
 const DEPARTAMENTOS = ["Beni", "Chuquisaca", "Cochabamba", "La Paz", "Oruro", "Pando", "Potosí", "Santa Cruz", "Tarija"];
-const TIPOS_ENTREGA = ["Pagada", "Por Pagar"];
+const TIPOS_ENTREGA = [
+  { value: "Prepaid", label: "Pagada" },
+  { value: "CashOnDelivery", label: "Por Pagar" },
+];
 
 interface OrderDeliveryFormProps {
   mode: "create" | "edit" | "view";
@@ -40,11 +43,11 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
   // Form State
   const [userId, setUserId] = useState<string>("");
-  const [departamento, setDepartamento] = useState<number>(0);
-  const [clienteNombreCompleto, setClienteNombreCompleto] = useState("");
-  const [clientePhone, setClientePhone] = useState("");
-  const [clienteDireccion, setClienteDireccion] = useState("");
-  const [tipoEntrega, setTipoEntrega] = useState<number>(0);
+  const [department, setDepartment] = useState<number>(0);
+  const [clientFullName, setClientFullName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
+  const [deliveryType, setDeliveryType] = useState<number>(0);
   const [lines, setLines] = useState<CreateOrderDeliveryLineRequest[]>([]);
 
   const fetchDependencies = useCallback(async () => {
@@ -69,11 +72,11 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
     try {
       const order = await orderDeliveryService.getDeliveryById(orderId);
       setUserId(order.userId);
-      setDepartamento(DEPARTAMENTOS.indexOf(order.departamento));
-      setClienteNombreCompleto(order.clienteNombreCompleto);
-      setClientePhone(order.clientePhone);
-      setClienteDireccion(order.clienteDireccion);
-      setTipoEntrega(TIPOS_ENTREGA.indexOf(order.tipoEntrega));
+      setDepartment(DEPARTAMENTOS.indexOf(order.department));
+      setClientFullName(order.clientFullName);
+      setClientPhone(order.clientPhone);
+      setClientAddress(order.clientAddress);
+      setDeliveryType(TIPOS_ENTREGA.findIndex((t) => t.value === order.deliveryType));
       setLines(order.details.map(d => ({
         articleId: d.articleId,
         quantity: d.quantity,
@@ -138,11 +141,11 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       if (mode === "create") {
         const payload: CreateOrderDeliveryRequest = {
           userId,
-          departamento,
-          clienteNombreCompleto,
-          clientePhone,
-          clienteDireccion,
-          tipoEntrega,
+          department,
+          clientFullName,
+          clientPhone,
+          clientAddress,
+          deliveryType,
           lines,
         };
         await orderDeliveryService.createDelivery(payload);
@@ -150,11 +153,11 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       } else if (mode === "edit" && orderId) {
         // Update endpoint uses same DTO shape without userId
         await orderDeliveryService.updateDelivery(orderId, {
-          departamento,
-          clienteNombreCompleto,
-          clientePhone,
-          clienteDireccion,
-          tipoEntrega,
+          department,
+          clientFullName,
+          clientPhone,
+          clientAddress,
+          deliveryType,
           lines,
         });
         showToast("success", "Orden actualizada", "La orden de entrega fue actualizada exitosamente.");
@@ -195,8 +198,8 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
               <div className="sm:col-span-2">
                 <Label required>Nombre del Cliente</Label>
                 <Input
-                  value={clienteNombreCompleto}
-                  onChange={(e) => setClienteNombreCompleto(e.target.value)}
+                  value={clientFullName}
+                  onChange={(e) => setClientFullName(e.target.value)}
                   disabled={readOnly}
                   required
                   placeholder="Ej. Juan Pérez"
@@ -206,8 +209,8 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
               <div>
                 <Label required>Teléfono</Label>
                 <Input
-                  value={clientePhone}
-                  onChange={(e) => setClientePhone(e.target.value)}
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
                   disabled={readOnly}
                   required
                   placeholder="Ej. +591 7XXXXXXX"
@@ -218,8 +221,8 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                 <Label required>Departamento de Destino</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
-                  value={departamento}
-                  onChange={(e) => setDepartamento(Number(e.target.value))}
+                  value={department}
+                  onChange={(e) => setDepartment(Number(e.target.value))}
                   disabled={readOnly}
                   required
                 >
@@ -232,8 +235,8 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
               <div className="sm:col-span-2">
                 <Label required>Dirección Exacta</Label>
                 <Input
-                  value={clienteDireccion}
-                  onChange={(e) => setClienteDireccion(e.target.value)}
+                  value={clientAddress}
+                  onChange={(e) => setClientAddress(e.target.value)}
                   disabled={readOnly}
                   required
                   placeholder="Ej. Av. Principal #123, Zona Sur"
@@ -269,13 +272,13 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                 <Label required>Tipo de Entrega</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
-                  value={tipoEntrega}
-                  onChange={(e) => setTipoEntrega(Number(e.target.value))}
+                  value={deliveryType}
+                  onChange={(e) => setDeliveryType(Number(e.target.value))}
                   disabled={readOnly}
                   required
                 >
                   {TIPOS_ENTREGA.map((tipo, idx) => (
-                    <option key={idx} value={idx}>{tipo}</option>
+                    <option key={idx} value={idx}>{tipo.label}</option>
                   ))}
                 </select>
               </div>

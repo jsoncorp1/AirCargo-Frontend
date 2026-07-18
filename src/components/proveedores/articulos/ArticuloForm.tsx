@@ -31,7 +31,6 @@ export default function ArticuloForm({
   const emptyData: ArticuloFormData = {
     nombre: "",
     sku: "",
-    categoria: "",
     empresaId: defaultEmpresaId ?? empresas[0]?.id ?? "",
     precio: 0,
     stock: 0,
@@ -70,14 +69,6 @@ export default function ArticuloForm({
               defaultValue={data.sku}
               disabled={readOnly}
               onChange={(e) => set("sku", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Categoría</Label>
-            <Input
-              defaultValue={data.categoria}
-              disabled={readOnly}
-              onChange={(e) => set("categoria", e.target.value)}
             />
           </div>
           <div>
