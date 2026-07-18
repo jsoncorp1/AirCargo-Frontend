@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <GroupIcon />,
-    name: "Empresas",
+    name: "Proveedores",
     path: "/empresas",
   },
   {
@@ -54,6 +54,11 @@ const navItems: NavItem[] = [
     icon: <TaskIcon />,
     name: "Recepciones",
     path: "/recepciones",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Órdenes de Entrega",
+    path: "/ordenes",
   },
   {
     icon: <UserCircleIcon />,

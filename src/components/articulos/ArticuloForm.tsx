@@ -14,21 +14,21 @@ export type ArticuloFormData = CreateArticleRequest;
 interface ArticuloFormProps {
   mode: "create" | "edit" | "view";
   initialData: CreateArticleRequest | null;
-  empresas: Supplier[];
+  proveedores: Supplier[];
   onSubmit: (data: ArticuloFormData) => void;
   onCancel: () => void;
 }
 
-const emptyData = (empresas: Supplier[]): ArticuloFormData => ({
+const emptyData = (proveedores: Supplier[]): ArticuloFormData => ({
   name: "",
   sku: "",
-  supplierId: empresas[0]?.id ?? "",
+  supplierId: proveedores[0]?.id ?? "",
   price: 0,
   count: 0,
 });
 
-export default function ArticuloForm({ mode, initialData, empresas, onSubmit, onCancel }: ArticuloFormProps) {
-  const [data, setData] = useState<ArticuloFormData>(initialData ?? emptyData(empresas));
+export default function ArticuloForm({ mode, initialData, proveedores, onSubmit, onCancel }: ArticuloFormProps) {
+  const [data, setData] = useState<ArticuloFormData>(initialData ?? emptyData(proveedores));
   const readOnly = mode === "view";
 
   const set = <K extends keyof ArticuloFormData>(key: K, value: ArticuloFormData[K]) =>
@@ -66,10 +66,10 @@ export default function ArticuloForm({ mode, initialData, empresas, onSubmit, on
             />
           </div>
           <div className="sm:col-span-2">
-            <Label required>Empresa Proveedora</Label>
+            <Label required>Proveedor</Label>
             <SelectField
-              placeholder="Seleccione la empresa"
-              options={empresas.map(e => ({ value: e.id, label: e.name }))}
+              placeholder="Seleccione el proveedor"
+              options={proveedores.map(e => ({ value: e.id, label: e.name }))}
               defaultValue={data.supplierId}
               onChange={(value) => set("supplierId", value)}
             />
@@ -84,16 +84,18 @@ export default function ArticuloForm({ mode, initialData, empresas, onSubmit, on
               placeholder="0.00"
             />
           </div>
-          <div>
-            <Label>Stock Disponible</Label>
-            <Input
-              type="number"
-              value={data.count}
-              disabled={true}
-              placeholder="0"
-              hint="El stock se controla automáticamente mediante Recepciones de artículos."
-            />
-          </div>
+          {mode !== "create" && (
+            <div>
+              <Label>Stock Disponible</Label>
+              <Input
+                type="number"
+                value={data.count}
+                disabled={true}
+                placeholder="0"
+                hint="El stock se controla automáticamente mediante Recepciones de artículos."
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 dark:border-gray-800">

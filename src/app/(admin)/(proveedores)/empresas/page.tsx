@@ -5,16 +5,16 @@ import ComponentCard from "@/components/common/ComponentCard";
 import EmpresasTable from "@/components/proveedores/empresas/EmpresasTable";
 
 export const metadata: Metadata = {
-  title: "Empresas Proveedoras | AirCargo",
-  description: "Gestión de empresas proveedoras",
+  title: "Proveedores | AirCargo",
+  description: "Gestión de proveedores",
 };
 
 export default function EmpresasPage() {
   return (
     <div>
-      <PageBreadcrumb pageTitle="Empresas Proveedoras" />
+      <PageBreadcrumb pageTitle="Proveedores" />
       <div className="space-y-6">
-        <ComponentCard title="Empresas">
+        <ComponentCard title="Proveedores">
           <Suspense fallback={null}>
             <EmpresasTable />
           </Suspense>

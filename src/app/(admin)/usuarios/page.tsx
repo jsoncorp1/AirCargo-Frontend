@@ -207,7 +207,7 @@ export default function UsuariosPage() {
       if (!isProveedorRole) {
         delete payload.supplierId;
       } else if (!payload.supplierId) {
-        throw new Error("Debe seleccionar una empresa para este rol.");
+        throw new Error("Debe seleccionar un proveedor para este rol.");
       }
 
       if (modalMode === "create") {
@@ -523,9 +523,9 @@ export default function UsuariosPage() {
             {/* Supplier (conditional) */}
             {isProveedorRole && (
               <div className="rounded-xl border border-brand-100 bg-brand-50/50 p-4 dark:border-brand-800 dark:bg-brand-900/10">
-                <Label required>Empresa Proveedora</Label>
+                <Label required>Proveedor</Label>
                 <p className="mb-2 text-xs text-brand-600 dark:text-brand-400">
-                  Este rol requiere asociar al usuario con una empresa proveedora.
+                  Este rol requiere asociar al usuario con un proveedor.
                 </p>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -533,7 +533,7 @@ export default function UsuariosPage() {
                   onChange={(e: any) => setFormData({ ...formData, supplierId: e.target.value })}
                   required
                 >
-                  <option value="" disabled>Seleccione la empresa</option>
+                  <option value="" disabled>Seleccione el proveedor</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}

@@ -14,34 +14,29 @@ import SelectField from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
 import StatCard from "@/components/proveedores/StatCard";
 import { Modal } from "@/components/ui/modal";
-import { Dropdown } from "@/components/ui/dropdown/Dropdown";
-import { DropdownItem } from "@/components/ui/dropdown/DropdownItem";
-import { Article, ArticlesPaginatedResponse, CreateArticleRequest, UpdateArticleRequest } from "@/services/articleService";
-// import { Supplier } from "@/services/supplierService"; // removed unused import
 import { articleService } from "@/services/articleService";
 import { Supplier, supplierService } from "@/services/supplierService";
 import { Articulo } from "@/data/mock/articulos";
-import { Empresa } from "@/data/mock/empresas";
 import {
   BoxCubeIcon,
   CheckCircleIcon,
   CloseLineIcon,
   PlusIcon,
-  MoreDotIcon,
   EyeIcon,
   PencilIcon,
   TrashBinIcon,
-  PlugInIcon,
 } from "@/icons";
 import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 
 const PAGE_SIZE = 10;
 
 export default function ArticulosTable() {
   const { showToast } = useToast();
+  const { companyId, role } = useAuth();
   const [articulos, setArticulos] = useState<Articulo[]>([]);
   const [empresas, setEmpresas] = useState<Supplier[]>([]);
   const [empresaMap, setEmpresaMap] = useState<Record<string, string>>({});
@@ -50,21 +45,22 @@ export default function ArticulosTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [estadoFilter, setEstadoFilter] = useState<"" | "Activo" | "Inactivo">("");
   const [empresaFilter, setEmpresaFilter] = useState<string>("");
-  const [categoriaFilter, setCategoriaFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formMode, setFormMode] = useState<"create" | "edit" | "view">("create");
   const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
   const [articuloToDelete, setArticuloToDelete] = useState<Articulo | null>(null);
-  const [openMenuRowId, setOpenMenuRowId] = useState<string | null>(null);
 
   const formModal = useModal();
   const deleteModal = useModal();
+  const isCompanyUser = role?.toLowerCase() === "usuarioempresa";
+  const canManageArticles = !isCompanyUser;
+  const defaultArticleStatus: Articulo["estado"] = "Activo";
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const [articlesResp, suppliersResp] = await Promise.all([
-      articleService.getArticles(),
+      articleService.getArticles(1, 200, isCompanyUser ? companyId ?? undefined : undefined),
       supplierService.getSuppliers(),
     ]);
     // Map backend Articles to UI Articulo shape
@@ -72,11 +68,10 @@ export default function ArticulosTable() {
       id: a.id,
       nombre: a.name,
       sku: a.sku,
-      categoria: "Otros", // The backend Article type doesn't have category yet
       empresaId: a.supplierId,
       precio: a.price,
       stock: a.count,
-      estado: "Activo" as "Activo", // Default status as backend doesn't provide one
+      estado: defaultArticleStatus, // Default status as backend doesn't provide one
       fechaRegistro: a.fechaRegistro ?? "",
     }));
     setArticulos(mappedArticulos);
@@ -86,32 +81,26 @@ export default function ArticulosTable() {
     suppliers.forEach((e) => (map[e.id] = e.name));
     setEmpresaMap(map);
     setLoading(false);
-  }, []);
+  }, [companyId, isCompanyUser]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
   }, [fetchAll]);
 
-  const categorias = useMemo(
-    () => Array.from(new Set(articulos.map(a => a.categoria))).sort(),
-    [articulos]
-  );
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return articulos.filter((a) => {
       const matchesSearch =
-        !term ||
         a.nombre.toLowerCase().includes(term) ||
         a.sku.toLowerCase().includes(term) ||
-        a.categoria.toLowerCase().includes(term) ||
         (empresaMap[a.empresaId] || "").toLowerCase().includes(term);
       const matchesEstado = !estadoFilter || a.estado === estadoFilter;
       const matchesEmpresa = !empresaFilter || a.empresaId === empresaFilter;
-      const matchesCategoria = !categoriaFilter || a.categoria === categoriaFilter;
-      return matchesSearch && matchesEstado && matchesEmpresa && matchesCategoria;
+      return matchesSearch && matchesEstado && matchesEmpresa;
     });
-  }, [articulos, empresaMap, searchTerm, estadoFilter, empresaFilter, categoriaFilter]);
+  }, [articulos, empresaMap, searchTerm, estadoFilter, empresaFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -127,9 +116,9 @@ export default function ArticulosTable() {
 
   // Modal helpers
   const openCreate = () => { setFormMode("create"); setSelectedArticulo(null); formModal.openModal(); };
-  const openEdit = (art: Articulo) => { setFormMode("edit"); setSelectedArticulo(art); setOpenMenuRowId(null); formModal.openModal(); };
-  const openView = (art: Articulo) => { setFormMode("view"); setSelectedArticulo(art); setOpenMenuRowId(null); formModal.openModal(); };
-  const askDelete = (art: Articulo) => { setArticuloToDelete(art); setOpenMenuRowId(null); deleteModal.openModal(); };
+  const openEdit = (art: Articulo) => { setFormMode("edit"); setSelectedArticulo(art); formModal.openModal(); };
+  const openView = (art: Articulo) => { setFormMode("view"); setSelectedArticulo(art); formModal.openModal(); };
+  const askDelete = (art: Articulo) => { setArticuloToDelete(art); deleteModal.openModal(); };
 
   const handleSubmit = async (data: ArticuloFormData) => {
     try {
@@ -142,8 +131,8 @@ export default function ArticulosTable() {
       }
       await fetchAll();
       formModal.closeModal();
-    } catch (e: any) {
-      showToast("error", "Error al guardar", e.message || "Ocurrió un error al guardar el artículo.");
+    } catch (error: unknown) {
+      showToast("error", "Error al guardar", error instanceof Error ? error.message : "Ocurrió un error al guardar el artículo.");
     }
   };
 
@@ -153,8 +142,8 @@ export default function ArticulosTable() {
         await articleService.deleteArticle(articuloToDelete.id);
         showToast("success", "Artículo eliminado", `El artículo "${articuloToDelete.nombre}" fue eliminado.`);
         await fetchAll();
-      } catch (e: any) {
-        showToast("error", "Error al eliminar", e.message || "No se pudo eliminar el artículo.");
+      } catch (error: unknown) {
+        showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar el artículo.");
       }
     }
     deleteModal.closeModal();
@@ -182,7 +171,7 @@ export default function ArticulosTable() {
         <div className="flex flex-1 flex-wrap gap-3">
           <div className="min-w-[200px] flex-1">
             <Input
-              placeholder="Buscar por nombre, SKU, empresa..."
+              placeholder="Buscar por artículo, sku, proveedor..."
               defaultValue={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
@@ -199,20 +188,13 @@ export default function ArticulosTable() {
           </div>
           <div className="w-52">
             <SelectField
-              placeholder="Todas las empresas"
+              placeholder="Todos los proveedores"
               options={empresas.map(e => ({ value: e.id, label: e.name }))}
               onChange={(val) => { setEmpresaFilter(val); setCurrentPage(1); }}
             />
           </div>
-          <div className="w-44">
-            <SelectField
-              placeholder="Categorías"
-              options={categorias.map(c => ({ value: c, label: c }))}
-              onChange={(val) => { setCategoriaFilter(val); setCurrentPage(1); }}
-            />
-          </div>
         </div>
-        <Button startIcon={<PlusIcon />} onClick={openCreate}>Nuevo Artículo</Button>
+        {canManageArticles && <Button startIcon={<PlusIcon />} onClick={openCreate}>Nuevo Artículo</Button>}
       </div>
 
       {/* TABLA */}
@@ -222,8 +204,7 @@ export default function ArticulosTable() {
             <TableHeader className="border-gray-100 dark:border-gray-800 border-y">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Artículo</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Empresa</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Categoría</TableCell>
+                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Proveedor</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Precio</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Stock</TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
@@ -241,7 +222,6 @@ export default function ArticulosTable() {
                       </div>
                     </TableCell>
                     <TableCell className="px-5 py-4"><div className="h-4 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
-                    <TableCell className="px-5 py-4"><div className="h-5 w-16 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
                     <TableCell className="px-5 py-4"><div className="h-4 w-20 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
                     <TableCell className="px-5 py-4"><div className="h-4 w-12 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
                     <TableCell className="px-5 py-4"><div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" /></TableCell>
@@ -250,7 +230,7 @@ export default function ArticulosTable() {
                 ))
               ) : paginated.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={7}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -269,11 +249,6 @@ export default function ArticulosTable() {
                   </TableCell>
                   <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">
                     {empresaMap[art.empresaId] || "–"}
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                      {art.categoria}
-                    </span>
                   </TableCell>
                   <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
                     {new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(art.precio)}
@@ -298,20 +273,24 @@ export default function ArticulosTable() {
                       >
                         <EyeIcon className="size-4" /> Ver
                       </button>
-                      <button
-                        onClick={() => openEdit(art)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                        title="Editar"
-                      >
-                        <PencilIcon className="size-4" /> Editar
-                      </button>
-                      <button
-                        onClick={() => askDelete(art)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                        title="Eliminar"
-                      >
-                        <TrashBinIcon className="size-4" /> Eliminar
-                      </button>
+                      {canManageArticles && (
+                        <>
+                          <button
+                            onClick={() => openEdit(art)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                            title="Editar"
+                          >
+                            <PencilIcon className="size-4" /> Editar
+                          </button>
+                          <button
+                            onClick={() => askDelete(art)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                            title="Eliminar"
+                          >
+                            <TrashBinIcon className="size-4" /> Eliminar
+                          </button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -337,7 +316,7 @@ export default function ArticulosTable() {
             price: selectedArticulo.precio,
             supplierId: selectedArticulo.empresaId,
           } : null}
-          empresas={empresas}
+          proveedores={empresas}
           onSubmit={handleSubmit}
           onCancel={formModal.closeModal}
         />

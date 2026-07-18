@@ -4,8 +4,14 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useRouter } from 'next/navigation';
 import { authService, LoginRequest, LoginResponse } from '../services/authService';
 
+interface AuthSessionUser extends LoginResponse {
+  companyId: string | null;
+}
+
 interface AuthContextType {
-  user: LoginResponse | null;
+  user: AuthSessionUser | null;
+  companyId: string | null;
+  role: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
@@ -14,8 +20,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+};
+
+const buildSessionUser = (response: LoginResponse): AuthSessionUser => {
+  const payload = decodeTokenPayload(response.token);
+  const companyId =
+    (payload?.companyId as string | undefined) ||
+    (payload?.supplierId as string | undefined) ||
+    (payload?.empresaId as string | undefined) ||
+    null;
+
+  return {
+    ...response,
+    companyId,
+  };
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<LoginResponse | null>(null);
+  const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -26,8 +59,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     if (savedToken && savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
+        const parsedUser = JSON.parse(savedUser) as LoginResponse;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setUser(buildSessionUser({ ...parsedUser, token: savedToken }));
+      } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -38,9 +73,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (data: LoginRequest) => {
     try {
       const response = await authService.login(data);
+      const sessionUser = buildSessionUser(response);
       localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response));
-      setUser(response);
+      localStorage.setItem('user', JSON.stringify(sessionUser));
+      setUser(sessionUser);
       router.push('/');
     } catch (error) {
       throw error;
@@ -55,7 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, companyId: user?.companyId ?? null, role: user?.role ?? null, isAuthenticated: !!user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
