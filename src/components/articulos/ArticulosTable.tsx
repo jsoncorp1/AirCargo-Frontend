@@ -12,15 +12,12 @@ import Badge from "@/components/ui/badge/Badge";
 import Input from "@/components/form/input/InputField";
 import SelectField from "@/components/form/Select";
 import Pagination from "@/components/tables/Pagination";
-import StatCard from "@/components/proveedores/StatCard";
 import { Modal } from "@/components/ui/modal";
-import { articleService } from "@/services/articleService";
+import { articleService, Article } from "@/services/articleService";
 import { Supplier, supplierService } from "@/services/supplierService";
 import { Articulo } from "@/data/mock/articulos";
 import {
   BoxCubeIcon,
-  CheckCircleIcon,
-  CloseLineIcon,
   PlusIcon,
   EyeIcon,
   PencilIcon,
@@ -30,22 +27,46 @@ import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
 import { useToast } from "@/context/ToastContext";
-import { useAuth } from "@/context/AuthContext";
 
-const PAGE_SIZE = 10;
+const DEFAULT_PER_PAGE = 10;
+// El backend no soporta búsqueda de texto ni filtro de estado como query params (solo supplierId);
+// mientras alguno de esos dos filtros esté activo se trae un lote más grande y se filtra en cliente.
+const SEARCH_BATCH_SIZE = 200;
+
+function mapArticulo(a: Article): Articulo {
+  return {
+    id: a.id,
+    nombre: a.name,
+    sku: a.sku,
+    empresaId: a.supplierId,
+    precio: a.price,
+    stock: a.count,
+    estado: "Activo", // Default status as backend doesn't provide one
+    fechaRegistro: a.fechaRegistro ?? "",
+  };
+}
 
 export default function ArticulosTable() {
   const { showToast } = useToast();
-  const { companyId, role } = useAuth();
-  const [articulos, setArticulos] = useState<Articulo[]>([]);
+
+  // Página real del servidor: se usa cuando no hay búsqueda ni filtro de estado activos
+  // (el filtro por proveedor sí lo soporta el backend, así que se aplica en ambos modos).
+  const [pageArticulos, setPageArticulos] = useState<Articulo[]>([]);
+  const [pageTotalPages, setPageTotalPages] = useState(1);
+  const [pageLoading, setPageLoading] = useState(true);
+  // Lote grande para búsqueda/estado.
+  const [batchArticulos, setBatchArticulos] = useState<Articulo[]>([]);
+  const [batchLoading, setBatchLoading] = useState(true);
+
   const [empresas, setEmpresas] = useState<Supplier[]>([]);
   const [empresaMap, setEmpresaMap] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [estadoFilter, setEstadoFilter] = useState<"" | "Activo" | "Inactivo">("");
   const [empresaFilter, setEmpresaFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+  const [filterResetKey, setFilterResetKey] = useState(0);
 
   const [formMode, setFormMode] = useState<"create" | "edit" | "view">("create");
   const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
@@ -53,66 +74,87 @@ export default function ArticulosTable() {
 
   const formModal = useModal();
   const deleteModal = useModal();
-  const isCompanyUser = role?.toLowerCase() === "usuarioempresa";
-  const canManageArticles = !isCompanyUser;
-  const defaultArticleStatus: Articulo["estado"] = "Activo";
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    const [articlesResp, suppliersResp] = await Promise.all([
-      articleService.getArticles(1, 200, isCompanyUser ? companyId ?? undefined : undefined),
-      supplierService.getSuppliers(),
-    ]);
-    // Map backend Articles to UI Articulo shape
-    const mappedArticulos = articlesResp.data.map((a) => ({
-      id: a.id,
-      nombre: a.name,
-      sku: a.sku,
-      empresaId: a.supplierId,
-      precio: a.price,
-      stock: a.count,
-      estado: defaultArticleStatus, // Default status as backend doesn't provide one
-      fechaRegistro: a.fechaRegistro ?? "",
-    }));
-    setArticulos(mappedArticulos);
-    const suppliers = suppliersResp.data;
-    setEmpresas(suppliers);
+  const isFiltering = Boolean(searchTerm.trim()) || Boolean(estadoFilter);
+
+  const fetchPage = useCallback(async (page: number, supplierId: string) => {
+    setPageLoading(true);
+    const resp = await articleService.getArticles(page, perPage, supplierId || undefined);
+    setPageArticulos(resp.data.map(mapArticulo));
+    setPageTotalPages(resp.totalPages);
+    setPageLoading(false);
+  }, [perPage]);
+
+  const fetchBatch = useCallback(async (supplierId: string) => {
+    setBatchLoading(true);
+    const resp = await articleService.getArticles(1, SEARCH_BATCH_SIZE, supplierId || undefined);
+    setBatchArticulos(resp.data.map(mapArticulo));
+    setBatchLoading(false);
+  }, []);
+
+  const fetchSuppliers = useCallback(async () => {
+    const resp = await supplierService.getSuppliers(1, SEARCH_BATCH_SIZE);
+    setEmpresas(resp.data);
     const map: Record<string, string> = {};
-    suppliers.forEach((e) => (map[e.id] = e.name));
+    resp.data.forEach((e) => (map[e.id] = e.name));
     setEmpresaMap(map);
-    setLoading(false);
-  }, [companyId, isCompanyUser]);
+  }, []);
+
+  const fetchAll = useCallback(() => {
+    fetchPage(currentPage, empresaFilter);
+    fetchBatch(empresaFilter);
+    fetchSuppliers();
+  }, [fetchPage, fetchBatch, fetchSuppliers, currentPage, empresaFilter]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchAll();
-  }, [fetchAll]);
+    fetchPage(currentPage, empresaFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, empresaFilter, perPage]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchBatch(empresaFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaFilter]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchSuppliers();
+  }, [fetchSuppliers]);
+
+  // Volver a la página 1 al activar/cambiar un filtro o el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, estadoFilter, empresaFilter, perPage]);
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return articulos.filter((a) => {
+    return batchArticulos.filter((a) => {
       const matchesSearch =
         a.nombre.toLowerCase().includes(term) ||
         a.sku.toLowerCase().includes(term) ||
         (empresaMap[a.empresaId] || "").toLowerCase().includes(term);
       const matchesEstado = !estadoFilter || a.estado === estadoFilter;
-      const matchesEmpresa = !empresaFilter || a.empresaId === empresaFilter;
-      return matchesSearch && matchesEstado && matchesEmpresa;
+      return matchesSearch && matchesEstado;
     });
-  }, [articulos, empresaMap, searchTerm, estadoFilter, empresaFilter]);
+  }, [batchArticulos, empresaMap, searchTerm, estadoFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const filteredTotalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const paginatedFiltered = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  const stats = useMemo(
-    () => ({
-      total: articulos.length,
-      activos: articulos.filter(a => a.estado === "Activo").length,
-      sinStock: articulos.filter(a => a.stock === 0).length,
-    }),
-    [articulos]
-  );
+  const paginated = isFiltering ? paginatedFiltered : pageArticulos;
+  const totalPages = isFiltering ? filteredTotalPages : pageTotalPages;
+  const loading = isFiltering ? batchLoading : pageLoading;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setEstadoFilter("");
+    setEmpresaFilter("");
+    setCurrentPage(1);
+    setFilterResetKey((k) => k + 1);
+  };
 
   // Modal helpers
   const openCreate = () => { setFormMode("create"); setSelectedArticulo(null); formModal.openModal(); };
@@ -129,7 +171,7 @@ export default function ArticulosTable() {
         await articleService.updateArticle(selectedArticulo.id, data);
         showToast("success", "Artículo actualizado", `El artículo "${data.name}" se actualizó exitosamente.`);
       }
-      await fetchAll();
+      fetchAll();
       formModal.closeModal();
     } catch (error: unknown) {
       showToast("error", "Error al guardar", error instanceof Error ? error.message : "Ocurrió un error al guardar el artículo.");
@@ -141,7 +183,7 @@ export default function ArticulosTable() {
       try {
         await articleService.deleteArticle(articuloToDelete.id);
         showToast("success", "Artículo eliminado", `El artículo "${articuloToDelete.nombre}" fue eliminado.`);
-        await fetchAll();
+        fetchAll();
       } catch (error: unknown) {
         showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar el artículo.");
       }
@@ -159,42 +201,40 @@ export default function ArticulosTable() {
 
   return (
     <div className="space-y-5">
-      {/* STATS */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={<BoxCubeIcon className="text-gray-800 size-6 dark:text-white/90" />} label="Total Artículos" value={stats.total} />
-        <StatCard icon={<CheckCircleIcon className="text-success-500 size-6" />} label="Artículos Activos" value={stats.activos} />
-        <StatCard icon={<CloseLineIcon className="text-error-500 size-6" />} label="Sin Stock" value={stats.sinStock} />
+      {/* ACCIÓN PRINCIPAL */}
+      <div className="flex justify-end">
+        <Button startIcon={<PlusIcon />} onClick={openCreate}>Nuevo Artículo</Button>
       </div>
 
       {/* FILTROS */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-wrap gap-3">
-          <div className="min-w-[200px] flex-1">
-            <Input
-              placeholder="Buscar por artículo, sku, proveedor..."
-              defaultValue={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            />
-          </div>
-          <div className="w-44">
-            <SelectField
-              placeholder="Todos los estados"
-              options={[
-                { value: "Activo", label: "Activo" },
-                { value: "Inactivo", label: "Inactivo" },
-              ]}
-              onChange={(val) => { setEstadoFilter(val as "" | "Activo" | "Inactivo"); setCurrentPage(1); }}
-            />
-          </div>
-          <div className="w-52">
-            <SelectField
-              placeholder="Todos los proveedores"
-              options={empresas.map(e => ({ value: e.id, label: e.name }))}
-              onChange={(val) => { setEmpresaFilter(val); setCurrentPage(1); }}
-            />
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-[200px] flex-1">
+          <Input
+            placeholder="Buscar por artículo, sku, proveedor..."
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          />
         </div>
-        {canManageArticles && <Button startIcon={<PlusIcon />} onClick={openCreate}>Nuevo Artículo</Button>}
+        <div className="w-full sm:w-44">
+          <SelectField
+            key={`estado-${filterResetKey}`}
+            placeholder="Todos los estados"
+            options={[
+              { value: "Activo", label: "Activo" },
+              { value: "Inactivo", label: "Inactivo" },
+            ]}
+            onChange={(val) => { setEstadoFilter(val as "" | "Activo" | "Inactivo"); setCurrentPage(1); }}
+          />
+        </div>
+        <div className="w-full sm:w-52">
+          <SelectField
+            key={`proveedor-${filterResetKey}`}
+            placeholder="Todos los proveedores"
+            options={empresas.map(e => ({ value: e.id, label: e.name }))}
+            onChange={(val) => { setEmpresaFilter(val); setCurrentPage(1); }}
+          />
+        </div>
+        <Button variant="outline" onClick={clearFilters}>Limpiar filtros</Button>
       </div>
 
       {/* TABLA */}
@@ -273,24 +313,20 @@ export default function ArticulosTable() {
                       >
                         <EyeIcon className="size-4" /> Ver
                       </button>
-                      {canManageArticles && (
-                        <>
-                          <button
-                            onClick={() => openEdit(art)}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                            title="Editar"
-                          >
-                            <PencilIcon className="size-4" /> Editar
-                          </button>
-                          <button
-                            onClick={() => askDelete(art)}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                            title="Eliminar"
-                          >
-                            <TrashBinIcon className="size-4" /> Eliminar
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => openEdit(art)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                        title="Editar"
+                      >
+                        <PencilIcon className="size-4" /> Editar
+                      </button>
+                      <button
+                        onClick={() => askDelete(art)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                        title="Eliminar"
+                      >
+                        <TrashBinIcon className="size-4" /> Eliminar
+                      </button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -300,7 +336,13 @@ export default function ArticulosTable() {
           </Table>
         </div>
         <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            perPage={perPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       </div>
 

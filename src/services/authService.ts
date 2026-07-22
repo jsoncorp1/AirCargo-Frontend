@@ -10,6 +10,9 @@ export interface LoginResponse {
   fullName: string;
   email: string;
   role: string;
+  roleId?: string;
+  supplierId?: string;
+  supplierName?: string;
   token: string;
 }
 

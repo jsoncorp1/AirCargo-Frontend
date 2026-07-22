@@ -4,19 +4,24 @@ import { apiClient } from './apiClient';
 
 export interface OrderDeliveryDetailItem {
   id: string;
-  articleId: string;
+  articleId: string | null;
   articleName: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
 }
 
+// "Corporate": orden ligada a un proveedor con artículos de inventario.
+// "Sporadic": orden de mostrador creada vía /shipments/sporadic, sin proveedor ni artículos de inventario.
+export type OrderType = "Corporate" | "Sporadic";
+
 export interface OrderDelivery {
   id: string;
-  supplierId: string;
-  supplierName: string;
+  supplierId: string | null;
+  supplierName: string | null;
   userId: string;
   userName: string;
+  orderType: OrderType;
   department: string;
   clientPhone: string;
   clientFullName: string;
@@ -30,8 +35,9 @@ export interface OrderDelivery {
 
 export interface OrderDeliveryPaginatedItem {
   id: string;
-  supplierId: string;
-  supplierName: string;
+  supplierId: string | null;
+  supplierName: string | null;
+  orderType: OrderType;
   clientFullName: string;
   department: string;
   deliveryType: string;

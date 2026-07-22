@@ -5,21 +5,19 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { shipmentService, ShipmentPaginatedItem } from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
-import ShipmentsTable from "@/components/envios/ShipmentsTable";
+import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
 
 const DEFAULT_PER_PAGE = 10;
 
-export default function EnviosPage() {
+export default function AdminEnviosPage() {
   const [shipments, setShipments] = useState<ShipmentPaginatedItem[]>([]);
   const [orderTotals, setOrderTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Stats
   const [totalShipmentsCount, setTotalShipmentsCount] = useState(0);
   const [totalWeight, setTotalWeight] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -39,7 +37,6 @@ export default function EnviosPage() {
       ordersRes.data.forEach((o) => { totals[o.id] = o.totalPrice; });
       setOrderTotals(totals);
 
-      // Compute stats for current page
       const pageWeight = res.data.reduce((sum, s) => sum + s.totalWeight, 0);
       const pageRevenue = res.data.reduce((sum, s) => sum + s.shippingPrice, 0);
 
@@ -65,9 +62,7 @@ export default function EnviosPage() {
     <div>
       <PageBreadcrumb pageTitle="Envíos Logísticos" />
 
-      {/* ─── Summary Cards ─────────────────────────────────────────────────── */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* Total Shipments */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-500/10">
             <svg className="h-6 w-6 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -84,7 +79,6 @@ export default function EnviosPage() {
           </div>
         </div>
 
-        {/* Total Weight */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-warning-50 dark:bg-warning-500/10">
             <svg className="h-6 w-6 text-warning-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,7 +95,6 @@ export default function EnviosPage() {
           </div>
         </div>
 
-        {/* Total Revenue */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-success-50 dark:bg-success-500/10">
             <svg className="h-6 w-6 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,8 +112,8 @@ export default function EnviosPage() {
         </div>
       </div>
 
-      <ComponentCard title="Gestión de Envíos (Shipments)">
-        <ShipmentsTable
+      <ComponentCard title="Envíos">
+        <AdminShipmentsTable
           shipments={shipments}
           orderTotals={orderTotals}
           loading={loading}
@@ -129,7 +122,6 @@ export default function EnviosPage() {
           onPageChange={setCurrentPage}
           perPage={perPage}
           onPerPageChange={setPerPage}
-          onDataChange={fetchShipments}
         />
       </ComponentCard>
     </div>

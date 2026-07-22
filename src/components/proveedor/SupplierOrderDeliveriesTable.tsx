@@ -18,25 +18,16 @@ import {
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
 } from "@/services/orderDeliveryService";
-import OrderDeliveryForm from "./OrderDeliveryForm";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
+import SupplierOrderDeliveryForm from "./SupplierOrderDeliveryForm";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
   CashOnDelivery: "Por Pagar",
 };
 
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  Corporate: "Corporativa",
-  Sporadic: "Esporádica",
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type FormMode = "create" | "edit" | "view";
 
-interface OrderDeliveriesTableProps {
+interface SupplierOrderDeliveriesTableProps {
   orders: OrderDeliveryPaginatedItem[];
   loading: boolean;
   totalPages: number;
@@ -47,12 +38,10 @@ interface OrderDeliveriesTableProps {
   onDataChange: () => void;
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
 function SkeletonRow() {
   return (
     <TableRow>
-      {[24, 60, 48, 24, 32, 28, 20, 32].map((w, i) => (
+      {[24, 60, 32, 28, 20, 32].map((w, i) => (
         <TableCell key={i} className="px-5 py-4">
           <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
         </TableCell>
@@ -61,9 +50,7 @@ function SkeletonRow() {
   );
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function OrderDeliveriesTable({
+export default function SupplierOrderDeliveriesTable({
   orders,
   loading,
   totalPages,
@@ -72,15 +59,13 @@ export default function OrderDeliveriesTable({
   perPage,
   onPerPageChange,
   onDataChange,
-}: OrderDeliveriesTableProps) {
+}: SupplierOrderDeliveriesTableProps) {
   const { showToast } = useToast();
   const formModal = useModal();
   const deleteModal = useModal();
 
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const openCreate = useCallback(() => {
     setSelectedId(null);
@@ -128,8 +113,6 @@ export default function OrderDeliveriesTable({
 
   const selectedOrderBasic = orders.find(o => o.id === selectedId);
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <>
       <div className="flex justify-end mb-4">
@@ -156,12 +139,6 @@ export default function OrderDeliveriesTable({
                   Cliente / Destino
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Proveedor
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Origen
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Tipo Entrega
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -181,7 +158,7 @@ export default function OrderDeliveriesTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : orders.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={8}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -215,18 +192,6 @@ export default function OrderDeliveriesTable({
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
-                      <span className="text-theme-sm text-gray-600 dark:text-gray-300">
-                        {order.supplierName ?? "Cliente esporádico"}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.orderType === "Sporadic" ? "info" : "primary"}>
-                        {ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
                       <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
                         {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
                       </Badge>
@@ -251,15 +216,13 @@ export default function OrderDeliveriesTable({
                         >
                           <EyeIcon className="size-4 shrink-0" /> Ver
                         </button>
-                        {order.orderType !== "Sporadic" && (
-                          <button
-                            onClick={() => openEdit(order.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                            title="Editar"
-                          >
-                            <PencilIcon className="size-4 shrink-0" /> Editar
-                          </button>
-                        )}
+                        <button
+                          onClick={() => openEdit(order.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                          title="Editar"
+                        >
+                          <PencilIcon className="size-4 shrink-0" /> Editar
+                        </button>
                         <button
                           onClick={() => askDelete(order.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
@@ -287,14 +250,13 @@ export default function OrderDeliveriesTable({
         </div>
       </div>
 
-      {/* Form Modal */}
       <Modal
         isOpen={formModal.isOpen}
         onClose={formModal.closeModal}
         className="max-w-[700px] m-4 z-50"
       >
         {formModal.isOpen && (
-          <OrderDeliveryForm
+          <SupplierOrderDeliveryForm
             key={selectedId ?? "new"}
             mode={formMode}
             orderId={selectedId}
@@ -304,7 +266,6 @@ export default function OrderDeliveriesTable({
         )}
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal
         isOpen={deleteModal.isOpen}
         onClose={deleteModal.closeModal}

@@ -16,6 +16,7 @@ export interface Shipment {
   id: string;
   orderDeliveryId: string;
   waybillNumber: string;
+  code: string;
   clientFullName: string;
   clientAddress: string;
   department: string;
@@ -29,6 +30,7 @@ export interface ShipmentPaginatedItem {
   id: string;
   orderDeliveryId: string;
   waybillNumber: string;
+  code: string;
   clientFullName: string;
   totalWeight: number;
   shippingPrice: number;
@@ -64,17 +66,60 @@ export interface UpdateShipmentRequest {
   lines: UpdateShipmentLineRequest[];
 }
 
+// ─── DTOs: envío esporádico (mostrador) ────────────────────────────────────────
+
+export interface CreateSporadicShipmentLineRequest {
+  articleName: string;
+  quantity: number;
+  unitPrice: number;
+  weight: number;
+  shippingCost: number;
+}
+
+export interface CreateSporadicShipmentRequest {
+  userId: string;
+  department: string;
+  clientPhone: string;
+  clientFullName: string;
+  clientAddress: string;
+  deliveryType: string;
+  lines: CreateSporadicShipmentLineRequest[];
+}
+
+export interface SporadicShipmentDetailItem {
+  orderDeliveryDetailId: string;
+  shipmentDetailId: string;
+  articleName: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  weight: number;
+  shippingCost: number;
+}
+
+export interface SporadicShipmentResponse {
+  orderDeliveryId: string;
+  shipmentId: string;
+  code: string;
+  totalPrice: number;
+  totalWeight: number;
+  shippingPrice: number;
+  details: SporadicShipmentDetailItem[];
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export const shipmentService = {
   getShipments: async (
     page = 1,
-    perPage = 10
+    perPage = 10,
+    supplierId?: string
   ): Promise<ShipmentsPaginatedResponse> => {
     const query = new URLSearchParams({
       page: page.toString(),
       perPage: perPage.toString(),
     });
+    if (supplierId) query.append('supplierId', supplierId);
     return apiClient<ShipmentsPaginatedResponse>(`/shipments?${query.toString()}`);
   },
 
@@ -102,6 +147,15 @@ export const shipmentService = {
   deleteShipment: async (id: string): Promise<{ id: string }> => {
     return apiClient<{ id: string }>(`/shipments/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  createSporadicShipment: async (
+    data: CreateSporadicShipmentRequest
+  ): Promise<SporadicShipmentResponse> => {
+    return apiClient<SporadicShipmentResponse>('/shipments/sporadic', {
+      method: 'POST',
+      data,
     });
   },
 };

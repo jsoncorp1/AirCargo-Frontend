@@ -14,7 +14,7 @@ function getInitials(fullName?: string | null) {
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, companyName, logout } = useAuth();
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     e.stopPropagation();
@@ -79,6 +79,11 @@ export default function UserDropdown() {
             <span className="mt-0.5 block text-theme-xs text-brand-500 font-medium truncate">
               {user?.role || ""}
             </span>
+            {companyName && (
+              <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400 truncate">
+                Empresa: {companyName}
+              </span>
+            )}
           </div>
         </div>
 

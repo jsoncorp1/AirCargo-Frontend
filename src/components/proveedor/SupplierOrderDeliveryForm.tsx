@@ -5,8 +5,8 @@ import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import { TrashBinIcon, PlusIcon } from "@/icons";
-import { userService, User } from "@/services/userService";
 import { articleService, Article } from "@/services/articleService";
 import {
   orderDeliveryService,
@@ -17,8 +17,7 @@ import {
 // decimals (e.g. "42.") without React snapping it back to 0 mid-keystroke —
 // number-typed inputs report an empty value for incomplete floats.
 interface LineFormState {
-  articleId: string | null;
-  articleName?: string;
+  articleId: string;
   quantity: number;
   unitPrice: string;
 }
@@ -31,26 +30,23 @@ const TIPOS_ENTREGA = [
   { value: "CashOnDelivery", label: "Por Pagar" },
 ];
 
-interface OrderDeliveryFormProps {
+interface SupplierOrderDeliveryFormProps {
   mode: "create" | "edit" | "view";
   orderId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: OrderDeliveryFormProps) {
+export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSaved }: SupplierOrderDeliveryFormProps) {
   const { showToast } = useToast();
+  const { user, companyId } = useAuth();
   const readOnly = mode === "view";
 
   const [loading, setLoading] = useState(mode !== "create");
   const [submitting, setSubmitting] = useState(false);
 
-  // Data sources
-  const [users, setUsers] = useState<User[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
 
-  // Form State
-  const [userId, setUserId] = useState<string>("");
   const [department, setDepartment] = useState<number>(0);
   const [clientFullName, setClientFullName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -60,34 +56,27 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
   const fetchDependencies = useCallback(async () => {
     try {
-      const [usersResp, articlesResp] = await Promise.all([
-        userService.getUsers(1, 200),
-        articleService.getArticles(1, 200),
-      ]);
-      setUsers(usersResp.data);
+      const articlesResp = await articleService.getArticles(1, 200, companyId ?? undefined);
       setArticles(articlesResp.data);
-      if (usersResp.data.length > 0 && mode === "create") {
-        setUserId(usersResp.data[0].id);
-      }
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "No se pudieron cargar los datos necesarios.");
     }
-  }, [mode, showToast]);
+  }, [companyId, showToast]);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
     try {
       const order = await orderDeliveryService.getDeliveryById(orderId);
-      setUserId(order.userId);
       setDepartment(DEPARTAMENTOS.indexOf(order.department));
       setClientFullName(order.clientFullName);
       setClientPhone(order.clientPhone);
       setClientAddress(order.clientAddress);
       setDeliveryType(TIPOS_ENTREGA.findIndex((t) => t.value === order.deliveryType));
       setLines(order.details.map(d => ({
-        articleId: d.articleId,
-        articleName: d.articleName,
+        // Las órdenes del proveedor siempre son corporativas: articleId nunca
+        // debería venir null aquí (eso solo ocurre en órdenes esporádicas).
+        articleId: d.articleId ?? "",
         quantity: d.quantity,
         unitPrice: String(d.unitPrice)
       })));
@@ -124,7 +113,6 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
   ) => {
     const newLines = [...lines];
     newLines[index] = { ...newLines[index], [field]: value } as LineFormState;
-    // Auto-fill price if article changed
     if (field === "articleId") {
       const article = articles.find(a => a.id === value);
       if (article) {
@@ -151,18 +139,22 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       showToast("error", "Error", "Todos los artículos deben tener una cantidad válida.");
       return;
     }
+    if (!user?.id) {
+      showToast("error", "Error", "No se pudo identificar al usuario actual.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const submittedLines = lines.map((l) => ({
-        articleId: l.articleId ?? "",
+        articleId: l.articleId,
         quantity: l.quantity,
         unitPrice: Number(l.unitPrice) || 0,
       }));
 
       if (mode === "create") {
         const payload: CreateOrderDeliveryRequest = {
-          userId,
+          userId: user.id,
           department,
           clientFullName,
           clientPhone,
@@ -173,7 +165,6 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
         await orderDeliveryService.createDelivery(payload);
         showToast("success", "Orden creada", "La orden de entrega fue creada exitosamente.");
       } else if (mode === "edit" && orderId) {
-        // Update endpoint uses same DTO shape without userId
         await orderDeliveryService.updateDelivery(orderId, {
           department,
           clientFullName,
@@ -211,9 +202,8 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       </div>
 
       <div className="overflow-y-auto px-6 py-5 custom-scrollbar">
-        <form id="order-form" onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Section: Datos del Cliente */}
+        <form id="supplier-order-form" onSubmit={handleSubmit} className="space-y-6">
+
           <div>
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Datos del Cliente y Destino</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -227,7 +217,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                   placeholder="Ej. Juan Pérez"
                 />
               </div>
-              
+
               <div>
                 <Label required>Teléfono</Label>
                 <Input
@@ -269,27 +259,9 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
           <div className="border-t border-gray-100 dark:border-gray-800"></div>
 
-          {/* Section: Configuración de Orden */}
           <div>
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Configuración de la Orden</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              {mode === "create" && (
-                <div>
-                  <Label required>Usuario Responsable (Vendedor/Admin)</Label>
-                  <select
-                    className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>Seleccione un usuario</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.fullName}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              
               <div>
                 <Label required>Tipo de Entrega</Label>
                 <select
@@ -309,7 +281,6 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
           <div className="border-t border-gray-100 dark:border-gray-800"></div>
 
-          {/* Section: Artículos */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h5 className="text-sm font-semibold text-brand-500 uppercase tracking-wider">Artículos a Enviar</h5>
@@ -346,23 +317,18 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                   {lines.map((line, idx) => (
                   <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center rounded-xl bg-gray-50 p-3 dark:bg-gray-800/40">
                     <div className="w-full sm:flex-1">
-                      {readOnly || line.articleId === null ? (
-                        <div className="flex h-11 w-full items-center rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                          {line.articleName || "Artículo sin especificar"}
-                        </div>
-                      ) : (
-                        <select
-                          className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
-                          value={line.articleId}
-                          onChange={(e) => handleLineChange(idx, "articleId", e.target.value)}
-                          required
-                        >
-                          <option value="" disabled>Seleccione artículo</option>
-                          {articles.map((a) => (
-                            <option key={a.id} value={a.id}>[{a.sku}] {a.name}</option>
-                          ))}
-                        </select>
-                      )}
+                      <select
+                        className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
+                        value={line.articleId}
+                        onChange={(e) => handleLineChange(idx, "articleId", e.target.value)}
+                        disabled={readOnly}
+                        required
+                      >
+                        <option value="" disabled>Seleccione artículo</option>
+                        {articles.map((a) => (
+                          <option key={a.id} value={a.id}>[{a.sku}] {a.name}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="flex w-full sm:w-auto gap-3 items-center">
@@ -410,7 +376,6 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
               )}
             </div>
 
-            {/* Resumen */}
             {lines.length > 0 && (
               <div className="mt-4 flex justify-end">
                 <div className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-3 dark:border-brand-800 dark:bg-brand-900/20 w-full sm:w-auto">
@@ -427,14 +392,13 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
         </form>
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0">
         <Button variant="outline" onClick={onClose}>
           {readOnly ? "Cerrar" : "Cancelar"}
         </Button>
         {!readOnly && (
           <Button onClick={() => {
-            const form = document.getElementById("order-form") as HTMLFormElement | null;
+            const form = document.getElementById("supplier-order-form") as HTMLFormElement | null;
             if (form) form.requestSubmit();
           }} disabled={submitting}>
             {submitting ? "Guardando..." : mode === "create" ? "Crear Orden" : "Guardar Cambios"}

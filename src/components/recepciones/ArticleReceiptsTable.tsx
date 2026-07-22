@@ -34,6 +34,8 @@ interface ArticleReceiptsTableProps {
   totalPages: number;
   currentPage: number;
   onPageChange: (page: number) => void;
+  perPage?: number;
+  onPerPageChange?: (perPage: number) => void;
   onDataChange: () => void; // callback to re-fetch after mutations
 }
 
@@ -64,6 +66,8 @@ export default function ArticleReceiptsTable({
   totalPages,
   currentPage,
   onPageChange,
+  perPage,
+  onPerPageChange,
   onDataChange,
 }: ArticleReceiptsTableProps) {
   const { showToast } = useToast();
@@ -273,15 +277,15 @@ export default function ArticleReceiptsTable({
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={onPageChange}
-            />
-          </div>
-        )}
+        <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            perPage={perPage}
+            onPerPageChange={onPerPageChange}
+          />
+        </div>
       </div>
 
       {/* Form Modal */}

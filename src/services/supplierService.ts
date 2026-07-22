@@ -1,9 +1,35 @@
 import { apiClient } from './apiClient';
 
+export type BolivianDepartment =
+  | 'Beni'
+  | 'Chuquisaca'
+  | 'Cochabamba'
+  | 'LaPaz'
+  | 'Oruro'
+  | 'Pando'
+  | 'Potosi'
+  | 'SantaCruz'
+  | 'Tarija';
+
+export const BOLIVIAN_DEPARTMENT_LABELS: Record<BolivianDepartment, string> = {
+  Beni: 'Beni',
+  Chuquisaca: 'Chuquisaca',
+  Cochabamba: 'Cochabamba',
+  LaPaz: 'La Paz',
+  Oruro: 'Oruro',
+  Pando: 'Pando',
+  Potosi: 'Potosí',
+  SantaCruz: 'Santa Cruz',
+  Tarija: 'Tarija',
+};
+
 export interface Supplier {
   id: string;
   name: string;
   description?: string;
+  department?: BolivianDepartment;
+  articleQuantity?: number;
+  userQuantity?: number;
 }
 
 export interface SuppliersPaginatedResponse {
@@ -17,11 +43,13 @@ export interface SuppliersPaginatedResponse {
 export interface CreateSupplierRequest {
   name: string;
   description?: string;
+  department?: BolivianDepartment;
 }
 
 export interface UpdateSupplierRequest {
   name: string;
   description?: string;
+  department?: BolivianDepartment;
 }
 
 export const supplierService = {

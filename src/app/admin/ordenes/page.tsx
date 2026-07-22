@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { orderDeliveryService, OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
-import OrderDeliveriesTable from "@/components/ordenes/OrderDeliveriesTable";
+import AdminOrderDeliveriesTable from "@/components/admin/AdminOrderDeliveriesTable";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 
 const DEFAULT_PER_PAGE = 10;
@@ -14,13 +14,11 @@ const STATUS_BATCH_SIZE = 200;
 
 type StatusFilter = "" | "pending" | "attended";
 
-export default function OrdenesPage() {
-  // Página real del servidor: se usa cuando el filtro de estado es "Todas".
+export default function AdminOrdenesPage() {
   const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [pageTotalPages, setPageTotalPages] = useState(1);
   const [pageTotalCount, setPageTotalCount] = useState(0);
   const [pageLoading, setPageLoading] = useState(true);
-  // Lote grande para los tabs de estado y para filtrar Pendientes/Atendidas en cliente.
   const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
 
@@ -55,11 +53,6 @@ export default function OrdenesPage() {
       setBatchLoading(false);
     }
   }, []);
-
-  const fetchOrders = useCallback(() => {
-    fetchPage(currentPage);
-    fetchBatch();
-  }, [fetchPage, fetchBatch, currentPage]);
 
   useEffect(() => {
     fetchPage(currentPage);
@@ -109,9 +102,7 @@ export default function OrdenesPage() {
     <div>
       <PageBreadcrumb pageTitle="Órdenes de Entrega" />
 
-      {/* ─── Summary Cards ─────────────────────────────────────────────────── */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* Total orders */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-500/10">
             <svg className="h-6 w-6 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,7 +119,6 @@ export default function OrdenesPage() {
           </div>
         </div>
 
-        {/* Total Sales (Page) */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-success-50 dark:bg-success-500/10">
             <svg className="h-6 w-6 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -145,7 +135,6 @@ export default function OrdenesPage() {
           </div>
         </div>
 
-        {/* Attended */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-info-50 dark:bg-info-500/10">
             <svg className="h-6 w-6 text-info-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,11 +152,11 @@ export default function OrdenesPage() {
         </div>
       </div>
 
-      <ComponentCard title="Gestión de Órdenes de Entrega">
+      <ComponentCard title="Órdenes de Entrega">
         <div className="mb-5">
           <Tabs items={statusTabs} value={statusFilter} onChange={handleStatusChange} />
         </div>
-        <OrderDeliveriesTable
+        <AdminOrderDeliveriesTable
           orders={paginatedOrders}
           loading={loading}
           totalPages={totalPages}
@@ -175,7 +164,6 @@ export default function OrdenesPage() {
           onPageChange={setCurrentPage}
           perPage={perPage}
           onPerPageChange={setPerPage}
-          onDataChange={fetchOrders}
         />
       </ComponentCard>
     </div>

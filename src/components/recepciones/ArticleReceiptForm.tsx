@@ -26,7 +26,7 @@ interface ArticleReceiptFormProps {
   initialData?: ArticleReceipt | null;
   onSubmit: (
     data: CreateArticleReceiptRequest | UpdateArticleReceiptRequest
-  ) => void;
+  ) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -48,17 +48,24 @@ export default function ArticleReceiptForm({
 }: ArticleReceiptFormProps) {
   const readOnly = mode === "view";
   const [data, setData] = useState<ArticleReceiptFormData>(defaultForm(initialData));
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const set = <K extends keyof ArticleReceiptFormData>(
     key: K,
     value: ArticleReceiptFormData[K]
   ) => setData((prev) => ({ ...prev, [key]: value }));
 
-  const handleSubmit = () => {
-    if (mode === "create") {
-      onSubmit({ articleId: data.articleId, count: data.count });
-    } else {
-      onSubmit({ count: data.count });
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (mode === "create") {
+        await onSubmit({ articleId: data.articleId, count: data.count });
+      } else {
+        await onSubmit({ count: data.count });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -174,15 +181,19 @@ export default function ArticleReceiptForm({
 
       {/* Footer */}
       <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800">
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
           {readOnly ? "Cerrar" : "Cancelar"}
         </Button>
         {!readOnly && (
           <Button
             onClick={handleSubmit}
-            disabled={mode === "create" && !data.articleId}
+            disabled={isSubmitting || (mode === "create" && !data.articleId)}
           >
-            {mode === "create" ? "Registrar Recepción" : "Guardar cambios"}
+            {isSubmitting
+              ? "Guardando..."
+              : mode === "create"
+              ? "Registrar Recepción"
+              : "Guardar cambios"}
           </Button>
         )}
       </div>

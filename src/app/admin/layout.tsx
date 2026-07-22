@@ -4,12 +4,12 @@ import { useSidebar } from "@/context/SidebarContext";
 import { useAuth } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
 import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/AppSidebar";
+import AdminSidebar from "@/layout/AdminSidebar";
 import Backdrop from "@/layout/Backdrop";
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export default function AdminLayout({
+export default function AdminUserLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -24,39 +24,33 @@ export default function AdminLayout({
       router.push("/signin");
     } else if (isSupplierUser) {
       router.push("/proveedor/ordenes");
-    } else if (isAdminUser) {
-      router.push("/admin");
+    } else if (!isAdminUser) {
+      router.push("/");
     }
   }, [isLoading, isAuthenticated, isSupplierUser, isAdminUser, router]);
 
-  // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen
     ? "ml-0"
     : isExpanded || isHovered
     ? "lg:ml-[290px]"
     : "lg:ml-[90px]";
 
-  if (isLoading || !isAuthenticated || isSupplierUser || isAdminUser) {
-    return null; // Or a loading spinner
+  if (isLoading || !isAuthenticated || isSupplierUser || !isAdminUser) {
+    return null;
   }
 
   return (
     <ToastProvider>
       <div className="min-h-screen xl:flex">
-        {/* Sidebar and Backdrop */}
-        <AppSidebar />
+        <AdminSidebar />
         <Backdrop />
-        {/* Main Content Area */}
         <div
           className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
         >
-          {/* Header */}
           <AppHeader />
-          {/* Page Content */}
           <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
         </div>
       </div>
     </ToastProvider>
   );
 }
-

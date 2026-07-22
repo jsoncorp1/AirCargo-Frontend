@@ -8,14 +8,20 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Modal } from "@/components/ui/modal";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Pagination from "@/components/tables/Pagination";
 import { roleService, Role } from "@/services/roleService";
 import { PencilIcon, TrashBinIcon, PlugInIcon } from "@/icons";
 import { useToast } from "@/context/ToastContext";
+
+const DEFAULT_PER_PAGE = 10;
 
 export default function RolesPage() {
   const { showToast } = useToast();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+  const [totalPages, setTotalPages] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -25,11 +31,12 @@ export default function RolesPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchRoles = async () => {
+  const fetchRoles = async (page = currentPage) => {
     setLoading(true);
     try {
-      const response = await roleService.getRoles();
+      const response = await roleService.getRoles(page, perPage);
       setRoles(response.data);
+      setTotalPages(response.totalPages);
     } catch (err) {
       console.error("Error fetching roles", err);
       showToast("error", "Error al cargar roles", "No se pudo conectar con el servidor.");
@@ -39,8 +46,15 @@ export default function RolesPage() {
   };
 
   useEffect(() => {
-    fetchRoles();
-  }, []);
+    fetchRoles(currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, perPage]);
+
+  // Volver a la página 1 al cambiar el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perPage]);
 
   const handleOpenModal = (role?: Role) => {
     setError(null);
@@ -184,6 +198,17 @@ export default function RolesPage() {
                 </TableBody>
               </Table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-white/[0.05]">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  perPage={perPage}
+                  onPerPageChange={setPerPage}
+                />
+              </div>
+            )}
           </div>
         </ComponentCard>
       </div>

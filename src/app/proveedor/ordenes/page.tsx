@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { orderDeliveryService, OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
-import OrderDeliveriesTable from "@/components/ordenes/OrderDeliveriesTable";
+import SupplierOrderDeliveriesTable from "@/components/proveedor/SupplierOrderDeliveriesTable";
+import { useAuth } from "@/context/AuthContext";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 
 const DEFAULT_PER_PAGE = 10;
@@ -14,7 +15,9 @@ const STATUS_BATCH_SIZE = 200;
 
 type StatusFilter = "" | "pending" | "attended";
 
-export default function OrdenesPage() {
+export default function ProveedorOrdenesPage() {
+  const { companyId } = useAuth();
+
   // Página real del servidor: se usa cuando el filtro de estado es "Todas".
   const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [pageTotalPages, setPageTotalPages] = useState(1);
@@ -33,7 +36,7 @@ export default function OrdenesPage() {
   const fetchPage = useCallback(async (page: number) => {
     setPageLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(page, perPage);
+      const res = await orderDeliveryService.getDeliveries(page, perPage, companyId ?? undefined);
       setPageOrders(res.data);
       setPageTotalPages(res.totalPages);
       setPageTotalCount(res.count);
@@ -42,19 +45,19 @@ export default function OrdenesPage() {
     } finally {
       setPageLoading(false);
     }
-  }, [perPage]);
+  }, [companyId, perPage]);
 
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
+      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE, companyId ?? undefined);
       setAllOrders(res.data);
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
       setBatchLoading(false);
     }
-  }, []);
+  }, [companyId]);
 
   const fetchOrders = useCallback(() => {
     fetchPage(currentPage);
@@ -109,9 +112,7 @@ export default function OrdenesPage() {
     <div>
       <PageBreadcrumb pageTitle="Órdenes de Entrega" />
 
-      {/* ─── Summary Cards ─────────────────────────────────────────────────── */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* Total orders */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-500/10">
             <svg className="h-6 w-6 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,7 +129,6 @@ export default function OrdenesPage() {
           </div>
         </div>
 
-        {/* Total Sales (Page) */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-success-50 dark:bg-success-500/10">
             <svg className="h-6 w-6 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -145,7 +145,6 @@ export default function OrdenesPage() {
           </div>
         </div>
 
-        {/* Attended */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-info-50 dark:bg-info-500/10">
             <svg className="h-6 w-6 text-info-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,11 +162,11 @@ export default function OrdenesPage() {
         </div>
       </div>
 
-      <ComponentCard title="Gestión de Órdenes de Entrega">
+      <ComponentCard title="Mis Órdenes de Entrega">
         <div className="mb-5">
           <Tabs items={statusTabs} value={statusFilter} onChange={handleStatusChange} />
         </div>
-        <OrderDeliveriesTable
+        <SupplierOrderDeliveriesTable
           orders={paginatedOrders}
           loading={loading}
           totalPages={totalPages}
