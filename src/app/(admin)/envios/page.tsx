@@ -4,14 +4,19 @@ import React, { useEffect, useState, useCallback } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { shipmentService, ShipmentPaginatedItem } from "@/services/shipmentService";
+import { orderDeliveryService } from "@/services/orderDeliveryService";
 import ShipmentsTable from "@/components/envios/ShipmentsTable";
+
+const DEFAULT_PER_PAGE = 10;
 
 export default function EnviosPage() {
   const [shipments, setShipments] = useState<ShipmentPaginatedItem[]>([]);
+  const [orderTotals, setOrderTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
   const [totalPages, setTotalPages] = useState(1);
 
   // Stats
@@ -22,15 +27,22 @@ export default function EnviosPage() {
   const fetchShipments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await shipmentService.getShipments(currentPage, 10);
+      const [res, ordersRes] = await Promise.all([
+        shipmentService.getShipments(currentPage, perPage),
+        orderDeliveryService.getDeliveries(1, 200),
+      ]);
       setShipments(res.data);
       setTotalPages(res.totalPages);
       setTotalShipmentsCount(res.count);
 
+      const totals: Record<string, number> = {};
+      ordersRes.data.forEach((o) => { totals[o.id] = o.totalPrice; });
+      setOrderTotals(totals);
+
       // Compute stats for current page
       const pageWeight = res.data.reduce((sum, s) => sum + s.totalWeight, 0);
       const pageRevenue = res.data.reduce((sum, s) => sum + s.shippingPrice, 0);
-      
+
       setTotalWeight(pageWeight);
       setTotalRevenue(pageRevenue);
     } catch (err) {
@@ -38,11 +50,16 @@ export default function EnviosPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage]);
+  }, [currentPage, perPage]);
 
   useEffect(() => {
     fetchShipments();
   }, [fetchShipments]);
+
+  // Volver a la página 1 al cambiar el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [perPage]);
 
   return (
     <div>
@@ -105,10 +122,13 @@ export default function EnviosPage() {
       <ComponentCard title="Gestión de Envíos (Shipments)">
         <ShipmentsTable
           shipments={shipments}
+          orderTotals={orderTotals}
           loading={loading}
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={setCurrentPage}
+          perPage={perPage}
+          onPerPageChange={setPerPage}
           onDataChange={fetchShipments}
         />
       </ComponentCard>

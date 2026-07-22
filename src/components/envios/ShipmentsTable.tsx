@@ -23,17 +23,20 @@ type FormMode = "create" | "edit" | "view";
 
 interface ShipmentsTableProps {
   shipments: ShipmentPaginatedItem[];
+  orderTotals: Record<string, number>;
   loading: boolean;
   totalPages: number;
   currentPage: number;
   onPageChange: (page: number) => void;
+  perPage?: number;
+  onPerPageChange?: (perPage: number) => void;
   onDataChange: () => void;
 }
 
 function SkeletonRow() {
   return (
     <TableRow>
-      {[48, 56, 32, 32, 28, 32].map((w, i) => (
+      {[28, 24, 48, 24, 28, 28, 32].map((w, i) => (
         <TableCell key={i} className="px-5 py-4">
           <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
         </TableCell>
@@ -44,10 +47,13 @@ function SkeletonRow() {
 
 export default function ShipmentsTable({
   shipments,
+  orderTotals,
   loading,
   totalPages,
   currentPage,
   onPageChange,
+  perPage,
+  onPerPageChange,
   onDataChange,
 }: ShipmentsTableProps) {
   const { showToast } = useToast();
@@ -123,6 +129,9 @@ export default function ShipmentsTable({
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Fecha
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Guía
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -132,10 +141,10 @@ export default function ShipmentsTable({
                   Peso (kg)
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Costo Envío
+                  Costo Total
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Fecha
+                  Costo Envío
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Acciones
@@ -148,7 +157,7 @@ export default function ShipmentsTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : shipments.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={7}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -168,9 +177,18 @@ export default function ShipmentsTable({
                     key={shipment.id}
                     className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
                   >
+                    <TableCell className="px-5 py-4 text-theme-sm">
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </TableCell>
+
                     <TableCell className="px-5 py-4">
                       <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                        {shipment.waybillNumber}
+                        {shipment.code}
                       </span>
                     </TableCell>
 
@@ -185,11 +203,11 @@ export default function ShipmentsTable({
                     </TableCell>
 
                     <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                      Bs {shipment.shippingPrice.toFixed(2)}
+                      Bs {((orderTotals[shipment.orderDeliveryId] ?? 0) + shipment.shippingPrice).toFixed(2)}
                     </TableCell>
 
-                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
-                      {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
+                    <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">
+                      Bs {shipment.shippingPrice.toFixed(2)}
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-right">
@@ -224,15 +242,15 @@ export default function ShipmentsTable({
           </Table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={onPageChange}
-            />
-          </div>
-        )}
+        <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            perPage={perPage}
+            onPerPageChange={onPerPageChange}
+          />
+        </div>
       </div>
 
       <Modal
@@ -268,7 +286,7 @@ export default function ShipmentsTable({
           </p>
           {selectedBasic && (
             <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40">
-              <p className="font-medium text-gray-800 dark:text-white">Guía: {selectedBasic.waybillNumber}</p>
+              <p className="font-medium text-gray-800 dark:text-white">Guía: {selectedBasic.code}</p>
               <p className="text-gray-500">Cliente: {selectedBasic.clientFullName}</p>
             </div>
           )}

@@ -15,14 +15,19 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isSupplierUser, isAdminUser } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isLoading) return;
+    if (!isAuthenticated) {
       router.push("/signin");
+    } else if (isSupplierUser) {
+      router.push("/proveedor/ordenes");
+    } else if (isAdminUser) {
+      router.push("/admin");
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, isSupplierUser, isAdminUser, router]);
 
   // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen
@@ -31,7 +36,7 @@ export default function AdminLayout({
     ? "lg:ml-[290px]"
     : "lg:ml-[90px]";
 
-  if (isLoading || !isAuthenticated) {
+  if (isLoading || !isAuthenticated || isSupplierUser || isAdminUser) {
     return null; // Or a loading spinner
   }
 
@@ -43,7 +48,7 @@ export default function AdminLayout({
         <Backdrop />
         {/* Main Content Area */}
         <div
-          className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
+          className={`flex-1 min-w-0 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
         >
           {/* Header */}
           <AppHeader />

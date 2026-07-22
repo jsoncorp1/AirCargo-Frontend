@@ -34,6 +34,18 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
   }
 
   if (!response.ok) {
+    // Toda la API exige JWT salvo /auth/login. Un 401 acá significa que no hay
+    // token o que expiró — se limpia la sesión y se manda a login, salvo que
+    // el 401 venga del login mismo (credenciales inválidas, no un tema de sesión).
+    const isLoginRequest = endpoint.includes('/auth/login');
+    if (response.status === 401 && !isLoginRequest && typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/signin') {
+        window.location.href = '/signin';
+      }
+    }
+
     // throw standard error combining ProblemDetails standard from .NET
     throw {
       status: response.status,

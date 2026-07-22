@@ -6,12 +6,16 @@ import { authService, LoginRequest, LoginResponse } from '../services/authServic
 
 interface AuthSessionUser extends LoginResponse {
   companyId: string | null;
+  companyName: string | null;
 }
 
 interface AuthContextType {
   user: AuthSessionUser | null;
   companyId: string | null;
+  companyName: string | null;
   role: string | null;
+  isSupplierUser: boolean;
+  isAdminUser: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
@@ -19,6 +23,12 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+export const isSupplierRole = (role?: string | null): boolean =>
+  role?.toLowerCase() === 'usuarioempresa';
+
+export const isAdminRole = (role?: string | null): boolean =>
+  role?.toLowerCase() === 'admin';
 
 const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
   const parts = token.split('.');
@@ -36,6 +46,7 @@ const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
 const buildSessionUser = (response: LoginResponse): AuthSessionUser => {
   const payload = decodeTokenPayload(response.token);
   const companyId =
+    response.supplierId ||
     (payload?.companyId as string | undefined) ||
     (payload?.supplierId as string | undefined) ||
     (payload?.empresaId as string | undefined) ||
@@ -44,6 +55,7 @@ const buildSessionUser = (response: LoginResponse): AuthSessionUser => {
   return {
     ...response,
     companyId,
+    companyName: response.supplierName ?? null,
   };
 };
 
@@ -77,7 +89,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('token', response.token);
       localStorage.setItem('user', JSON.stringify(sessionUser));
       setUser(sessionUser);
-      router.push('/');
+      if (isSupplierRole(sessionUser.role)) {
+        router.push('/proveedor/ordenes');
+      } else if (isAdminRole(sessionUser.role)) {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
     } catch (error) {
       throw error;
     }
@@ -91,7 +109,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, companyId: user?.companyId ?? null, role: user?.role ?? null, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      companyId: user?.companyId ?? null,
+      companyName: user?.companyName ?? null,
+      role: user?.role ?? null,
+      isSupplierUser: isSupplierRole(user?.role),
+      isAdminUser: isAdminRole(user?.role),
+      isAuthenticated: !!user,
+      isLoading,
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

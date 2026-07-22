@@ -13,6 +13,8 @@ import ArticleReceiptsTable from "@/components/recepciones/ArticleReceiptsTable"
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const DEFAULT_PER_PAGE = 10;
+
 export default function RecepcionesPage() {
   // ── Data state ──────────────────────────────────────────────────────────────
   const [receipts, setReceipts] = useState<ArticleReceipt[]>([]);
@@ -21,6 +23,7 @@ export default function RecepcionesPage() {
 
   // ── Pagination & filtering ──────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
   const [totalPages, setTotalPages] = useState(1);
   const [articleFilter, setArticleFilter] = useState<string>("");
 
@@ -44,7 +47,7 @@ export default function RecepcionesPage() {
     try {
       const res = await articleReceiptService.getReceipts(
         currentPage,
-        10,
+        perPage,
         articleFilter || undefined
       );
       setReceipts(res.data);
@@ -62,7 +65,7 @@ export default function RecepcionesPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, articleFilter]);
+  }, [currentPage, perPage, articleFilter]);
 
   useEffect(() => {
     fetchArticles();
@@ -77,6 +80,11 @@ export default function RecepcionesPage() {
     setArticleFilter(val);
     setCurrentPage(1);
   };
+
+  // Volver a la página 1 al cambiar el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [perPage]);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -169,6 +177,8 @@ export default function RecepcionesPage() {
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={setCurrentPage}
+          perPage={perPage}
+          onPerPageChange={setPerPage}
           onDataChange={fetchReceipts}
         />
       </ComponentCard>

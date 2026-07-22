@@ -8,6 +8,8 @@ export interface User {
   dni: string;
   roleId: string;
   roleName: string;
+  supplierId?: string | null;
+  supplierName?: string | null;
 }
 
 export interface UsersPaginatedResponse {

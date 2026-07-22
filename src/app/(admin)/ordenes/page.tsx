@@ -1,52 +1,109 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { orderDeliveryService, OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
 import OrderDeliveriesTable from "@/components/ordenes/OrderDeliveriesTable";
-import { useAuth } from "@/context/AuthContext";
+import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
+
+const DEFAULT_PER_PAGE = 10;
+// El backend no soporta filtrar por estado (pendiente/atendida) como query param;
+// mientras ese filtro esté activo se trae un lote más grande y se pagina en cliente.
+const STATUS_BATCH_SIZE = 200;
+
+type StatusFilter = "" | "pending" | "attended";
 
 export default function OrdenesPage() {
-  const { companyId, role } = useAuth();
-  const [orders, setOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Página real del servidor: se usa cuando el filtro de estado es "Todas".
+  const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [pageTotalPages, setPageTotalPages] = useState(1);
+  const [pageTotalCount, setPageTotalCount] = useState(0);
+  const [pageLoading, setPageLoading] = useState(true);
+  // Lote grande para los tabs de estado y para filtrar Pendientes/Atendidas en cliente.
+  const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [batchLoading, setBatchLoading] = useState(true);
 
-  // Pagination
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
-  // Stats
-  const [totalOrdersCount, setTotalOrdersCount] = useState(0);
-  const [totalSales, setTotalSales] = useState(0);
-  const [attendedOrders, setAttendedOrders] = useState(0);
-  const isCompanyUser = role?.toLowerCase() === "usuarioempresa";
-  const supplierFilter = isCompanyUser ? companyId ?? undefined : undefined;
+  const isFiltering = statusFilter !== "";
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const fetchPage = useCallback(async (page: number) => {
+    setPageLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(currentPage, 10, supplierFilter);
-      setOrders(res.data);
-      setTotalPages(res.totalPages);
-      setTotalOrdersCount(res.count);
-
-      // Compute stats for current page (or a rough estimate if no global stats endpoint exists)
-      const pageTotal = res.data.reduce((sum, o) => sum + o.totalPrice, 0);
-      const pageAttended = res.data.filter(o => o.isAttended).length;
-      
-      setTotalSales(pageTotal); // This is just for the current page, ideally backend provides global stats
-      setAttendedOrders(pageAttended);
+      const res = await orderDeliveryService.getDeliveries(page, perPage);
+      setPageOrders(res.data);
+      setPageTotalPages(res.totalPages);
+      setPageTotalCount(res.count);
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
-      setLoading(false);
+      setPageLoading(false);
     }
-  }, [currentPage, supplierFilter]);
+  }, [perPage]);
+
+  const fetchBatch = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
+      setAllOrders(res.data);
+    } catch (err) {
+      console.error("Error fetching orders", err);
+    } finally {
+      setBatchLoading(false);
+    }
+  }, []);
+
+  const fetchOrders = useCallback(() => {
+    fetchPage(currentPage);
+    fetchBatch();
+  }, [fetchPage, fetchBatch, currentPage]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    fetchPage(currentPage);
+  }, [fetchPage, currentPage]);
+
+  useEffect(() => {
+    fetchBatch();
+  }, [fetchBatch]);
+
+  // Volver a la página 1 al cambiar el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [perPage]);
+
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === "pending") return allOrders.filter((o) => !o.isAttended);
+    if (statusFilter === "attended") return allOrders.filter((o) => o.isAttended);
+    return allOrders;
+  }, [allOrders, statusFilter]);
+
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
+  const paginatedFiltered = filteredOrders.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  const paginatedOrders = isFiltering ? paginatedFiltered : pageOrders;
+  const totalPages = isFiltering ? filteredTotalPages : pageTotalPages;
+  const loading = isFiltering ? batchLoading : pageLoading;
+
+  const totalOrdersCount = isFiltering ? filteredOrders.length : pageTotalCount;
+  const totalSales = paginatedOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+  const attendedOrders = paginatedOrders.filter((o) => o.isAttended).length;
+
+  const statusTabs: TabItem[] = useMemo(
+    () => [
+      { value: "", label: "Todas", count: allOrders.length },
+      { value: "pending", label: "Pendientes", count: allOrders.filter((o) => !o.isAttended).length },
+      { value: "attended", label: "Atendidas", count: allOrders.filter((o) => o.isAttended).length },
+    ],
+    [allOrders]
+  );
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value as StatusFilter);
+    setCurrentPage(1);
+  };
 
   return (
     <div>
@@ -107,12 +164,17 @@ export default function OrdenesPage() {
       </div>
 
       <ComponentCard title="Gestión de Órdenes de Entrega">
+        <div className="mb-5">
+          <Tabs items={statusTabs} value={statusFilter} onChange={handleStatusChange} />
+        </div>
         <OrderDeliveriesTable
-          orders={orders}
+          orders={paginatedOrders}
           loading={loading}
           totalPages={totalPages}
           currentPage={currentPage}
           onPageChange={setCurrentPage}
+          perPage={perPage}
+          onPerPageChange={setPerPage}
           onDataChange={fetchOrders}
         />
       </ComponentCard>

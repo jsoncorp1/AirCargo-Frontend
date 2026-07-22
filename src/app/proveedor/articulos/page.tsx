@@ -2,21 +2,21 @@ import React, { Suspense } from "react";
 import { Metadata } from "next";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
-import EmpresasTable from "@/components/proveedores/empresas/EmpresasTable";
+import SupplierArticulosTable from "@/components/proveedor/SupplierArticulosTable";
 
 export const metadata: Metadata = {
-  title: "Proveedores | AirCargo",
-  description: "Gestión de proveedores",
+  title: "Artículos | AirCargo",
+  description: "Artículos disponibles de tu empresa",
 };
 
-export default function EmpresasPage() {
+export default function ProveedorArticulosPage() {
   return (
     <div>
-      <PageBreadcrumb pageTitle="Proveedores" />
+      <PageBreadcrumb pageTitle="Artículos" />
       <div className="space-y-6">
-        <ComponentCard title="Proveedores">
+        <ComponentCard title="Mis Artículos">
           <Suspense fallback={null}>
-            <EmpresasTable />
+            <SupplierArticulosTable />
           </Suspense>
         </ComponentCard>
       </div>

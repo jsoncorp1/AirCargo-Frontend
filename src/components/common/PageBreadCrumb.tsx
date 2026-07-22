@@ -3,9 +3,10 @@ import React from "react";
 
 interface BreadcrumbProps {
   pageTitle: string;
+  action?: React.ReactNode;
 }
 
-const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
+const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle, action }) => {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
       <h2
@@ -14,7 +15,9 @@ const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
       >
         {pageTitle}
       </h2>
-      <nav>
+      <div className="flex items-center gap-4">
+        {action}
+        <nav>
         <ol className="flex items-center gap-1.5">
           <li>
             <Link
@@ -44,7 +47,8 @@ const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
             {pageTitle}
           </li>
         </ol>
-      </nav>
+        </nav>
+      </div>
     </div>
   );
 };

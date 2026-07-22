@@ -15,9 +15,11 @@ import Badge from "@/components/ui/badge/Badge";
 import { Modal } from "@/components/ui/modal";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Pagination from "@/components/tables/Pagination";
 import { userService, User, CreateUserRequest } from "@/services/userService";
 import { roleService, Role } from "@/services/roleService";
 import { supplierService, Supplier } from "@/services/supplierService";
+import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 import {
   PencilIcon,
   TrashBinIcon,
@@ -41,6 +43,11 @@ interface FormState {
 }
 
 type ModalMode = "create" | "edit" | "delete";
+
+const DEFAULT_PER_PAGE = 10;
+// El backend no soporta búsqueda de texto ni filtro por rol como query params;
+// mientras esos filtros estén activos se trae un lote más grande para filtrar en cliente.
+const SEARCH_BATCH_SIZE = 200;
 
 const EMPTY_FORM: FormState = {
   fullName: "",
@@ -82,10 +89,15 @@ export default function UsuariosPage() {
   const { showToast } = useToast();
 
   // ── Data state ──────────────────────────────────────────────────────────────
-  const [users, setUsers] = useState<User[]>([]);
+  // Página real del servidor: se usa cuando no hay búsqueda ni filtro de rol activos.
+  const [pageUsers, setPageUsers] = useState<User[]>([]);
+  const [pageTotalPages, setPageTotalPages] = useState(1);
+  const [pageLoading, setPageLoading] = useState(true);
+  // Lote grande para búsqueda/tabs de rol (el backend no soporta esos filtros como query params).
+  const [batchUsers, setBatchUsers] = useState<User[]>([]);
+  const [batchLoading, setBatchLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [modalMode, setModalMode] = useState<ModalMode>("create");
@@ -101,22 +113,55 @@ export default function UsuariosPage() {
   // ── Filters ──────────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+
+  // El backend no soporta buscar por texto ni filtrar por rol, así que mientras
+  // alguno de estos filtros esté activo se pagina en cliente sobre el lote grande.
+  const isFiltering = Boolean(searchTerm.trim()) || Boolean(roleFilter);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    batchUsers.forEach((u) => {
+      counts[u.roleId] = (counts[u.roleId] ?? 0) + 1;
+    });
+    return counts;
+  }, [batchUsers]);
+
+  const roleTabs: TabItem[] = useMemo(
+    () => [
+      { value: "", label: "Todos", count: batchUsers.length },
+      ...roles.map((r) => ({ value: r.id, label: r.name, count: roleCounts[r.id] ?? 0 })),
+    ],
+    [roles, roleCounts, batchUsers.length]
+  );
+
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return users.filter((u) => {
+    return batchUsers.filter((u) => {
       const matchesSearch =
         !term ||
         u.fullName.toLowerCase().includes(term) ||
         u.email.toLowerCase().includes(term) ||
         (u.phoneNumber || "").toLowerCase().includes(term) ||
-        (u.roleName || "").toLowerCase().includes(term);
+        (u.roleName || "").toLowerCase().includes(term) ||
+        (u.supplierName || "").toLowerCase().includes(term);
       const matchesRole = !roleFilter || u.roleId === roleFilter;
       return matchesSearch && matchesRole;
     });
-  }, [users, searchTerm, roleFilter]);
+  }, [batchUsers, searchTerm, roleFilter]);
+
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredUsers.length / perPage));
+  const paginatedFilteredUsers = filteredUsers.slice(
+    (currentPage - 1) * perPage,
+    currentPage * perPage
+  );
+
+  const displayedUsers = isFiltering ? paginatedFilteredUsers : pageUsers;
+  const totalPages = isFiltering ? filteredTotalPages : pageTotalPages;
+  const loading = isFiltering ? batchLoading : pageLoading;
 
   const selectedRole = roles.find((r) => r.id === formData.roleId);
   const isProveedorRole =
@@ -125,17 +170,35 @@ export default function UsuariosPage() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
+  const fetchPageUsers = useCallback(async (page: number) => {
+    setPageLoading(true);
     try {
-      const response = await userService.getUsers();
-      setUsers(response.data);
+      const response = await userService.getUsers(page, perPage);
+      setPageUsers(response.data);
+      setPageTotalPages(response.totalPages);
     } catch (err) {
       console.error("Error fetching users", err);
     } finally {
-      setLoading(false);
+      setPageLoading(false);
+    }
+  }, [perPage]);
+
+  const fetchBatchUsers = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const response = await userService.getUsers(1, SEARCH_BATCH_SIZE);
+      setBatchUsers(response.data);
+    } catch (err) {
+      console.error("Error fetching users", err);
+    } finally {
+      setBatchLoading(false);
     }
   }, []);
+
+  const fetchAllUsers = useCallback(() => {
+    fetchPageUsers(currentPage);
+    fetchBatchUsers();
+  }, [fetchPageUsers, fetchBatchUsers, currentPage]);
 
   const fetchDependencies = useCallback(async () => {
     try {
@@ -151,9 +214,19 @@ export default function UsuariosPage() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    fetchPageUsers(currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, perPage]);
+
+  useEffect(() => {
+    fetchBatchUsers();
     fetchDependencies();
-  }, [fetchUsers, fetchDependencies]);
+  }, [fetchBatchUsers, fetchDependencies]);
+
+  // Volver a la página 1 al activar/cambiar un filtro o el tamaño de página.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, perPage]);
 
   // ── Modal helpers ─────────────────────────────────────────────────────────────
 
@@ -176,7 +249,7 @@ export default function UsuariosPage() {
       phoneNumber: user.phoneNumber ?? "",
       dni: user.dni ?? "",
       roleId: user.roleId,
-      supplierId: "",
+      supplierId: user.supplierId ?? "",
     });
     setShowPassword(false);
     setError(null);
@@ -228,7 +301,7 @@ export default function UsuariosPage() {
         );
       }
 
-      await fetchUsers();
+      fetchAllUsers();
       closeModal();
     } catch (err: any) {
       const msg = err.message || "No se pudo completar la operación.";
@@ -249,7 +322,7 @@ export default function UsuariosPage() {
         "Usuario eliminado",
         `"${selectedUser.fullName}" fue eliminado.`
       );
-      await fetchUsers();
+      fetchAllUsers();
       closeModal();
     } catch (err: any) {
       showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
@@ -266,6 +339,11 @@ export default function UsuariosPage() {
 
       <div className="space-y-6">
         <ComponentCard title="Administración de Usuarios">
+          {/* ── Role Tabs ── */}
+          <div className="mb-5 border-b border-gray-100 pb-5 dark:border-gray-800">
+            <Tabs items={roleTabs} value={roleFilter} onChange={setRoleFilter} />
+          </div>
+
           {/* ── Filter Bar ── */}
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 flex-col gap-3 sm:flex-row">
@@ -279,23 +357,10 @@ export default function UsuariosPage() {
                 <input
                   type="text"
                   className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 text-sm text-gray-800 placeholder-gray-400 focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder-gray-500"
-                  placeholder="Buscar por nombre, email, rol..."
+                  placeholder="Buscar por nombre, email, rol, empresa..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-              </div>
-              {/* Role filter */}
-              <div className="w-full sm:w-52">
-                <select
-                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                >
-                  <option value="">Todos los roles</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </select>
               </div>
             </div>
             <Button onClick={openCreate}>+ Nuevo Usuario</Button>
@@ -316,6 +381,9 @@ export default function UsuariosPage() {
                     <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       Rol
                     </TableCell>
+                    <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Empresa
+                    </TableCell>
                     <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       Acciones
                     </TableCell>
@@ -325,9 +393,9 @@ export default function UsuariosPage() {
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                   {loading ? (
                     Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-                  ) : filteredUsers.length === 0 ? (
+                  ) : displayedUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="px-5 py-16 text-center">
+                      <TableCell colSpan={5} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                             <GroupIcon className="size-7 text-gray-400" />
@@ -342,7 +410,7 @@ export default function UsuariosPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredUsers.map((user) => (
+                    displayedUsers.map((user) => (
                       <TableRow
                         key={user.id}
                         className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
@@ -376,6 +444,11 @@ export default function UsuariosPage() {
                           </Badge>
                         </TableCell>
 
+                        {/* Supplier / Empresa */}
+                        <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
+                          {user.supplierName || <span className="italic text-gray-300 dark:text-gray-600">—</span>}
+                        </TableCell>
+
                         {/* Actions */}
                         <TableCell className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -401,6 +474,17 @@ export default function UsuariosPage() {
                 </TableBody>
               </Table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  perPage={perPage}
+                  onPerPageChange={setPerPage}
+                />
+              </div>
+            )}
           </div>
         </ComponentCard>
       </div>

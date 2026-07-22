@@ -19,13 +19,17 @@ import {
   orderDeliveryService,
 } from "@/services/orderDeliveryService";
 import OrderDeliveryForm from "./OrderDeliveryForm";
-import { useAuth } from "@/context/AuthContext";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
   CashOnDelivery: "Por Pagar",
+};
+
+const ORDER_TYPE_LABELS: Record<string, string> = {
+  Corporate: "Corporativa",
+  Sporadic: "Esporádica",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,6 +42,8 @@ interface OrderDeliveriesTableProps {
   totalPages: number;
   currentPage: number;
   onPageChange: (page: number) => void;
+  perPage?: number;
+  onPerPageChange?: (perPage: number) => void;
   onDataChange: () => void;
 }
 
@@ -46,7 +52,7 @@ interface OrderDeliveriesTableProps {
 function SkeletonRow() {
   return (
     <TableRow>
-      {[60, 48, 32, 28, 20, 32].map((w, i) => (
+      {[24, 60, 48, 24, 32, 28, 20, 32].map((w, i) => (
         <TableCell key={i} className="px-5 py-4">
           <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
         </TableCell>
@@ -63,16 +69,16 @@ export default function OrderDeliveriesTable({
   totalPages,
   currentPage,
   onPageChange,
+  perPage,
+  onPerPageChange,
   onDataChange,
 }: OrderDeliveriesTableProps) {
-  const { role } = useAuth();
   const { showToast } = useToast();
   const formModal = useModal();
   const deleteModal = useModal();
 
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const canManageOrders = role?.toLowerCase() !== "usuarioempresa";
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -144,10 +150,16 @@ export default function OrderDeliveriesTable({
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Fecha
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Cliente / Destino
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Proveedor
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Origen
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Tipo Entrega
@@ -169,7 +181,7 @@ export default function OrderDeliveriesTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : orders.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={8}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -189,19 +201,29 @@ export default function OrderDeliveriesTable({
                     key={order.id}
                     className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
                   >
+                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
+                      {new Date(order.createdAt).toLocaleDateString("es-BO")}
+                    </TableCell>
+
                     <TableCell className="px-5 py-4">
                       <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                         {order.clientFullName}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.department}
+                        {order.destinationDepartment}
                       </p>
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
                       <span className="text-theme-sm text-gray-600 dark:text-gray-300">
-                        {order.supplierName}
+                        {order.supplierName ?? "Cliente esporádico"}
                       </span>
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4">
+                      <Badge size="sm" color={order.orderType === "Sporadic" ? "info" : "primary"}>
+                        {ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
@@ -229,24 +251,22 @@ export default function OrderDeliveriesTable({
                         >
                           <EyeIcon className="size-4 shrink-0" /> Ver
                         </button>
-                        {canManageOrders && (
-                          <>
-                            <button
-                              onClick={() => openEdit(order.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                              title="Editar"
-                            >
-                              <PencilIcon className="size-4 shrink-0" /> Editar
-                            </button>
-                            <button
-                              onClick={() => askDelete(order.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                              title="Eliminar"
-                            >
-                              <TrashBinIcon className="size-4 shrink-0" /> Eliminar
-                            </button>
-                          </>
+                        {order.orderType !== "Sporadic" && (
+                          <button
+                            onClick={() => openEdit(order.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                            title="Editar"
+                          >
+                            <PencilIcon className="size-4 shrink-0" /> Editar
+                          </button>
                         )}
+                        <button
+                          onClick={() => askDelete(order.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                          title="Eliminar"
+                        >
+                          <TrashBinIcon className="size-4 shrink-0" /> Eliminar
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -256,15 +276,15 @@ export default function OrderDeliveriesTable({
           </Table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={onPageChange}
-            />
-          </div>
-        )}
+        <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            perPage={perPage}
+            onPerPageChange={onPerPageChange}
+          />
+        </div>
       </div>
 
       {/* Form Modal */}
@@ -303,7 +323,7 @@ export default function OrderDeliveriesTable({
           {selectedOrderBasic && (
             <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40">
               <p className="font-medium text-gray-800 dark:text-white">Cliente: {selectedOrderBasic.clientFullName}</p>
-              <p className="text-gray-500">Destino: {selectedOrderBasic.department}</p>
+              <p className="text-gray-500">Destino: {selectedOrderBasic.destinationDepartment}</p>
             </div>
           )}
           <p className="mb-6 text-xs text-error-500">Esta acción no se puede deshacer y puede afectar los envíos asociados.</p>

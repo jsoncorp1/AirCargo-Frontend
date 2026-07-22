@@ -29,21 +29,16 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/",
   },
   {
-    icon: <UserCircleIcon />,
-    name: "Mi Perfil",
-    path: "/profile",
-  },
-  {
     icon: <GroupIcon />,
     name: "Proveedores",
-    path: "/empresas",
+    path: "/proveedores",
   },
   {
     icon: <BoxIcon />,
@@ -67,6 +62,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <BoxCubeIcon />,
+    name: "Envío Esporádico",
+    path: "/envios/esporadico",
+  },
+  {
+    icon: <BoxCubeIcon />,
     name: "Envíos",
     path: "/envios",
   },
@@ -85,6 +85,8 @@ const othersItems: NavItem[] = [];
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
+
+  const navItems = baseNavItems;
 
   const renderMenuItems = (
     navItems: NavItem[],
@@ -239,7 +241,7 @@ const AppSidebar: React.FC = () => {
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [pathname, isActive]);
+  }, [pathname, isActive, navItems]);
 
   useEffect(() => {
     // Set the height of the submenu items when the submenu is opened
