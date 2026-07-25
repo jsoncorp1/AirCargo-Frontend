@@ -31,6 +31,7 @@ export interface OrderDelivery {
   clientFullName: string;
   clientAddress: string;
   deliveryType: string;
+  isExpress: boolean;
   totalPrice: number;
   isAttended: boolean;
   createdAt: string;
@@ -45,6 +46,7 @@ export interface OrderDeliveryPaginatedItem {
   clientFullName: string;
   destinationDepartment: string;
   deliveryType: string;
+  isExpress: boolean;
   totalPrice: number;
   isAttended: boolean;
   createdAt: string;
@@ -70,6 +72,7 @@ export interface CreateOrderDeliveryRequest {
   clientFullName: string;
   clientAddress: string;
   deliveryType: number;
+  isExpress: boolean;
   lines: CreateOrderDeliveryLineRequest[];
 }
 
@@ -79,6 +82,7 @@ export interface UpdateOrderDeliveryRequest {
   clientFullName: string;
   clientAddress: string;
   deliveryType: number;
+  isExpress: boolean;
   lines: CreateOrderDeliveryLineRequest[];
 }
 

@@ -37,6 +37,7 @@ interface ShipmentWaybillProps {
   clientPhone: string;
   clientAddress: string;
   deliveryType: string;
+  isExpress: boolean;
   packageCount: number;
   packageDescription: string;
   lines: WaybillLine[];
@@ -83,6 +84,7 @@ export default function ShipmentWaybill({
   clientPhone,
   clientAddress,
   deliveryType,
+  isExpress,
   packageCount,
   packageDescription,
   lines,
@@ -103,6 +105,11 @@ export default function ShipmentWaybill({
         <p className="text-[11px] font-semibold tracking-wide text-gray-500">
           Callcenter: {CALLCENTER_PHONE}
         </p>
+        {isExpress && (
+          <span className="mt-1 rounded-full bg-error-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+            Envío Expreso
+          </span>
+        )}
       </div>
 
       {/* Ruta: origen -> destino */}

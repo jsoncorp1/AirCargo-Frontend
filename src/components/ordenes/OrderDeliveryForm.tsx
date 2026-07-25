@@ -4,6 +4,14 @@ import React, { useState, useEffect, useCallback } from "react";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Checkbox from "@/components/form/input/Checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/context/ToastContext";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 import { articleService, Article } from "@/services/articleService";
@@ -66,6 +74,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [deliveryType, setDeliveryType] = useState<number>(0);
+  const [isExpress, setIsExpress] = useState(false);
   const [lines, setLines] = useState<LineFormState[]>([]);
 
   // Origen/emisor: informativo, solo se puede leer (lo calcula el backend al crear la orden).
@@ -99,6 +108,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       setClientPhone(order.clientPhone);
       setClientAddress(order.clientAddress);
       setDeliveryType(TIPOS_ENTREGA.findIndex((t) => t.value === order.deliveryType));
+      setIsExpress(order.isExpress);
       setSenderInfo({
         originDepartment: order.originDepartment,
         senderFullName: order.senderFullName,
@@ -128,8 +138,13 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
     });
   }, [fetchDependencies, loadOrder, mode]);
 
+  // Solo se pueden agregar artículos con stock disponible; los que ya están
+  // en una línea existente (ej. al editar) se siguen mostrando aunque su
+  // stock haya bajado a 0 después, para no perder la selección previa.
+  const availableArticles = articles.filter(a => a.count > 0);
+
   const handleAddLine = () => {
-    if (articles.length === 0) return;
+    if (availableArticles.length === 0) return;
     setLines([...lines, { articleId: "", quantity: 1, unitPrice: "0" }]);
   };
 
@@ -187,6 +202,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           clientPhone,
           clientAddress,
           deliveryType,
+          isExpress,
           lines: submittedLines,
         };
         await orderDeliveryService.createDelivery(payload);
@@ -199,6 +215,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           clientPhone,
           clientAddress,
           deliveryType,
+          isExpress,
           lines: submittedLines,
         });
         showToast("success", "Orden actualizada", "La orden de entrega fue actualizada exitosamente.");
@@ -344,6 +361,16 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                   ))}
                 </select>
               </div>
+
+              <div className="flex items-end pb-2.5">
+                <Checkbox
+                  id="isExpress"
+                  label="Envío Expreso"
+                  checked={isExpress}
+                  onChange={setIsExpress}
+                  disabled={readOnly}
+                />
+              </div>
             </div>
           </div>
 
@@ -357,98 +384,123 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                 <button
                   type="button"
                   onClick={handleAddLine}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+                  disabled={availableArticles.length === 0}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <PlusIcon className="size-4" /> Agregar Artículo
                 </button>
               )}
             </div>
 
-            <div className="space-y-3">
-              {lines.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center dark:border-gray-700">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No hay artículos en la orden.</p>
-                  {!readOnly && (
-                    <button type="button" onClick={handleAddLine} className="mt-2 text-xs font-medium text-brand-600 hover:underline">
-                      Agregar el primer artículo
-                    </button>
-                  )}
+            {!readOnly && availableArticles.length === 0 && (
+              <p className="mb-3 text-xs text-warning-600 dark:text-warning-400">
+                No hay artículos con stock disponible.
+              </p>
+            )}
+
+            {lines.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400">No hay artículos en la orden.</p>
+                {!readOnly && availableArticles.length > 0 && (
+                  <button type="button" onClick={handleAddLine} className="mt-2 text-xs font-medium text-brand-600 hover:underline">
+                    Agregar el primer artículo
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-gray-50 dark:bg-gray-800/40">
+                      <TableRow>
+                        <TableCell isHeader className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Artículo
+                        </TableCell>
+                        <TableCell isHeader className="w-24 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Cant.
+                        </TableCell>
+                        <TableCell isHeader className="w-32 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Precio Unit.
+                        </TableCell>
+                        <TableCell isHeader className="w-28 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Total
+                        </TableCell>
+                        {!readOnly && <TableCell isHeader className="w-11 px-3 py-2">{null}</TableCell>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {lines.map((line, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="min-w-[200px] px-3 py-2">
+                            {readOnly || line.articleId === null ? (
+                              <span className="text-sm text-gray-700 dark:text-gray-300">
+                                {line.articleName || "Artículo sin especificar"}
+                              </span>
+                            ) : (
+                              <select
+                                className="h-9 w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
+                                value={line.articleId}
+                                onChange={(e) => handleLineChange(idx, "articleId", e.target.value)}
+                                required
+                              >
+                                <option value="" disabled>Seleccione artículo</option>
+                                {availableArticles.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.name} - Stock: {a.count}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={line.quantity}
+                              onChange={(e) => handleLineChange(idx, "quantity", parseInt(e.target.value) || 1)}
+                              disabled={readOnly}
+                              required
+                              placeholder="Cant."
+                              className="!h-9"
+                            />
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.unitPrice}
+                              onChange={(e) => handlePriceChange(idx, e.target.value)}
+                              disabled={readOnly}
+                              required
+                              placeholder="Precio"
+                              className="!h-9"
+                            />
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2 text-right text-sm font-medium text-gray-800 dark:text-white/90">
+                            Bs {lineTotal(line).toFixed(2)}
+                          </TableCell>
+
+                          {!readOnly && (
+                            <TableCell className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLine(idx)}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-error-50 hover:text-error-600 transition-colors dark:hover:bg-error-500/10 dark:hover:text-error-400"
+                              >
+                                <TrashBinIcon className="size-4" />
+                              </button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              ) : (
-                <>
-                  <div className="hidden gap-3 px-3 text-xs font-medium text-gray-400 dark:text-gray-500 sm:flex">
-                    <div className="flex-1">Artículo</div>
-                    <div className="w-20">Cant.</div>
-                    <div className="w-28">Precio Unit.</div>
-                    <div className="w-28 text-right">Total</div>
-                    <div className="w-11"></div>
-                  </div>
-                  {lines.map((line, idx) => (
-                  <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center rounded-xl bg-gray-50 p-3 dark:bg-gray-800/40">
-                    <div className="w-full sm:flex-1">
-                      {readOnly || line.articleId === null ? (
-                        <div className="flex h-11 w-full items-center rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                          {line.articleName || "Artículo sin especificar"}
-                        </div>
-                      ) : (
-                        <select
-                          className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
-                          value={line.articleId}
-                          onChange={(e) => handleLineChange(idx, "articleId", e.target.value)}
-                          required
-                        >
-                          <option value="" disabled>Seleccione artículo</option>
-                          {articles.map((a) => (
-                            <option key={a.id} value={a.id}>[{a.sku}] {a.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-
-                    <div className="flex w-full sm:w-auto gap-3 items-center">
-                      <div className="w-20">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={line.quantity}
-                          onChange={(e) => handleLineChange(idx, "quantity", parseInt(e.target.value) || 1)}
-                          disabled={readOnly}
-                          required
-                          placeholder="Cant."
-                        />
-                      </div>
-
-                      <div className="w-28">
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={line.unitPrice}
-                          onChange={(e) => handlePriceChange(idx, e.target.value)}
-                          disabled={readOnly}
-                          required
-                          placeholder="Precio"
-                        />
-                      </div>
-
-                      <div className="w-28 shrink-0 text-right text-sm font-medium text-gray-800 dark:text-white/90">
-                        Bs {lineTotal(line).toFixed(2)}
-                      </div>
-
-                      {!readOnly && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLine(idx)}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-error-50 hover:text-error-600 transition-colors dark:hover:bg-error-500/10 dark:hover:text-error-400"
-                        >
-                          <TrashBinIcon className="size-5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  ))}
-                </>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Resumen */}
             {lines.length > 0 && (

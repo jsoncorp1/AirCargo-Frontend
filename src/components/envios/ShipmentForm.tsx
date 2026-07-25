@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Badge from "@/components/ui/badge/Badge";
 import {
   Table,
   TableBody,
@@ -41,6 +42,7 @@ interface OrderHeaderInfo {
   destinationDepartment: string;
   clientAddress: string;
   deliveryType: string;
+  isExpress: boolean;
   supplierName: string | null;
   originDepartment: string;
   senderFullName: string;
@@ -115,6 +117,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
         destinationDepartment: order.destinationDepartment,
         clientAddress: order.clientAddress,
         deliveryType: order.deliveryType,
+        isExpress: order.isExpress,
         supplierName: order.supplierName,
         originDepartment: order.originDepartment,
         senderFullName: order.senderFullName,
@@ -156,6 +159,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
         destinationDepartment: shipment.destinationDepartment,
         clientAddress: shipment.clientAddress,
         deliveryType: prev?.deliveryType ?? "",
+        isExpress: prev?.isExpress ?? false,
         supplierName: prev?.supplierName ?? "",
         originDepartment: shipment.originDepartment,
         senderFullName: shipment.senderFullName,
@@ -180,6 +184,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
           destinationDepartment: shipment.destinationDepartment,
           clientAddress: shipment.clientAddress,
           deliveryType: order.deliveryType,
+          isExpress: order.isExpress,
           supplierName: order.supplierName,
           originDepartment: shipment.originDepartment,
           senderFullName: shipment.senderFullName,
@@ -355,6 +360,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
               clientPhone={orderInfo?.clientPhone ?? ""}
               clientAddress={orderInfo?.clientAddress ?? ""}
               deliveryType={orderInfo?.deliveryType ?? ""}
+              isExpress={orderInfo?.isExpress ?? false}
               packageCount={packageCount}
               packageDescription={packageDescription}
               lines={lines}
@@ -443,6 +449,12 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
                 label="Tipo de Entrega"
                 value={orderInfo?.deliveryType ? DELIVERY_TYPE_LABELS[orderInfo.deliveryType] ?? orderInfo.deliveryType : undefined}
               />
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400 dark:text-gray-500">Envío Expreso</p>
+                <Badge size="sm" color={orderInfo?.isExpress ? "error" : "light"}>
+                  {orderInfo?.isExpress ? "Expreso" : "Normal"}
+                </Badge>
+              </div>
               <InfoField label="Proveedor" value={orderInfo?.supplierName ?? "Cliente esporádico"} />
               <InfoField label="Origen" value={orderInfo?.originDepartment} />
               <InfoField label="Remitente" value={orderInfo?.senderFullName} />

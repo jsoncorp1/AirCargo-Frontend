@@ -98,6 +98,7 @@ export interface CreateSporadicShipmentRequest {
   clientFullName: string;
   clientAddress: string;
   deliveryType: string;
+  isExpress: boolean;
   packageCount: number;
   packageDescription: string;
   lines: CreateSporadicShipmentLineRequest[];
@@ -118,6 +119,7 @@ export interface SporadicShipmentResponse {
   orderDeliveryId: string;
   shipmentId: string;
   code: string;
+  isExpress: boolean;
   totalPrice: number;
   totalWeight: number;
   shippingPrice: number;

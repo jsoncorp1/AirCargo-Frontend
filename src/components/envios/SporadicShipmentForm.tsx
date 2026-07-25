@@ -5,6 +5,8 @@ import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Checkbox from "@/components/form/input/Checkbox";
+import Badge from "@/components/ui/badge/Badge";
 import {
   Table,
   TableBody,
@@ -82,6 +84,7 @@ export default function SporadicShipmentForm() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [deliveryType, setDeliveryType] = useState(TIPOS_ENTREGA[0].value);
+  const [isExpress, setIsExpress] = useState(false);
 
   const [packageCount, setPackageCount] = useState(1);
   const [packageDescription, setPackageDescription] = useState("");
@@ -97,6 +100,7 @@ export default function SporadicShipmentForm() {
     setClientPhone("");
     setClientAddress("");
     setDeliveryType(TIPOS_ENTREGA[0].value);
+    setIsExpress(false);
     setPackageCount(1);
     setPackageDescription("");
     setLines([emptyLine()]);
@@ -176,6 +180,7 @@ export default function SporadicShipmentForm() {
         clientFullName,
         clientAddress,
         deliveryType,
+        isExpress,
         packageCount,
         packageDescription: packageDescription.trim(),
         lines: lines.map((l) => ({
@@ -206,6 +211,11 @@ export default function SporadicShipmentForm() {
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Código de guía generado</p>
             <p className="text-2xl font-bold tracking-wide text-gray-800 dark:text-white/90">{result.code}</p>
+            {result.isExpress && (
+              <div className="mt-2">
+                <Badge size="sm" color="warning">Expreso</Badge>
+              </div>
+            )}
           </div>
 
           <div className="grid w-full max-w-md grid-cols-3 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/40">
@@ -340,6 +350,15 @@ export default function SporadicShipmentForm() {
                   <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="flex items-end pb-2.5">
+              <Checkbox
+                id="isExpress"
+                label="Envío Expreso"
+                checked={isExpress}
+                onChange={setIsExpress}
+              />
             </div>
 
             <div className="sm:col-span-3">

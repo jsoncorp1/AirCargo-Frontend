@@ -141,9 +141,14 @@ export default function AdminOrderDeliveriesTable({
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
-                        {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
+                          {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
+                        </Badge>
+                        {order.isExpress && (
+                          <Badge size="sm" color="error">Expreso</Badge>
+                        )}
+                      </div>
                     </TableCell>
 
                     <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
