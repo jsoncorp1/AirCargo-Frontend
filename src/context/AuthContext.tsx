@@ -13,6 +13,9 @@ interface AuthContextType {
   user: AuthSessionUser | null;
   companyId: string | null;
   companyName: string | null;
+  branchOfficeId: string | null;
+  branchOfficeCode: string | null;
+  branchOfficeCity: string | null;
   role: string | null;
   isSupplierUser: boolean;
   isAdminUser: boolean;
@@ -52,10 +55,18 @@ const buildSessionUser = (response: LoginResponse): AuthSessionUser => {
     (payload?.empresaId as string | undefined) ||
     null;
 
+  // La sucursal viene en la respuesta del login; si no, se toma el claim
+  // `branchOfficeId` del JWT ("" cuando el usuario no tiene sucursal).
+  const branchOfficeId =
+    response.branchOfficeId ||
+    (payload?.branchOfficeId as string | undefined) ||
+    null;
+
   return {
     ...response,
     companyId,
     companyName: response.supplierName ?? null,
+    branchOfficeId,
   };
 };
 
@@ -113,6 +124,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       companyId: user?.companyId ?? null,
       companyName: user?.companyName ?? null,
+      branchOfficeId: user?.branchOfficeId ?? null,
+      branchOfficeCode: user?.branchOfficeCode ?? null,
+      branchOfficeCity: user?.branchOfficeCity ?? null,
       role: user?.role ?? null,
       isSupplierUser: isSupplierRole(user?.role),
       isAdminUser: isAdminRole(user?.role),

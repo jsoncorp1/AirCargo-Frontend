@@ -19,6 +19,7 @@ import Pagination from "@/components/tables/Pagination";
 import { userService, User, CreateUserRequest } from "@/services/userService";
 import { roleService, Role } from "@/services/roleService";
 import { supplierService, Supplier } from "@/services/supplierService";
+import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 import {
   PencilIcon,
@@ -40,6 +41,7 @@ interface FormState {
   dni: string;
   roleId: string;
   supplierId: string;
+  branchOfficeId: string;
 }
 
 type ModalMode = "create" | "edit" | "delete";
@@ -57,6 +59,7 @@ const EMPTY_FORM: FormState = {
   dni: "",
   roleId: "",
   supplierId: "",
+  branchOfficeId: "",
 };
 
 // ─── Skeleton Row ─────────────────────────────────────────────────────────────
@@ -98,6 +101,7 @@ export default function UsuariosPage() {
   const [batchLoading, setBatchLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [modalMode, setModalMode] = useState<ModalMode>("create");
@@ -147,7 +151,9 @@ export default function UsuariosPage() {
         u.email.toLowerCase().includes(term) ||
         (u.phoneNumber || "").toLowerCase().includes(term) ||
         (u.roleName || "").toLowerCase().includes(term) ||
-        (u.supplierName || "").toLowerCase().includes(term);
+        (u.supplierName || "").toLowerCase().includes(term) ||
+        (u.branchOfficeCode || "").toLowerCase().includes(term) ||
+        (u.branchOfficeCity || "").toLowerCase().includes(term);
       const matchesRole = !roleFilter || u.roleId === roleFilter;
       return matchesSearch && matchesRole;
     });
@@ -202,12 +208,14 @@ export default function UsuariosPage() {
 
   const fetchDependencies = useCallback(async () => {
     try {
-      const [rolesResp, suppResp] = await Promise.all([
+      const [rolesResp, suppResp, branchResp] = await Promise.all([
         roleService.getRoles(1, 100),
         supplierService.getSuppliers(1, 100),
+        branchOfficeService.getBranchOffices(1, 100),
       ]);
       setRoles(rolesResp.data);
       setSuppliers(suppResp.data);
+      setBranchOffices(branchResp.data);
     } catch (err) {
       console.error("Error fetching dependencies", err);
     }
@@ -250,6 +258,7 @@ export default function UsuariosPage() {
       dni: user.dni ?? "",
       roleId: user.roleId,
       supplierId: user.supplierId ?? "",
+      branchOfficeId: user.branchOfficeId ?? "",
     });
     setShowPassword(false);
     setError(null);
@@ -281,6 +290,14 @@ export default function UsuariosPage() {
         delete payload.supplierId;
       } else if (!payload.supplierId) {
         throw new Error("Debe seleccionar un proveedor para este rol.");
+      }
+
+      // La sucursal es opcional y no aplica a usuarios de proveedores.
+      // Se manda null para limpiar la asignación al editar.
+      if (isProveedorRole) {
+        delete payload.branchOfficeId;
+      } else {
+        payload.branchOfficeId = payload.branchOfficeId || null;
       }
 
       if (modalMode === "create") {
@@ -384,6 +401,9 @@ export default function UsuariosPage() {
                     <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       Empresa
                     </TableCell>
+                    <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Sucursal
+                    </TableCell>
                     <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       Acciones
                     </TableCell>
@@ -395,7 +415,7 @@ export default function UsuariosPage() {
                     Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
                   ) : displayedUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="px-5 py-16 text-center">
+                      <TableCell colSpan={6} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                             <GroupIcon className="size-7 text-gray-400" />
@@ -447,6 +467,18 @@ export default function UsuariosPage() {
                         {/* Supplier / Empresa */}
                         <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
                           {user.supplierName || <span className="italic text-gray-300 dark:text-gray-600">—</span>}
+                        </TableCell>
+
+                        {/* Branch office / Sucursal */}
+                        <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
+                          {user.branchOfficeCode ? (
+                            <>
+                              <p className="font-medium text-gray-700 dark:text-gray-300">{user.branchOfficeCode}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500">{user.branchOfficeCity}</p>
+                            </>
+                          ) : (
+                            <span className="italic text-gray-300 dark:text-gray-600">—</span>
+                          )}
                         </TableCell>
 
                         {/* Actions */}
@@ -620,6 +652,26 @@ export default function UsuariosPage() {
                   <option value="" disabled>Seleccione el proveedor</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Branch office (optional, not for supplier users) */}
+            {!isProveedorRole && (
+              <div>
+                <Label>Sucursal</Label>
+                <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                  La sucursal del usuario se usa como origen al atender envíos. Un usuario sin sucursal no puede atender envíos.
+                </p>
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  value={formData.branchOfficeId}
+                  onChange={(e) => setFormData({ ...formData, branchOfficeId: e.target.value })}
+                >
+                  <option value="">Sin sucursal</option>
+                  {branchOffices.map((b) => (
+                    <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
                   ))}
                 </select>
               </div>

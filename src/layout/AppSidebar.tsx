@@ -76,6 +76,7 @@ const baseNavItems: NavItem[] = [
     subItems: [
       { name: "Roles", path: "/roles", pro: false },
       { name: "Usuarios", path: "/usuarios", pro: false },
+      { name: "Sucursales", path: "/sucursales", pro: false },
     ],
   },
 ];

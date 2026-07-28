@@ -12,12 +12,17 @@ import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
-import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon } from "@/icons";
+import Badge from "@/components/ui/badge/Badge";
+import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon, TaskIcon } from "@/icons";
 import {
   ShipmentPaginatedItem,
   shipmentService,
+  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_BADGE,
+  SHIPMENT_OBSERVATION_LABELS,
 } from "@/services/shipmentService";
 import ShipmentForm from "./ShipmentForm";
+import ShipmentStatusModal from "./ShipmentStatusModal";
 
 type FormMode = "create" | "edit" | "view";
 
@@ -36,7 +41,7 @@ interface ShipmentsTableProps {
 function SkeletonRow() {
   return (
     <TableRow>
-      {[28, 24, 48, 24, 28, 28, 32].map((w, i) => (
+      {[28, 24, 48, 24, 20, 24, 28, 28, 32].map((w, i) => (
         <TableCell key={i} className="px-5 py-4">
           <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
         </TableCell>
@@ -59,9 +64,18 @@ export default function ShipmentsTable({
   const { showToast } = useToast();
   const formModal = useModal();
   const deleteModal = useModal();
+  const statusModal = useModal();
 
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const openStatus = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      statusModal.openModal();
+    },
+    [statusModal]
+  );
 
   const openCreate = useCallback(() => {
     setSelectedId(null);
@@ -138,6 +152,12 @@ export default function ShipmentsTable({
                   Cliente
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Ruta
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Estado
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Peso (kg)
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -157,7 +177,7 @@ export default function ShipmentsTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : shipments.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={7}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={9}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -198,6 +218,27 @@ export default function ShipmentsTable({
                       </p>
                     </TableCell>
 
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-600 dark:text-gray-300">
+                      {shipment.originBranchOfficeCode || shipment.destinationBranchOfficeCode ? (
+                        <span className="whitespace-nowrap">
+                          {shipment.originBranchOfficeCode ?? "—"} &rarr; {shipment.destinationBranchOfficeCode ?? "—"}
+                        </span>
+                      ) : (
+                        <span className="italic text-gray-300 dark:text-gray-600">—</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4">
+                      <Badge size="sm" color={SHIPMENT_STATUS_BADGE[shipment.status] ?? "light"}>
+                        {SHIPMENT_STATUS_LABELS[shipment.status] ?? shipment.status}
+                      </Badge>
+                      {shipment.observation && (
+                        <p className="mt-1 text-xs text-warning-600 dark:text-orange-400">
+                          {SHIPMENT_OBSERVATION_LABELS[shipment.observation] ?? shipment.observation}
+                        </p>
+                      )}
+                    </TableCell>
+
                     <TableCell className="px-5 py-4 font-medium text-gray-700 text-theme-sm dark:text-gray-300">
                       {shipment.totalWeight} kg
                     </TableCell>
@@ -212,6 +253,13 @@ export default function ShipmentsTable({
 
                     <TableCell className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openStatus(shipment.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-warning-50 hover:text-warning-600 dark:hover:bg-warning-500/10 dark:hover:text-orange-400 transition-colors"
+                          title="Cambiar estado / observar"
+                        >
+                          <TaskIcon className="size-4 shrink-0" /> Estado
+                        </button>
                         <button
                           onClick={() => openView(shipment.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
@@ -264,6 +312,24 @@ export default function ShipmentsTable({
             mode={formMode}
             shipmentId={selectedId}
             onClose={formModal.closeModal}
+            onSaved={onDataChange}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={statusModal.isOpen}
+        onClose={statusModal.closeModal}
+        className="max-w-[480px] m-4 z-50"
+      >
+        {statusModal.isOpen && selectedBasic && (
+          <ShipmentStatusModal
+            key={selectedBasic.id}
+            shipmentId={selectedBasic.id}
+            code={selectedBasic.code}
+            currentStatus={selectedBasic.status}
+            currentObservation={selectedBasic.observation}
+            onClose={statusModal.closeModal}
             onSaved={onDataChange}
           />
         )}

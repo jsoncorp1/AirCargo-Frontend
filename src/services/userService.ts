@@ -10,6 +10,9 @@ export interface User {
   roleName: string;
   supplierId?: string | null;
   supplierName?: string | null;
+  branchOfficeId?: string | null;
+  branchOfficeCode?: string | null;
+  branchOfficeCity?: string | null;
 }
 
 export interface UsersPaginatedResponse {
@@ -28,6 +31,8 @@ export interface CreateUserRequest {
   dni?: string;
   roleId: string;
   supplierId?: string;
+  // Sucursal del usuario (opcional): los usuarios de proveedores no llevan sucursal.
+  branchOfficeId?: string | null;
 }
 
 export const userService = {

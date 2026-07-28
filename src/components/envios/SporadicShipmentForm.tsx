@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
@@ -20,7 +20,9 @@ import {
   shipmentService,
   CreateSporadicShipmentRequest,
   SporadicShipmentResponse,
+  SHIPMENT_ERROR_MESSAGES,
 } from "@/services/shipmentService";
+import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 
 // unitPrice/weight/shippingCost se guardan como string mientras se editan para
 // permitir decimales en progreso (ej. "12.") sin que React los normalice a 0.
@@ -64,7 +66,9 @@ const emptyLine = (): SporadicLineFormState => ({
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object" && "message" in err) {
     const msg = (err as { message?: unknown }).message;
-    if (typeof msg === "string" && msg.trim().length > 0) return msg;
+    if (typeof msg === "string" && msg.trim().length > 0) {
+      return SHIPMENT_ERROR_MESSAGES[msg] ?? msg;
+    }
   }
   return fallback;
 }
@@ -74,6 +78,9 @@ export default function SporadicShipmentForm() {
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SporadicShipmentResponse | null>(null);
+
+  const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
+  const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
 
   const [originDepartment, setOriginDepartment] = useState(DEPARTAMENTOS[0].value);
   const [senderFullName, setSenderFullName] = useState("");
@@ -91,7 +98,21 @@ export default function SporadicShipmentForm() {
 
   const [lines, setLines] = useState<SporadicLineFormState[]>([emptyLine()]);
 
+  useEffect(() => {
+    const fetchBranchOffices = async () => {
+      try {
+        const res = await branchOfficeService.getBranchOffices(1, 100);
+        setBranchOffices(res.data);
+      } catch (err) {
+        console.error(err);
+        showToast("error", "Error", "No se pudieron cargar las sucursales.");
+      }
+    };
+    fetchBranchOffices();
+  }, [showToast]);
+
   const resetForm = () => {
+    setDestinationBranchOfficeId("");
     setOriginDepartment(DEPARTAMENTOS[0].value);
     setSenderFullName("");
     setSenderPhone("");
@@ -167,10 +188,15 @@ export default function SporadicShipmentForm() {
       showToast("error", "Error", "Debe describir los paquetes del envío.");
       return;
     }
+    if (!destinationBranchOfficeId) {
+      showToast("error", "Error", "Debe seleccionar la sucursal de destino.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const payload: CreateSporadicShipmentRequest = {
+        destinationBranchOfficeId,
         originDepartment,
         senderFullName: senderFullName.trim(),
         senderPhone: senderPhone.trim(),
@@ -334,6 +360,21 @@ export default function SporadicShipmentForm() {
               >
                 {DEPARTAMENTOS.map((dep) => (
                   <option key={dep.value} value={dep.value}>{dep.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label required>Sucursal de Destino</Label>
+              <select
+                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                value={destinationBranchOfficeId}
+                onChange={(e) => setDestinationBranchOfficeId(e.target.value)}
+                required
+              >
+                <option value="" disabled>Seleccione la sucursal</option>
+                {branchOffices.map((b) => (
+                  <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
                 ))}
               </select>
             </div>

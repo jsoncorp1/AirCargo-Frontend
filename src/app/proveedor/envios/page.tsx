@@ -28,7 +28,7 @@ export default function ProveedorEnviosPage() {
     setLoading(true);
     try {
       const [res, ordersRes] = await Promise.all([
-        shipmentService.getShipments(currentPage, perPage, companyId ?? undefined),
+        shipmentService.getShipments(currentPage, perPage, { supplierId: companyId ?? undefined }),
         orderDeliveryService.getDeliveries(1, 200, companyId ?? undefined),
       ]);
       setShipments(res.data);

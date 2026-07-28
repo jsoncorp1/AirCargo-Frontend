@@ -3,9 +3,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
-import { shipmentService, ShipmentPaginatedItem } from "@/services/shipmentService";
+import { shipmentService, ShipmentPaginatedItem, ShipmentListFilters } from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import ShipmentsTable from "@/components/envios/ShipmentsTable";
+import ShipmentFiltersBar from "@/components/envios/ShipmentFiltersBar";
 
 const DEFAULT_PER_PAGE = 10;
 
@@ -24,11 +25,14 @@ export default function EnviosPage() {
   const [totalWeight, setTotalWeight] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
+  // Filtros combinables: proveedor, sucursal origen/destino y estado.
+  const [filters, setFilters] = useState<ShipmentListFilters>({});
+
   const fetchShipments = useCallback(async () => {
     setLoading(true);
     try {
       const [res, ordersRes] = await Promise.all([
-        shipmentService.getShipments(currentPage, perPage),
+        shipmentService.getShipments(currentPage, perPage, filters),
         orderDeliveryService.getDeliveries(1, 200),
       ]);
       setShipments(res.data);
@@ -50,16 +54,16 @@ export default function EnviosPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, perPage]);
+  }, [currentPage, perPage, filters]);
 
   useEffect(() => {
     fetchShipments();
   }, [fetchShipments]);
 
-  // Volver a la página 1 al cambiar el tamaño de página.
+  // Volver a la página 1 al cambiar el tamaño de página o los filtros.
   useEffect(() => {
     setCurrentPage(1);
-  }, [perPage]);
+  }, [perPage, filters]);
 
   return (
     <div>
@@ -120,6 +124,7 @@ export default function EnviosPage() {
       </div>
 
       <ComponentCard title="Gestión de Envíos (Shipments)">
+        <ShipmentFiltersBar value={filters} onChange={setFilters} />
         <ShipmentsTable
           shipments={shipments}
           orderTotals={orderTotals}

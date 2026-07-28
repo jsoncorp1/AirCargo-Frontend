@@ -13,6 +13,10 @@ export interface LoginResponse {
   roleId?: string;
   supplierId?: string;
   supplierName?: string;
+  // Sucursal del usuario (null si no tiene sucursal asignada).
+  branchOfficeId?: string | null;
+  branchOfficeCode?: string | null;
+  branchOfficeCity?: string | null;
   token: string;
 }
 

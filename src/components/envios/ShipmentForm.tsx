@@ -20,7 +20,14 @@ import {
 import {
   shipmentService,
   CreateShipmentRequest,
+  ShipmentStatus,
+  ShipmentObservation,
+  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_BADGE,
+  SHIPMENT_OBSERVATION_LABELS,
+  getShipmentErrorMessage,
 } from "@/services/shipmentService";
+import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import ShipmentWaybill from "./ShipmentWaybill";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
@@ -82,12 +89,21 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
 
   // Data sources
   const [orders, setOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
   const [lines, setLines] = useState<ShipmentLineFormState[]>([]);
 
   // Form State
   const [orderDeliveryId, setOrderDeliveryId] = useState<string>("");
+  const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState<string>("");
   const [packageCount, setPackageCount] = useState<number>(1);
   const [packageDescription, setPackageDescription] = useState<string>("");
+
+  // Multisucursal / estado (solo lectura, viene del backend)
+  const [originBranchLabel, setOriginBranchLabel] = useState<string | null>(null);
+  const [destinationBranchLabel, setDestinationBranchLabel] = useState<string | null>(null);
+  const [status, setStatus] = useState<ShipmentStatus | null>(null);
+  const [observation, setObservation] = useState<ShipmentObservation | null>(null);
+  const [deliveryComment, setDeliveryComment] = useState<string | null>(null);
 
   // Header display data
   const [guia, setGuia] = useState("");
@@ -105,6 +121,16 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "No se pudieron cargar las órdenes de entrega.");
+    }
+  }, [showToast]);
+
+  const fetchBranchOffices = useCallback(async () => {
+    try {
+      const res = await branchOfficeService.getBranchOffices(1, 100);
+      setBranchOffices(res.data);
+    } catch (err) {
+      console.error(err);
+      showToast("error", "Error", "No se pudieron cargar las sucursales.");
     }
   }, [showToast]);
 
@@ -154,6 +180,19 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       setCreatedBy(shipment.createdBy);
       setPackageCount(shipment.packageCount);
       setPackageDescription(shipment.packageDescription);
+      setOriginBranchLabel(
+        shipment.originBranchOfficeCode
+          ? [shipment.originBranchOfficeCode, shipment.originBranchOfficeCity].filter(Boolean).join(" — ")
+          : null
+      );
+      setDestinationBranchLabel(
+        shipment.destinationBranchOfficeCode
+          ? [shipment.destinationBranchOfficeCode, shipment.destinationBranchOfficeCity].filter(Boolean).join(" — ")
+          : null
+      );
+      setStatus(shipment.status ?? null);
+      setObservation(shipment.observation ?? null);
+      setDeliveryComment(shipment.deliveryComment ?? null);
       setOrderInfo((prev) => ({
         clientPhone: prev?.clientPhone ?? "",
         destinationDepartment: shipment.destinationDepartment,
@@ -206,10 +245,11 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
   useEffect(() => {
     if (mode === "create") {
       fetchOrders();
+      fetchBranchOffices();
     } else {
       loadShipment();
     }
-  }, [mode, fetchOrders, loadShipment]);
+  }, [mode, fetchOrders, fetchBranchOffices, loadShipment]);
 
   const handleOrderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -237,12 +277,17 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       showToast("error", "Error", "Debe describir los paquetes del envío.");
       return;
     }
+    if (mode === "create" && !destinationBranchOfficeId) {
+      showToast("error", "Error", "Debe seleccionar la sucursal de destino.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       if (mode === "create") {
         const payload: CreateShipmentRequest = {
           orderDeliveryId,
+          destinationBranchOfficeId,
           packageCount,
           packageDescription: packageDescription.trim(),
           lines: lines.map((l) => ({
@@ -268,7 +313,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       onSaved();
       onClose();
     } catch (err: unknown) {
-      showToast("error", "Error", err instanceof Error ? err.message : "No se pudo guardar el envío.");
+      showToast("error", "Error", getShipmentErrorMessage(err, "No se pudo guardar el envío."));
     } finally {
       setSubmitting(false);
     }
@@ -348,6 +393,32 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
         </div>
 
         <div className="overflow-y-auto bg-gray-100 px-6 py-6 custom-scrollbar dark:bg-gray-900/60">
+          {(status || originBranchLabel || destinationBranchLabel) && (
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-gray-800 dark:bg-gray-900">
+              <div className="flex flex-wrap items-center gap-3">
+                {status && (
+                  <Badge size="sm" color={SHIPMENT_STATUS_BADGE[status] ?? "light"}>
+                    {SHIPMENT_STATUS_LABELS[status] ?? status}
+                  </Badge>
+                )}
+                {observation && (
+                  <span className="text-xs text-warning-600 dark:text-orange-400">
+                    {SHIPMENT_OBSERVATION_LABELS[observation] ?? observation}
+                  </span>
+                )}
+                {(originBranchLabel || destinationBranchLabel) && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {originBranchLabel ?? "—"} &rarr; {destinationBranchLabel ?? "—"}
+                  </span>
+                )}
+              </div>
+              {deliveryComment && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="font-medium">Comentario del delivery:</span> {deliveryComment}
+                </p>
+              )}
+            </div>
+          )}
           <div ref={waybillRef}>
             <ShipmentWaybill
               code={guia}
@@ -434,6 +505,24 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
                   </option>
                 ))}
               </select>
+
+              <div className="mt-4">
+                <Label required>Sucursal de Destino</Label>
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  value={destinationBranchOfficeId}
+                  onChange={(e) => setDestinationBranchOfficeId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>Seleccione la sucursal de destino</option>
+                  {branchOffices.map((b) => (
+                    <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  La sucursal de origen se registra automáticamente con la sucursal de tu usuario.
+                </p>
+              </div>
             </div>
           ) : null}
 
@@ -460,6 +549,32 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
               <InfoField label="Remitente" value={orderInfo?.senderFullName} />
               {orderInfo?.senderPhone && <InfoField label="Teléfono Remitente" value={orderInfo.senderPhone} />}
               {orderInfo?.senderAddress && <InfoField label="Dirección Remitente" value={orderInfo.senderAddress} />}
+              {mode !== "create" && (
+                <>
+                  <InfoField label="Sucursal Origen" value={originBranchLabel} />
+                  <InfoField label="Sucursal Destino" value={destinationBranchLabel} />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400 dark:text-gray-500">Estado</p>
+                    {status ? (
+                      <Badge size="sm" color={SHIPMENT_STATUS_BADGE[status] ?? "light"}>
+                        {SHIPMENT_STATUS_LABELS[status] ?? status}
+                      </Badge>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">—</p>
+                    )}
+                  </div>
+                  <InfoField
+                    label="Observación"
+                    value={observation ? SHIPMENT_OBSERVATION_LABELS[observation] ?? observation : null}
+                  />
+                  {deliveryComment && (
+                    <div className="col-span-2 min-w-0 sm:col-span-4">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Comentario del Delivery</p>
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">{deliveryComment}</p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
