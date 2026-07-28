@@ -11,6 +11,7 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon } from "@/icons";
@@ -99,17 +100,20 @@ export default function SupplierOrderDeliveriesTable({
     [deleteModal]
   );
 
-  const handleDelete = async () => {
-    if (!selectedId) return;
-    try {
-      await orderDeliveryService.deleteDelivery(selectedId);
-      showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
-      deleteModal.closeModal();
-      onDataChange();
-    } catch (error: unknown) {
-      showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
-    }
-  };
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const handleDelete = () =>
+    runDelete(async () => {
+      if (!selectedId) return;
+      try {
+        await orderDeliveryService.deleteDelivery(selectedId);
+        showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
+        deleteModal.closeModal();
+        onDataChange();
+      } catch (error: unknown) {
+        showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
+      }
+    });
 
   const selectedOrderBasic = orders.find(o => o.id === selectedId);
 
@@ -296,15 +300,17 @@ export default function SupplierOrderDeliveriesTable({
           <div className="flex justify-end gap-3">
             <button
               onClick={deleteModal.closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>
             <button
               onClick={handleDelete}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors"
+              disabled={deleting}
+              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sí, eliminar
+              {deleting ? "Eliminando…" : "Sí, eliminar"}
             </button>
           </div>
         </div>

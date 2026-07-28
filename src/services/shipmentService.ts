@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import { API_ERROR_MESSAGES } from './apiErrorMessages';
 
 // ─── Estados y observaciones ─────────────────────────────────────────────────
 
@@ -65,16 +66,10 @@ export const SHIPMENT_OBSERVATION_LABELS: Record<ShipmentObservation, string> = 
 // Solo se puede observar un envío en estos estados.
 export const OBSERVABLE_STATUSES: ShipmentStatus[] = ['InTransit', 'Observed'];
 
-// Mensajes amigables para las claves de error del backend (vienen en `title`).
-export const SHIPMENT_ERROR_MESSAGES: Record<string, string> = {
-  'shipment.originbranch.missing':
-    'Tu usuario no tiene una sucursal asignada, por lo que no puede atender envíos. Pide al administrador que te asigne una sucursal.',
-  'shipment.statuschange.empty': 'Debes indicar un estado, una observación o un comentario.',
-  'shipment.statuschange.conflict': 'No se puede mandar estado y observación a la vez.',
-  'shipment.statuschange.invalidtransition': 'La transición de estado no está permitida.',
-  'shipment.observation.invalidstatus':
-    'Solo se puede observar un envío en estado "En tránsito" u "Observado".',
-};
+// Los mensajes por clave de error viven en un único mapa central (apiClient ya
+// traduce el `title` del ProblemDetails al lanzar el error); se reexporta para
+// los componentes que traducen a mano.
+export const SHIPMENT_ERROR_MESSAGES = API_ERROR_MESSAGES;
 
 export function getShipmentErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object' && 'message' in err) {
@@ -153,6 +148,10 @@ export interface ShipmentListFilters {
   originBranchOfficeId?: string;
   destinationBranchOfficeId?: string;
   status?: ShipmentStatus | '';
+  // Rango sobre la fecha de creación del envío, en formato `yyyy-MM-dd`.
+  // Ambos extremos son inclusive y el backend cubre el día completo en `dateTo`.
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface ShipmentsPaginatedResponse {
@@ -201,9 +200,10 @@ export interface CreateSporadicShipmentLineRequest {
   shippingCost: number;
 }
 
+// El origen (departamento y sucursal) lo pone el backend con la sucursal del
+// usuario que registra el envío: no se manda desde el front.
 export interface CreateSporadicShipmentRequest {
   destinationBranchOfficeId: string;
-  originDepartment: string;
   senderFullName: string;
   senderPhone: string;
   senderAddress: string;
@@ -276,6 +276,8 @@ export const shipmentService = {
     if (filters.originBranchOfficeId) query.append('originBranchOfficeId', filters.originBranchOfficeId);
     if (filters.destinationBranchOfficeId) query.append('destinationBranchOfficeId', filters.destinationBranchOfficeId);
     if (filters.status) query.append('status', filters.status);
+    if (filters.dateFrom) query.append('dateFrom', filters.dateFrom);
+    if (filters.dateTo) query.append('dateTo', filters.dateTo);
     return apiClient<ShipmentsPaginatedResponse>(`/shipments?${query.toString()}`);
   },
 

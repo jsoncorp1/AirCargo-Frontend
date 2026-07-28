@@ -6,6 +6,7 @@ import Label from "@/components/form/Label";
 import Badge from "@/components/ui/badge/Badge";
 import TextArea from "@/components/form/input/TextArea";
 import { useToast } from "@/context/ToastContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
   shipmentService,
   ShipmentStatus,
@@ -53,7 +54,9 @@ export default function ShipmentStatusModal({
   const [status, setStatus] = useState<ShipmentStatus | "">("");
   const [observation, setObservation] = useState<ShipmentObservation | "">("");
   const [deliveryComment, setDeliveryComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo: bloquea los botones mientras el PATCH está en curso (y corta el
+  // segundo click del doble click).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const modeOptions = useMemo(
     () =>
@@ -65,7 +68,7 @@ export default function ShipmentStatusModal({
     [canObserve, allowedStatuses.length]
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const comment = deliveryComment.trim();
@@ -82,26 +85,25 @@ export default function ShipmentStatusModal({
       return;
     }
 
-    setSubmitting(true);
-    try {
-      // Se manda `status` o `observation`, nunca ambos; el comentario acompaña a cualquiera.
-      const res = await shipmentService.changeShipmentStatus(shipmentId, {
-        ...(mode === "status" && status ? { status } : {}),
-        ...(mode === "observation" && observation ? { observation } : {}),
-        ...(comment ? { deliveryComment: comment } : {}),
-      });
-      showToast(
-        "success",
-        "Envío actualizado",
-        `La guía ${res.code} quedó en estado "${SHIPMENT_STATUS_LABELS[res.status]}".`
-      );
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      showToast("error", "Error", getShipmentErrorMessage(err, "No se pudo actualizar el envío."));
-    } finally {
-      setSubmitting(false);
-    }
+    runSubmit(async () => {
+      try {
+        // Se manda `status` o `observation`, nunca ambos; el comentario acompaña a cualquiera.
+        const res = await shipmentService.changeShipmentStatus(shipmentId, {
+          ...(mode === "status" && status ? { status } : {}),
+          ...(mode === "observation" && observation ? { observation } : {}),
+          ...(comment ? { deliveryComment: comment } : {}),
+        });
+        showToast(
+          "success",
+          "Envío actualizado",
+          `La guía ${res.code} quedó en estado "${SHIPMENT_STATUS_LABELS[res.status]}".`
+        );
+        onSaved();
+        onClose();
+      } catch (err: unknown) {
+        showToast("error", "Error", getShipmentErrorMessage(err, "No se pudo actualizar el envío."));
+      }
+    });
   };
 
   return (
@@ -209,7 +211,7 @@ export default function ShipmentStatusModal({
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
-          <Button size="sm" variant="outline" type="button" onClick={onClose}>
+          <Button size="sm" variant="outline" type="button" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
           <Button size="sm" type="submit" disabled={submitting}>

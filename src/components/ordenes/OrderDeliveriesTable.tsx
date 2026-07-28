@@ -11,9 +11,11 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
-import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon } from "@/icons";
+import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon, TaskIcon } from "@/icons";
+import ShipmentForm from "@/components/envios/ShipmentForm";
 import {
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
@@ -75,6 +77,7 @@ export default function OrderDeliveriesTable({
 }: OrderDeliveriesTableProps) {
   const { showToast } = useToast();
   const formModal = useModal();
+  const attendModal = useModal();
   const deleteModal = useModal();
 
   const [formMode, setFormMode] = useState<FormMode>("create");
@@ -106,6 +109,14 @@ export default function OrderDeliveriesTable({
     [formModal]
   );
 
+  const openAttend = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      attendModal.openModal();
+    },
+    [attendModal]
+  );
+
   const askDelete = useCallback(
     (id: string) => {
       setSelectedId(id);
@@ -114,17 +125,20 @@ export default function OrderDeliveriesTable({
     [deleteModal]
   );
 
-  const handleDelete = async () => {
-    if (!selectedId) return;
-    try {
-      await orderDeliveryService.deleteDelivery(selectedId);
-      showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
-      deleteModal.closeModal();
-      onDataChange();
-    } catch (error: unknown) {
-      showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
-    }
-  };
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const handleDelete = () =>
+    runDelete(async () => {
+      if (!selectedId) return;
+      try {
+        await orderDeliveryService.deleteDelivery(selectedId);
+        showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
+        deleteModal.closeModal();
+        onDataChange();
+      } catch (error: unknown) {
+        showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
+      }
+    });
 
   const selectedOrderBasic = orders.find(o => o.id === selectedId);
 
@@ -256,6 +270,15 @@ export default function OrderDeliveriesTable({
                         >
                           <EyeIcon className="size-4 shrink-0" /> Ver
                         </button>
+                        {!order.isAttended && (
+                          <button
+                            onClick={() => openAttend(order.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-500/10 dark:hover:text-brand-300 transition-colors"
+                            title="Atender la orden y generar la guía del envío"
+                          >
+                            <TaskIcon className="size-4 shrink-0" /> Atender
+                          </button>
+                        )}
                         {order.orderType !== "Sporadic" && (
                           <button
                             onClick={() => openEdit(order.id)}
@@ -309,6 +332,23 @@ export default function OrderDeliveriesTable({
         )}
       </Modal>
 
+      {/* Atender: crea el envío de la orden (queda atendida y aparece en Envíos) */}
+      <Modal
+        isOpen={attendModal.isOpen}
+        onClose={attendModal.closeModal}
+        className="max-w-[700px] m-4 z-50"
+      >
+        {attendModal.isOpen && selectedId && (
+          <ShipmentForm
+            key={`attend-${selectedId}`}
+            mode="create"
+            presetOrderDeliveryId={selectedId}
+            onClose={attendModal.closeModal}
+            onSaved={onDataChange}
+          />
+        )}
+      </Modal>
+
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={deleteModal.isOpen}
@@ -335,15 +375,17 @@ export default function OrderDeliveriesTable({
           <div className="flex justify-end gap-3">
             <button
               onClick={deleteModal.closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>
             <button
               onClick={handleDelete}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors"
+              disabled={deleting}
+              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sí, eliminar
+              {deleting ? "Eliminando…" : "Sí, eliminar"}
             </button>
           </div>
         </div>

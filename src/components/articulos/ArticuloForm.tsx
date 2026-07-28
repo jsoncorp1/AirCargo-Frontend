@@ -6,6 +6,7 @@ import Input from "@/components/form/input/InputField";
 import SelectField from "@/components/form/Select";
 import Switch from "@/components/form/switch/Switch";
 import Button from "@/components/ui/button/Button";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { Supplier } from "@/services/supplierService";
 import { CreateArticleRequest } from "@/services/articleService";
 
@@ -15,7 +16,7 @@ interface ArticuloFormProps {
   mode: "create" | "edit" | "view";
   initialData: CreateArticleRequest | null;
   proveedores: Supplier[];
-  onSubmit: (data: ArticuloFormData) => void;
+  onSubmit: (data: ArticuloFormData) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -30,6 +31,8 @@ const emptyData = (proveedores: Supplier[]): ArticuloFormData => ({
 export default function ArticuloForm({ mode, initialData, proveedores, onSubmit, onCancel }: ArticuloFormProps) {
   const [data, setData] = useState<ArticuloFormData>(initialData ?? emptyData(proveedores));
   const readOnly = mode === "view";
+  // Cerrojo: evita que un doble click registre el artículo dos veces.
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const set = <K extends keyof ArticuloFormData>(key: K, value: ArticuloFormData[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
@@ -99,12 +102,16 @@ export default function ArticuloForm({ mode, initialData, proveedores, onSubmit,
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 dark:border-gray-800">
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel} disabled={submitting}>
             {readOnly ? "Cerrar" : "Cancelar"}
           </Button>
           {!readOnly && (
-            <Button onClick={() => onSubmit(data)}>
-              {mode === "create" ? "Registrar Artículo" : "Guardar cambios"}
+            <Button onClick={() => runSubmit(() => onSubmit(data))} disabled={submitting}>
+              {submitting
+                ? "Guardando…"
+                : mode === "create"
+                ? "Registrar Artículo"
+                : "Guardar cambios"}
             </Button>
           )}
         </div>

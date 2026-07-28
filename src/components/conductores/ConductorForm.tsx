@@ -5,6 +5,7 @@ import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import SelectField from "@/components/form/Select";
 import Button from "@/components/ui/button/Button";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { Conductor, ConductorEstado } from "@/data/mock/conductores";
 
 export type ConductorFormData = Omit<Conductor, "id" | "fechaRegistro" | "calificacion">;
@@ -12,7 +13,7 @@ export type ConductorFormData = Omit<Conductor, "id" | "fechaRegistro" | "califi
 interface ConductorFormProps {
   mode: "create" | "edit" | "view";
   initialData: Conductor | null;
-  onSubmit: (data: ConductorFormData) => void;
+  onSubmit: (data: ConductorFormData) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -29,6 +30,8 @@ const emptyData: ConductorFormData = {
 export default function ConductorForm({ mode, initialData, onSubmit, onCancel }: ConductorFormProps) {
   const [data, setData] = useState<ConductorFormData>(initialData ?? emptyData);
   const readOnly = mode === "view";
+  // Cerrojo: evita que un doble click registre el conductor dos veces.
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const set = <K extends keyof ConductorFormData>(key: K, value: ConductorFormData[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
@@ -117,12 +120,16 @@ export default function ConductorForm({ mode, initialData, onSubmit, onCancel }:
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 dark:border-gray-800">
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel} disabled={submitting}>
             {readOnly ? "Cerrar" : "Cancelar"}
           </Button>
           {!readOnly && (
-            <Button onClick={() => onSubmit(data)}>
-              {mode === "create" ? "Registrar Conductor" : "Guardar cambios"}
+            <Button onClick={() => runSubmit(() => onSubmit(data))} disabled={submitting}>
+              {submitting
+                ? "Guardando…"
+                : mode === "create"
+                ? "Registrar Conductor"
+                : "Guardar cambios"}
             </Button>
           )}
         </div>

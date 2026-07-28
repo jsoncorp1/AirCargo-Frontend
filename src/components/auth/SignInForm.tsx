@@ -7,6 +7,7 @@ import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -14,17 +15,21 @@ export default function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { login, isLoading } = useAuth();
+  const { login } = useAuth();
+  // Cerrojo: evita que un doble click mande dos veces el login.
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    try {
-      await login({ email, password });
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Error al iniciar sesión");
-    }
+    runSubmit(async () => {
+      try {
+        await login({ email, password });
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Error al iniciar sesión");
+      }
+    });
   };
 
   return (
@@ -159,8 +164,8 @@ export default function SignInForm() {
                   </Link>
                 </div>
                 <div>
-                  <Button className="w-full" size="sm" type="submit">
-                    Sign in
+                  <Button className="w-full" size="sm" type="submit" disabled={submitting}>
+                    {submitting ? "Ingresando…" : "Sign in"}
                   </Button>
                 </div>
               </div>

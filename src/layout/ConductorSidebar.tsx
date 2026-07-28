@@ -3,7 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
-import { BoxCubeIcon, PageIcon, UserCircleIcon, ListIcon, HorizontaLDots } from "../icons/index";
+import { BoxCubeIcon, HorizontaLDots } from "../icons/index";
 
 type NavItem = {
   name: string;
@@ -14,27 +14,12 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <BoxCubeIcon />,
-    name: "Registrar Envío Esporádico",
-    path: "/admin/envios/esporadico",
-  },
-  {
-    icon: <PageIcon />,
-    name: "Atender Órdenes de Entrega",
-    path: "/admin/ordenes",
-  },
-  {
-    icon: <UserCircleIcon />,
-    name: "Mis Conductores",
-    path: "/admin/conductores",
-  },
-  {
-    icon: <ListIcon />,
-    name: "Informe de Envíos",
-    path: "/admin/envios",
+    name: "Envíos",
+    path: "/conductor/envios",
   },
 ];
 
-const AdminSidebar: React.FC = () => {
+const ConductorSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
@@ -58,7 +43,7 @@ const AdminSidebar: React.FC = () => {
         className={`py-8 flex  ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
           }`}
       >
-        <Link href="/admin/envios/esporadico" className="flex items-center gap-2">
+        <Link href="/conductor/envios" className="flex items-center gap-2">
           {isExpanded || isHovered || isMobileOpen ? (
             <span className="text-2xl font-bold text-gray-900 dark:text-white">
               Air<span className="text-brand-500">Cargo</span>
@@ -108,4 +93,4 @@ const AdminSidebar: React.FC = () => {
   );
 };
 
-export default AdminSidebar;
+export default ConductorSidebar;

@@ -25,6 +25,7 @@ import {
 } from "@/icons";
 import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
 import { useToast } from "@/context/ToastContext";
 
@@ -178,19 +179,22 @@ export default function ArticulosTable() {
     }
   };
 
-  const confirmDelete = async () => {
-    if (articuloToDelete) {
-      try {
-        await articleService.deleteArticle(articuloToDelete.id);
-        showToast("success", "Artículo eliminado", `El artículo "${articuloToDelete.nombre}" fue eliminado.`);
-        fetchAll();
-      } catch (error: unknown) {
-        showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar el artículo.");
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const confirmDelete = () =>
+    runDelete(async () => {
+      if (articuloToDelete) {
+        try {
+          await articleService.deleteArticle(articuloToDelete.id);
+          showToast("success", "Artículo eliminado", `El artículo "${articuloToDelete.nombre}" fue eliminado.`);
+          fetchAll();
+        } catch (error: unknown) {
+          showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar el artículo.");
+        }
       }
-    }
-    deleteModal.closeModal();
-    setArticuloToDelete(null);
-  };
+      deleteModal.closeModal();
+      setArticuloToDelete(null);
+    });
 
   const getStockBadge = (stock: number) => {
     if (stock === 0) return <Badge size="sm" color="error">Sin Stock</Badge>;
@@ -372,8 +376,8 @@ export default function ArticulosTable() {
             ¿Eliminar <strong className="text-gray-800 dark:text-white">{articuloToDelete?.nombre}</strong>? Esta acción no se puede deshacer.
           </p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={deleteModal.closeModal}>Cancelar</Button>
-            <Button onClick={confirmDelete}>Eliminar</Button>
+            <Button variant="outline" onClick={deleteModal.closeModal} disabled={deleting}>Cancelar</Button>
+            <Button onClick={confirmDelete} disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar"}</Button>
           </div>
         </div>
       </Modal>

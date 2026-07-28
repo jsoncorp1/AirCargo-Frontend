@@ -1,4 +1,9 @@
 import { API_BASE_URL } from '../config/env';
+import {
+  API_ERROR_MESSAGES,
+  FORBIDDEN_FALLBACK_MESSAGE,
+  ORPHAN_TOKEN_ERROR_KEYS,
+} from './apiErrorMessages';
 
 interface FetchOptions extends RequestInit {
   data?: any;
@@ -34,11 +39,16 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
   }
 
   if (!response.ok) {
+    const errorKey: string | undefined = responseData?.title;
+
     // Toda la API exige JWT salvo /auth/login. Un 401 acá significa que no hay
     // token o que expiró — se limpia la sesión y se manda a login, salvo que
     // el 401 venga del login mismo (credenciales inválidas, no un tema de sesión).
+    // Los 404 `*.user.notfound` son tokens huérfanos (el usuario del token ya no
+    // existe en BD, p. ej. tras un reseteo): se tratan igual que un 401.
     const isLoginRequest = endpoint.includes('/auth/login');
-    if (response.status === 401 && !isLoginRequest && typeof window !== 'undefined') {
+    const isOrphanToken = !!errorKey && ORPHAN_TOKEN_ERROR_KEYS.has(errorKey);
+    if ((response.status === 401 || isOrphanToken) && !isLoginRequest && typeof window !== 'undefined') {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/signin') {
@@ -46,10 +56,25 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
       }
     }
 
+    // Los errores de permisos llegan como ProblemDetails con `title` = error key
+    // y `detail` en español. El 403 del middleware de roles llega sin body.
+    const mappedMessage =
+      (errorKey && API_ERROR_MESSAGES[errorKey]) ||
+      errorKey ||
+      responseData?.detail;
+    const fallbackMessage =
+      response.status === 403
+        ? FORBIDDEN_FALLBACK_MESSAGE
+        : 'An error occurred while processing your request.';
+
     // throw standard error combining ProblemDetails standard from .NET
     throw {
       status: response.status,
-      message: responseData?.title || responseData?.detail || 'An error occurred while processing your request.',
+      // `title` (error key) primero para que los mapas de mensajes por módulo
+      // (p. ej. SHIPMENT_ERROR_MESSAGES) puedan seguir traduciendo por clave.
+      message: mappedMessage || fallbackMessage,
+      errorKey,
+      detail: responseData?.detail,
       errors: responseData?.errors || {},
     };
   }

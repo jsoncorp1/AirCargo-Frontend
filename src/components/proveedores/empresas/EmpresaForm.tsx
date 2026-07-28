@@ -9,6 +9,7 @@ import Switch from "@/components/form/switch/Switch";
 import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
 import AvatarText from "@/components/ui/avatar/AvatarText";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { UserIcon, BoxCubeIcon } from "@/icons";
 import { BOLIVIAN_DEPARTMENT_LABELS, BolivianDepartment, Supplier } from "@/services/supplierService";
 
@@ -17,7 +18,7 @@ export type EmpresaFormData = Omit<Supplier, "id">;
 interface EmpresaFormProps {
   mode: "create" | "edit" | "view";
   initialData: Supplier | null;
-  onSubmit: (data: EmpresaFormData) => void;
+  onSubmit: (data: EmpresaFormData) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -32,6 +33,8 @@ const DEPARTMENT_OPTIONS = (Object.keys(BOLIVIAN_DEPARTMENT_LABELS) as BolivianD
 
 export default function EmpresaForm({ mode, initialData, onSubmit, onCancel }: EmpresaFormProps) {
   const [data, setData] = useState<EmpresaFormData>(initialData ?? emptyData);
+  // Cerrojo: evita que un doble click cree la empresa dos veces.
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const set = <K extends keyof EmpresaFormData>(key: K, value: EmpresaFormData[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
@@ -134,9 +137,9 @@ export default function EmpresaForm({ mode, initialData, onSubmit, onCancel }: E
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-5 dark:border-gray-800">
-          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-          <Button onClick={() => onSubmit(data)}>
-            {mode === "create" ? "Crear empresa" : "Guardar cambios"}
+          <Button variant="outline" onClick={onCancel} disabled={submitting}>Cancelar</Button>
+          <Button onClick={() => runSubmit(() => onSubmit(data))} disabled={submitting}>
+            {submitting ? "Guardando…" : mode === "create" ? "Crear empresa" : "Guardar cambios"}
           </Button>
         </div>
       </div>

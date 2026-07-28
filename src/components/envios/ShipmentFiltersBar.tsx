@@ -8,6 +8,7 @@ import {
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import { supplierService, Supplier } from "@/services/supplierService";
+import ShipmentDateRangeFilter, { DateRange } from "./ShipmentDateRangeFilter";
 
 interface ShipmentFiltersBarProps {
   value: ShipmentListFilters;
@@ -46,8 +47,17 @@ export default function ShipmentFiltersBar({
   const set = (patch: Partial<ShipmentListFilters>) => onChange({ ...value, ...patch });
 
   const hasFilters = Boolean(
-    value.supplierId || value.originBranchOfficeId || value.destinationBranchOfficeId || value.status
+    value.supplierId ||
+      value.originBranchOfficeId ||
+      value.destinationBranchOfficeId ||
+      value.status ||
+      value.dateFrom ||
+      value.dateTo
   );
+
+  const dateRange: DateRange = { from: value.dateFrom, to: value.dateTo };
+  const setDateRange = (range: DateRange) =>
+    set({ dateFrom: range.from, dateTo: range.to });
 
   const branchOptions = branchOffices.map((b) => (
     <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
@@ -106,6 +116,13 @@ export default function ShipmentFiltersBar({
           )}
         </select>
       </div>
+
+      <ShipmentDateRangeFilter
+        className="lg:w-64"
+        label=""
+        value={dateRange}
+        onChange={setDateRange}
+      />
 
       {hasFilters && (
         <button

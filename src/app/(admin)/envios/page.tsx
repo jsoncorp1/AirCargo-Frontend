@@ -7,6 +7,7 @@ import { shipmentService, ShipmentPaginatedItem, ShipmentListFilters } from "@/s
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import ShipmentsTable from "@/components/envios/ShipmentsTable";
 import ShipmentFiltersBar from "@/components/envios/ShipmentFiltersBar";
+import { lastWeekRange } from "@/components/envios/ShipmentDateRangeFilter";
 
 const DEFAULT_PER_PAGE = 10;
 
@@ -25,8 +26,12 @@ export default function EnviosPage() {
   const [totalWeight, setTotalWeight] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
-  // Filtros combinables: proveedor, sucursal origen/destino y estado.
-  const [filters, setFilters] = useState<ShipmentListFilters>({});
+  // Filtros combinables: proveedor, sucursal origen/destino, estado y rango de
+  // fechas. Por defecto se muestra la última semana.
+  const [filters, setFilters] = useState<ShipmentListFilters>(() => {
+    const { from, to } = lastWeekRange();
+    return { dateFrom: from, dateTo: to };
+  });
 
   const fetchShipments = useCallback(async () => {
     setLoading(true);

@@ -30,8 +30,10 @@ export interface CreateUserRequest {
   phoneNumber?: string;
   dni?: string;
   roleId: string;
-  supplierId?: string;
-  // Sucursal del usuario (opcional): los usuarios de proveedores no llevan sucursal.
+  // Coherencia rol ↔ alcance (la valida el backend):
+  // usuarioempresa ⇒ supplierId obligatorio y branchOfficeId en null;
+  // admin/conductor ⇒ branchOfficeId obligatorio y supplierId en null.
+  supplierId?: string | null;
   branchOfficeId?: string | null;
 }
 

@@ -5,7 +5,6 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
 import { orderDeliveryService, OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
 import SupplierOrderDeliveriesTable from "@/components/proveedor/SupplierOrderDeliveriesTable";
-import { useAuth } from "@/context/AuthContext";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 
 const DEFAULT_PER_PAGE = 10;
@@ -16,8 +15,6 @@ const STATUS_BATCH_SIZE = 200;
 type StatusFilter = "" | "pending" | "attended";
 
 export default function ProveedorOrdenesPage() {
-  const { companyId } = useAuth();
-
   // Página real del servidor: se usa cuando el filtro de estado es "Todas".
   const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [pageTotalPages, setPageTotalPages] = useState(1);
@@ -36,7 +33,8 @@ export default function ProveedorOrdenesPage() {
   const fetchPage = useCallback(async (page: number) => {
     setPageLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(page, perPage, companyId ?? undefined);
+      // El backend ya limita el listado al proveedor del usuario autenticado.
+      const res = await orderDeliveryService.getDeliveries(page, perPage);
       setPageOrders(res.data);
       setPageTotalPages(res.totalPages);
       setPageTotalCount(res.count);
@@ -45,19 +43,19 @@ export default function ProveedorOrdenesPage() {
     } finally {
       setPageLoading(false);
     }
-  }, [companyId, perPage]);
+  }, [perPage]);
 
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE, companyId ?? undefined);
+      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
       setAllOrders(res.data);
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
       setBatchLoading(false);
     }
-  }, [companyId]);
+  }, []);
 
   const fetchOrders = useCallback(() => {
     fetchPage(currentPage);
@@ -96,9 +94,9 @@ export default function ProveedorOrdenesPage() {
 
   const statusTabs: TabItem[] = useMemo(
     () => [
-      { value: "", label: "Todas", count: allOrders.length },
       { value: "pending", label: "Pendientes", count: allOrders.filter((o) => !o.isAttended).length },
       { value: "attended", label: "Atendidas", count: allOrders.filter((o) => o.isAttended).length },
+      { value: "", label: "Todas", count: allOrders.length },
     ],
     [allOrders]
   );

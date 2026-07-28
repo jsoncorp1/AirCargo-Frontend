@@ -88,17 +88,26 @@ export interface UpdateOrderDeliveryRequest {
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 
+export interface OrderDeliveryListFilters {
+  // Solo lo respeta superadmin: al usuarioempresa el backend le fuerza su
+  // proveedor y al admin le limita el listado a su departamento.
+  supplierId?: string;
+  // `true` trae solo las órdenes sin atender (bandeja del admin).
+  unattended?: boolean;
+}
+
 export const orderDeliveryService = {
   getDeliveries: async (
     page = 1,
     perPage = 10,
-    supplierId?: string
+    filters: OrderDeliveryListFilters = {}
   ): Promise<OrderDeliveriesPaginatedResponse> => {
     const query = new URLSearchParams({
       page: page.toString(),
       perPage: perPage.toString(),
     });
-    if (supplierId) query.append('supplierId', supplierId);
+    if (filters.supplierId) query.append('supplierId', filters.supplierId);
+    if (filters.unattended) query.append('unattended', 'true');
     return apiClient<OrderDeliveriesPaginatedResponse>(
       `/order-deliveries?${query.toString()}`
     );

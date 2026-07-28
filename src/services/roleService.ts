@@ -1,5 +1,9 @@
 import { apiClient } from './apiClient';
 
+// Id semilla del rol conductor. El admin lo necesita para crear conductores
+// pero no puede listar roles (GET /roles es solo superadmin → 403).
+export const CONDUCTOR_ROLE_ID = '44444444-4444-4444-4444-444444444444';
+
 export interface Role {
   id: string;
   name: string;

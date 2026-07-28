@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/context/ToastContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
   orderDeliveryService,
   OrderDeliveryPaginatedItem,
@@ -38,6 +39,9 @@ const DELIVERY_TYPE_LABELS: Record<string, string> = {
 interface ShipmentFormProps {
   mode: "create" | "edit" | "view";
   shipmentId?: string | null;
+  // Al atender una orden desde el listado de órdenes, la orden ya viene elegida:
+  // en vez del selector se muestran sus datos y solo se piden los del envío.
+  presetOrderDeliveryId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -78,12 +82,22 @@ function InfoField({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: ShipmentFormProps) {
+export default function ShipmentForm({
+  mode,
+  shipmentId,
+  presetOrderDeliveryId,
+  onClose,
+  onSaved,
+}: ShipmentFormProps) {
   const { showToast } = useToast();
   const readOnly = mode === "view";
+  // Modo "atender orden": create con la orden ya fijada desde el listado.
+  const attendingOrder = mode === "create" && !!presetOrderDeliveryId;
 
   const [loading, setLoading] = useState(mode !== "create");
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo: bloquea guardar/cancelar mientras la petición está en curso (y
+  // corta el segundo click del doble click).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
   const [exporting, setExporting] = useState<"print" | "pdf" | null>(null);
   const waybillRef = useRef<HTMLDivElement>(null);
 
@@ -93,7 +107,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
   const [lines, setLines] = useState<ShipmentLineFormState[]>([]);
 
   // Form State
-  const [orderDeliveryId, setOrderDeliveryId] = useState<string>("");
+  const [orderDeliveryId, setOrderDeliveryId] = useState<string>(presetOrderDeliveryId ?? "");
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState<string>("");
   const [packageCount, setPackageCount] = useState<number>(1);
   const [packageDescription, setPackageDescription] = useState<string>("");
@@ -115,9 +129,11 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await orderDeliveryService.getDeliveries(1, 100);
-      // Only orders that haven't been shipped yet make sense to attach a new shipment to.
-      setOrders(res.data.filter((o) => !o.isAttended));
+      // Solo las órdenes sin atender se pueden convertir en envío. El backend
+      // además limita el listado a las del departamento del admin: atender una
+      // orden de otro departamento devuelve 403 shipment.orderdelivery.forbidden.
+      const res = await orderDeliveryService.getDeliveries(1, 100, { unattended: true });
+      setOrders(res.data);
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "No se pudieron cargar las órdenes de entrega.");
@@ -165,8 +181,15 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       }
     } catch (err) {
       console.error(err);
+      // Sin las líneas de la orden no se puede armar el envío: hay que avisar,
+      // si no el formulario queda vacío y el botón deshabilitado sin explicación.
+      showToast(
+        "error",
+        "Error",
+        getShipmentErrorMessage(err, "No se pudieron cargar los datos de la orden.")
+      );
     }
-  }, [mode]);
+  }, [mode, showToast]);
 
   const loadShipment = useCallback(async () => {
     if (!shipmentId) return;
@@ -244,12 +267,24 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
 
   useEffect(() => {
     if (mode === "create") {
-      fetchOrders();
       fetchBranchOffices();
+      if (presetOrderDeliveryId) {
+        // La orden ya está elegida: solo se cargan sus líneas y datos de cabecera.
+        loadOrderDetails(presetOrderDeliveryId);
+      } else {
+        fetchOrders();
+      }
     } else {
       loadShipment();
     }
-  }, [mode, fetchOrders, fetchBranchOffices, loadShipment]);
+  }, [
+    mode,
+    presetOrderDeliveryId,
+    fetchOrders,
+    fetchBranchOffices,
+    loadOrderDetails,
+    loadShipment,
+  ]);
 
   const handleOrderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -263,7 +298,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
     setLines(newLines);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (lines.length === 0) {
       showToast("error", "Error", "El envío debe tener detalles configurados.");
@@ -282,41 +317,46 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       return;
     }
 
-    setSubmitting(true);
-    try {
-      if (mode === "create") {
-        const payload: CreateShipmentRequest = {
-          orderDeliveryId,
-          destinationBranchOfficeId,
-          packageCount,
-          packageDescription: packageDescription.trim(),
-          lines: lines.map((l) => ({
-            orderDeliveryDetailId: l.orderDeliveryDetailId,
-            weight: l.weight,
-            shippingCost: l.shippingCost,
-          })),
-        };
-        await shipmentService.createShipment(payload);
-        showToast("success", "Envío creado", "El envío fue registrado exitosamente.");
-      } else if (mode === "edit" && shipmentId) {
-        await shipmentService.updateShipment(shipmentId, {
-          packageCount,
-          packageDescription: packageDescription.trim(),
-          lines: lines.map((l) => ({
-            shipmentDetailId: l.shipmentDetailId ?? "",
-            weight: l.weight,
-            shippingCost: l.shippingCost,
-          })),
-        });
-        showToast("success", "Envío actualizado", "El envío fue actualizado exitosamente.");
+    runSubmit(async () => {
+      try {
+        if (mode === "create") {
+          const payload: CreateShipmentRequest = {
+            orderDeliveryId,
+            destinationBranchOfficeId,
+            packageCount,
+            packageDescription: packageDescription.trim(),
+            lines: lines.map((l) => ({
+              orderDeliveryDetailId: l.orderDeliveryDetailId,
+              weight: l.weight,
+              shippingCost: l.shippingCost,
+            })),
+          };
+          await shipmentService.createShipment(payload);
+          showToast(
+            "success",
+            attendingOrder ? "Orden atendida" : "Envío creado",
+            attendingOrder
+              ? "Se generó la guía; la orden queda como atendida y el envío ya aparece en Envíos."
+              : "El envío fue registrado exitosamente."
+          );
+        } else if (mode === "edit" && shipmentId) {
+          await shipmentService.updateShipment(shipmentId, {
+            packageCount,
+            packageDescription: packageDescription.trim(),
+            lines: lines.map((l) => ({
+              shipmentDetailId: l.shipmentDetailId ?? "",
+              weight: l.weight,
+              shippingCost: l.shippingCost,
+            })),
+          });
+          showToast("success", "Envío actualizado", "El envío fue actualizado exitosamente.");
+        }
+        onSaved();
+        onClose();
+      } catch (err: unknown) {
+        showToast("error", "Error", getShipmentErrorMessage(err, "No se pudo guardar el envío."));
       }
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      showToast("error", "Error", getShipmentErrorMessage(err, "No se pudo guardar el envío."));
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   const captureWaybill = async () => {
@@ -476,10 +516,18 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
     <div className="flex flex-col max-h-[85vh]">
       <div className="border-b border-gray-100 px-6 py-5 dark:border-gray-800 shrink-0">
         <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          {mode === "create" ? "Registrar Envío" : mode === "edit" ? "Editar Envío" : "Detalle de Envío"}
+          {attendingOrder
+            ? "Atender Orden"
+            : mode === "create"
+            ? "Registrar Envío"
+            : mode === "edit"
+            ? "Editar Envío"
+            : "Detalle de Envío"}
         </h4>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {mode === "create"
+          {attendingOrder
+            ? "Completa los datos del envío para esta orden. Al guardar se genera la guía y la orden queda atendida."
+            : mode === "create"
             ? "Selecciona una orden de entrega y registra el peso y costo de envío de cada artículo."
             : "Información del envío logístico."}
         </p>
@@ -491,22 +539,26 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
           {/* Header Info */}
           {mode === "create" ? (
             <div>
-              <Label required>Orden de Entrega Asociada</Label>
-              <select
-                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                value={orderDeliveryId}
-                onChange={handleOrderChange}
-                required
-              >
-                <option value="" disabled>Seleccione una orden</option>
-                {orders.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    [{new Date(o.createdAt).toLocaleDateString()}] {o.clientFullName} - {o.destinationDepartment}
-                  </option>
-                ))}
-              </select>
+              {!attendingOrder && (
+                <>
+                  <Label required>Orden de Entrega Asociada</Label>
+                  <select
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    value={orderDeliveryId}
+                    onChange={handleOrderChange}
+                    required
+                  >
+                    <option value="" disabled>Seleccione una orden</option>
+                    {orders.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        [{new Date(o.createdAt).toLocaleDateString()}] {o.clientFullName} - {o.destinationDepartment}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
 
-              <div className="mt-4">
+              <div className={attendingOrder ? "" : "mt-4"}>
                 <Label required>Sucursal de Destino</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -701,12 +753,14 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
                     Bs {totalCost.toFixed(2)}
                   </p>
                 </div>
+                {/* El costo de envío se registra aparte y NO se suma al precio
+                    total: el total es el valor de los artículos de la orden. */}
                 <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 dark:border-brand-800 dark:bg-brand-900/20">
                   <p className="text-xs font-medium text-brand-600 uppercase tracking-wider dark:text-brand-400">
-                    Costo Total (Cliente)
+                    Precio Total (Artículos)
                   </p>
                   <p className="text-lg font-bold text-brand-800 dark:text-brand-200">
-                    Bs {(goodsValue + totalCost).toFixed(2)}
+                    Bs {goodsValue.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -716,7 +770,7 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={submitting}>
           {readOnly ? "Cerrar" : "Cancelar"}
         </Button>
         {!readOnly && (
@@ -724,7 +778,13 @@ export default function ShipmentForm({ mode, shipmentId, onClose, onSaved }: Shi
             const form = document.getElementById("shipment-form") as HTMLFormElement | null;
             if (form) form.requestSubmit();
           }} disabled={submitting || lines.length === 0}>
-            {submitting ? "Guardando..." : mode === "create" ? "Registrar Envío" : "Guardar Cambios"}
+            {submitting
+              ? "Guardando..."
+              : attendingOrder
+              ? "Atender y Generar Guía"
+              : mode === "create"
+              ? "Registrar Envío"
+              : "Guardar Cambios"}
           </Button>
         )}
       </div>

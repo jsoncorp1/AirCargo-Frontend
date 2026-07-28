@@ -11,6 +11,7 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
@@ -134,17 +135,20 @@ export default function ArticleReceiptsTable({
     }
   };
 
-  const handleDelete = async () => {
-    if (!selected) return;
-    try {
-      await articleReceiptService.deleteReceipt(selected.id);
-      showToast("success", "Recepción eliminada", "El registro ha sido eliminado.");
-      deleteModal.closeModal();
-      onDataChange();
-    } catch (err: any) {
-      showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
-    }
-  };
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const handleDelete = () =>
+    runDelete(async () => {
+      if (!selected) return;
+      try {
+        await articleReceiptService.deleteReceipt(selected.id);
+        showToast("success", "Recepción eliminada", "El registro ha sido eliminado.");
+        deleteModal.closeModal();
+        onDataChange();
+      } catch (err: any) {
+        showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
+      }
+    });
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -329,15 +333,17 @@ export default function ArticleReceiptsTable({
           <div className="flex justify-end gap-3">
             <button
               onClick={deleteModal.closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>
             <button
               onClick={handleDelete}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors"
+              disabled={deleting}
+              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sí, eliminar
+              {deleting ? "Eliminando…" : "Sí, eliminar"}
             </button>
           </div>
         </div>

@@ -11,13 +11,22 @@ import {
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import Pagination from "@/components/tables/Pagination";
+import Badge from "@/components/ui/badge/Badge";
 import { EyeIcon, BoxCubeIcon } from "@/icons";
-import { ShipmentPaginatedItem } from "@/services/shipmentService";
+import {
+  ShipmentPaginatedItem,
+  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_BADGE,
+  SHIPMENT_OBSERVATION_LABELS,
+} from "@/services/shipmentService";
 import ShipmentForm from "@/components/envios/ShipmentForm";
 
 interface SupplierShipmentsTableProps {
   shipments: ShipmentPaginatedItem[];
   orderTotals: Record<string, number>;
+  // Fecha de creación de cada orden, para mostrar cuándo se solicitó el envío
+  // además de cuándo se emitió la guía.
+  orderDates?: Record<string, string>;
   loading: boolean;
   totalPages: number;
   currentPage: number;
@@ -41,6 +50,7 @@ function SkeletonRow() {
 export default function SupplierShipmentsTable({
   shipments,
   orderTotals,
+  orderDates,
   loading,
   totalPages,
   currentPage,
@@ -67,7 +77,9 @@ export default function SupplierShipmentsTable({
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Fecha
+                  <span title="Fecha y hora en que se atendió la orden y se emitió la guía del envío">
+                    Guía Emitida
+                  </span>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Guía
@@ -76,10 +88,10 @@ export default function SupplierShipmentsTable({
                   Cliente
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Peso (kg)
+                  Estado
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Costo Total
+                  Precio Artículos
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Costo Envío
@@ -115,10 +127,15 @@ export default function SupplierShipmentsTable({
                     <TableCell className="px-5 py-4 text-theme-sm">
                       <p className="text-gray-700 dark:text-gray-300">
                         {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
+                        <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">
+                          {new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}
-                      </p>
+                      {orderDates?.[shipment.orderDeliveryId] && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          Solicitado: {new Date(orderDates[shipment.orderDeliveryId]).toLocaleDateString("es-BO")}
+                        </p>
+                      )}
                     </TableCell>
 
                     <TableCell className="px-5 py-4">
@@ -133,12 +150,21 @@ export default function SupplierShipmentsTable({
                       </p>
                     </TableCell>
 
-                    <TableCell className="px-5 py-4 font-medium text-gray-700 text-theme-sm dark:text-gray-300">
-                      {shipment.totalWeight} kg
+                    <TableCell className="px-5 py-4">
+                      <Badge size="sm" color={SHIPMENT_STATUS_BADGE[shipment.status] ?? "light"}>
+                        {SHIPMENT_STATUS_LABELS[shipment.status] ?? shipment.status}
+                      </Badge>
+                      {shipment.observation && (
+                        <p className="mt-1 text-xs text-warning-600 dark:text-orange-400">
+                          {SHIPMENT_OBSERVATION_LABELS[shipment.observation] ?? shipment.observation}
+                        </p>
+                      )}
                     </TableCell>
 
+                    {/* Valor de los artículos de la orden; el costo de envío va
+                        en su propia columna y no se suma acá. */}
                     <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                      Bs {((orderTotals[shipment.orderDeliveryId] ?? 0) + shipment.shippingPrice).toFixed(2)}
+                      Bs {(orderTotals[shipment.orderDeliveryId] ?? 0).toFixed(2)}
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">

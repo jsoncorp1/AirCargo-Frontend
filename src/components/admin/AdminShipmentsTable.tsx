@@ -105,7 +105,7 @@ export default function AdminShipmentsTable({
                   Peso (kg)
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Costo Total
+                  Precio Artículos
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Costo Envío
@@ -184,8 +184,10 @@ export default function AdminShipmentsTable({
                       {shipment.totalWeight} kg
                     </TableCell>
 
+                    {/* Valor de los artículos de la orden; el costo de envío va
+                        en su propia columna y no se suma acá. */}
                     <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                      Bs {((orderTotals[shipment.orderDeliveryId] ?? 0) + shipment.shippingPrice).toFixed(2)}
+                      Bs {(orderTotals[shipment.orderDeliveryId] ?? 0).toFixed(2)}
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">

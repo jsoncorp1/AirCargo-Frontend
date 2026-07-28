@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/context/ToastContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 import { articleService, Article } from "@/services/articleService";
 import {
@@ -63,7 +64,9 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
   const readOnly = mode === "view";
 
   const [loading, setLoading] = useState(mode !== "create");
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo: bloquea guardar/cancelar mientras la petición está en curso (y
+  // corta el segundo click del doble click).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   // Data sources
   const [articles, setArticles] = useState<Article[]>([]);
@@ -176,7 +179,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
   const lineTotal = (line: LineFormState) => line.quantity * (Number(line.unitPrice) || 0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (lines.length === 0) {
       showToast("error", "Error", "Debe agregar al menos un artículo a la orden.");
@@ -187,46 +190,45 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const submittedLines = lines.map((l) => ({
-        articleId: l.articleId ?? "",
-        quantity: l.quantity,
-        unitPrice: Number(l.unitPrice) || 0,
-      }));
+    runSubmit(async () => {
+      try {
+        const submittedLines = lines.map((l) => ({
+          articleId: l.articleId ?? "",
+          quantity: l.quantity,
+          unitPrice: Number(l.unitPrice) || 0,
+        }));
 
-      if (mode === "create") {
-        const payload: CreateOrderDeliveryRequest = {
-          destinationDepartment: department,
-          clientFullName,
-          clientPhone,
-          clientAddress,
-          deliveryType,
-          isExpress,
-          lines: submittedLines,
-        };
-        await orderDeliveryService.createDelivery(payload);
-        showToast("success", "Orden creada", "La orden de entrega fue creada exitosamente.");
-      } else if (mode === "edit" && orderId) {
-        // Update endpoint uses same DTO shape without userId
-        await orderDeliveryService.updateDelivery(orderId, {
-          destinationDepartment: department,
-          clientFullName,
-          clientPhone,
-          clientAddress,
-          deliveryType,
-          isExpress,
-          lines: submittedLines,
-        });
-        showToast("success", "Orden actualizada", "La orden de entrega fue actualizada exitosamente.");
+        if (mode === "create") {
+          const payload: CreateOrderDeliveryRequest = {
+            destinationDepartment: department,
+            clientFullName,
+            clientPhone,
+            clientAddress,
+            deliveryType,
+            isExpress,
+            lines: submittedLines,
+          };
+          await orderDeliveryService.createDelivery(payload);
+          showToast("success", "Orden creada", "La orden de entrega fue creada exitosamente.");
+        } else if (mode === "edit" && orderId) {
+          // Update endpoint uses same DTO shape without userId
+          await orderDeliveryService.updateDelivery(orderId, {
+            destinationDepartment: department,
+            clientFullName,
+            clientPhone,
+            clientAddress,
+            deliveryType,
+            isExpress,
+            lines: submittedLines,
+          });
+          showToast("success", "Orden actualizada", "La orden de entrega fue actualizada exitosamente.");
+        }
+        onSaved();
+        onClose();
+      } catch (error: unknown) {
+        showToast("error", "Error", error instanceof Error ? error.message : "No se pudo guardar la orden.");
       }
-      onSaved();
-      onClose();
-    } catch (error: unknown) {
-      showToast("error", "Error", error instanceof Error ? error.message : "No se pudo guardar la orden.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   const totalOrder = lines.reduce((acc, line) => acc + lineTotal(line), 0);
@@ -521,7 +523,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
       {/* Footer */}
       <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={submitting}>
           {readOnly ? "Cerrar" : "Cancelar"}
         </Button>
         {!readOnly && (

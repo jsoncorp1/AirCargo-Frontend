@@ -23,6 +23,8 @@ import {
   SHIPMENT_ERROR_MESSAGES,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
+import { useAuth } from "@/context/AuthContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 // unitPrice/weight/shippingCost se guardan como string mientras se editan para
 // permitir decimales en progreso (ej. "12.") sin que React los normalice a 0.
@@ -75,14 +77,18 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 export default function SporadicShipmentForm() {
   const { showToast } = useToast();
+  // El origen del envío es la sucursal del usuario que lo registra; acá solo se
+  // muestra como dato informativo.
+  const { branchOfficeCode, branchOfficeCity } = useAuth();
 
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo: bloquea el botón mientras la petición está en curso (y corta el
+  // segundo click del doble click, que registraría dos envíos).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
   const [result, setResult] = useState<SporadicShipmentResponse | null>(null);
 
   const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
 
-  const [originDepartment, setOriginDepartment] = useState(DEPARTAMENTOS[0].value);
   const [senderFullName, setSenderFullName] = useState("");
   const [senderPhone, setSenderPhone] = useState("");
 
@@ -97,6 +103,8 @@ export default function SporadicShipmentForm() {
   const [packageDescription, setPackageDescription] = useState("");
 
   const [lines, setLines] = useState<SporadicLineFormState[]>([emptyLine()]);
+
+  const originBranchLabel = [branchOfficeCode, branchOfficeCity].filter(Boolean).join(" — ");
 
   useEffect(() => {
     const fetchBranchOffices = async () => {
@@ -113,7 +121,6 @@ export default function SporadicShipmentForm() {
 
   const resetForm = () => {
     setDestinationBranchOfficeId("");
-    setOriginDepartment(DEPARTAMENTOS[0].value);
     setSenderFullName("");
     setSenderPhone("");
     setDestinationDepartment(DEPARTAMENTOS[0].value);
@@ -154,7 +161,7 @@ export default function SporadicShipmentForm() {
   const totalWeight = lines.reduce((acc, line) => acc + (Number(line.weight) || 0), 0);
   const totalShippingCost = lines.reduce((acc, line) => acc + (Number(line.shippingCost) || 0), 0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (lines.length === 0) {
       showToast("error", "Error", "Debe agregar al menos un artículo.");
@@ -193,38 +200,36 @@ export default function SporadicShipmentForm() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const payload: CreateSporadicShipmentRequest = {
-        destinationBranchOfficeId,
-        originDepartment,
-        senderFullName: senderFullName.trim(),
-        senderPhone: senderPhone.trim(),
-        senderAddress: "",
-        destinationDepartment,
-        clientPhone,
-        clientFullName,
-        clientAddress,
-        deliveryType,
-        isExpress,
-        packageCount,
-        packageDescription: packageDescription.trim(),
-        lines: lines.map((l) => ({
-          articleName: l.articleName.trim(),
-          quantity: l.quantity,
-          unitPrice: Number(l.unitPrice) || 0,
-          weight: Number(l.weight) || 0,
-          shippingCost: Number(l.shippingCost) || 0,
-        })),
-      };
-      const response = await shipmentService.createSporadicShipment(payload);
-      setResult(response);
-      showToast("success", "Envío registrado", `Guía generada: ${response.code}`);
-    } catch (error: unknown) {
-      showToast("error", "Error", getErrorMessage(error, "No se pudo registrar el envío esporádico."));
-    } finally {
-      setSubmitting(false);
-    }
+    runSubmit(async () => {
+      try {
+        const payload: CreateSporadicShipmentRequest = {
+          destinationBranchOfficeId,
+          senderFullName: senderFullName.trim(),
+          senderPhone: senderPhone.trim(),
+          senderAddress: "",
+          destinationDepartment,
+          clientPhone,
+          clientFullName,
+          clientAddress,
+          deliveryType,
+          isExpress,
+          packageCount,
+          packageDescription: packageDescription.trim(),
+          lines: lines.map((l) => ({
+            articleName: l.articleName.trim(),
+            quantity: l.quantity,
+            unitPrice: Number(l.unitPrice) || 0,
+            weight: Number(l.weight) || 0,
+            shippingCost: Number(l.shippingCost) || 0,
+          })),
+        };
+        const response = await shipmentService.createSporadicShipment(payload);
+        setResult(response);
+        showToast("success", "Envío registrado", `Guía generada: ${response.code}`);
+      } catch (error: unknown) {
+        showToast("error", "Error", getErrorMessage(error, "No se pudo registrar el envío esporádico."));
+      }
+    });
   };
 
   if (result) {
@@ -309,18 +314,14 @@ export default function SporadicShipmentForm() {
               />
             </div>
 
+            {/* El origen ya no se elige: el backend lo toma de la sucursal del
+                usuario que registra el envío. */}
             <div>
-              <Label required>Departamento de Origen</Label>
-              <select
-                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                value={originDepartment}
-                onChange={(e) => setOriginDepartment(e.target.value)}
-                required
-              >
-                {DEPARTAMENTOS.map((dep) => (
-                  <option key={dep.value} value={dep.value}>{dep.label}</option>
-                ))}
-              </select>
+              <Label>Sucursal de Origen</Label>
+              <Input value={originBranchLabel || "Sin sucursal asignada"} disabled />
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                Se toma de tu sucursal; no se puede cambiar.
+              </p>
             </div>
           </div>
         </div>

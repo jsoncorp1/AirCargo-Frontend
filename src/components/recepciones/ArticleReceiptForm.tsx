@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { Article } from "@/services/articleService";
 import {
   ArticleReceipt,
@@ -48,26 +49,23 @@ export default function ArticleReceiptForm({
 }: ArticleReceiptFormProps) {
   const readOnly = mode === "view";
   const [data, setData] = useState<ArticleReceiptFormData>(defaultForm(initialData));
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Cerrojo por ref: `isSubmitting` como estado solo bloquea a partir del
+  // siguiente render, así que un doble click alcanzaba a entrar dos veces.
+  const { pending: isSubmitting, run: runSubmit } = useSubmitLock();
 
   const set = <K extends keyof ArticleReceiptFormData>(
     key: K,
     value: ArticleReceiptFormData[K]
   ) => setData((prev) => ({ ...prev, [key]: value }));
 
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
+  const handleSubmit = () =>
+    runSubmit(async () => {
       if (mode === "create") {
         await onSubmit({ articleId: data.articleId, count: data.count });
       } else {
         await onSubmit({ count: data.count });
       }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    });
 
   const selectedArticle = articles.find((a) => a.id === data.articleId);
 

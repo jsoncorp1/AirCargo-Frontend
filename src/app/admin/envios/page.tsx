@@ -1,16 +1,34 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
-import { shipmentService, ShipmentPaginatedItem, ShipmentListFilters } from "@/services/shipmentService";
+import {
+  shipmentService,
+  ShipmentPaginatedItem,
+  ShipmentListFilters,
+  ShipmentStatus,
+  SHIPMENT_STATUS_LABELS,
+} from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
-import ShipmentFiltersBar from "@/components/envios/ShipmentFiltersBar";
+import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
+import ShipmentDateRangeFilter, {
+  DateRange,
+  lastWeekRange,
+} from "@/components/envios/ShipmentDateRangeFilter";
+import { useAuth } from "@/context/AuthContext";
 
 const DEFAULT_PER_PAGE = 10;
 
+// Bandejas del admin. El backend ya limita el listado a los envíos donde su
+// sucursal es origen o destino; mandando el propio branchOfficeId en uno u otro
+// filtro se separan las dos direcciones.
+type Bandeja = "outgoing" | "incoming" | "all";
+
 export default function AdminEnviosPage() {
+  const { branchOfficeId, branchOfficeCode, branchOfficeCity } = useAuth();
+
   const [shipments, setShipments] = useState<ShipmentPaginatedItem[]>([]);
   const [orderTotals, setOrderTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -23,8 +41,22 @@ export default function AdminEnviosPage() {
   const [totalWeight, setTotalWeight] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
-  // Filtros combinables: proveedor, sucursal origen/destino y estado.
-  const [filters, setFilters] = useState<ShipmentListFilters>({});
+  const [bandeja, setBandeja] = useState<Bandeja>("outgoing");
+  const [status, setStatus] = useState<ShipmentStatus | "">("");
+  // Por defecto se muestra la última semana.
+  const [dateRange, setDateRange] = useState<DateRange>(() => lastWeekRange());
+
+  const filters: ShipmentListFilters = useMemo(() => {
+    const base: ShipmentListFilters = {
+      ...(status ? { status } : {}),
+      ...(dateRange.from ? { dateFrom: dateRange.from } : {}),
+      ...(dateRange.to ? { dateTo: dateRange.to } : {}),
+    };
+    if (!branchOfficeId || bandeja === "all") return base;
+    return bandeja === "outgoing"
+      ? { ...base, originBranchOfficeId: branchOfficeId }
+      : { ...base, destinationBranchOfficeId: branchOfficeId };
+  }, [bandeja, status, dateRange.from, dateRange.to, branchOfficeId]);
 
   const fetchShipments = useCallback(async () => {
     setLoading(true);
@@ -62,6 +94,25 @@ export default function AdminEnviosPage() {
     setCurrentPage(1);
   }, [perPage, filters]);
 
+  const branchLabel = [branchOfficeCode, branchOfficeCity].filter(Boolean).join(" — ");
+
+  const bandejaTabs: TabItem[] = [
+    { value: "outgoing", label: "Por despachar" },
+    { value: "incoming", label: "Por entregar" },
+    { value: "all", label: "Todos" },
+  ];
+
+  // Los envíos nacen "En tránsito" al atender la orden, así que ese es el primer
+  // tab; "Pendiente" solo aparecería en "Todos". El filtro lo aplica el backend.
+  const statusTabs: TabItem[] = [
+    { value: "InTransit", label: SHIPMENT_STATUS_LABELS.InTransit },
+    { value: "Observed", label: SHIPMENT_STATUS_LABELS.Observed },
+    { value: "Delivered", label: SHIPMENT_STATUS_LABELS.Delivered },
+    { value: "Rejected", label: SHIPMENT_STATUS_LABELS.Rejected },
+    { value: "Returned", label: SHIPMENT_STATUS_LABELS.Returned },
+    { value: "", label: "Todos" },
+  ];
+
   return (
     <div>
       <PageBreadcrumb pageTitle="Envíos Logísticos" />
@@ -75,7 +126,11 @@ export default function AdminEnviosPage() {
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Total Envíos
+              {bandeja === "outgoing"
+                ? "Envíos por Despachar"
+                : bandeja === "incoming"
+                ? "Envíos por Entregar"
+                : "Total Envíos"}
             </p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white/90">
               {loading ? "—" : totalShipmentsCount}
@@ -116,8 +171,41 @@ export default function AdminEnviosPage() {
         </div>
       </div>
 
-      <ComponentCard title="Envíos">
-        <ShipmentFiltersBar value={filters} onChange={setFilters} />
+      <ComponentCard
+        title="Envíos"
+        desc={
+          branchLabel
+            ? `Envíos de tu sucursal (${branchLabel}): los que despachas y los que recibes para entregar.`
+            : "Tu usuario no tiene sucursal asignada, por lo que no puede atender envíos."
+        }
+      >
+        <div className="mb-5 space-y-3">
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              Bandeja
+            </p>
+            <Tabs
+              items={bandejaTabs}
+              value={bandeja}
+              onChange={(value) => setBandeja(value as Bandeja)}
+            />
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              Estado
+            </p>
+            <Tabs
+              items={statusTabs}
+              value={status}
+              onChange={(value) => setStatus(value as ShipmentStatus | "")}
+            />
+          </div>
+          <ShipmentDateRangeFilter
+            className="sm:w-72"
+            value={dateRange}
+            onChange={setDateRange}
+          />
+        </div>
         <AdminShipmentsTable
           shipments={shipments}
           orderTotals={orderTotals}

@@ -12,6 +12,7 @@ import Pagination from "@/components/tables/Pagination";
 import { roleService, Role } from "@/services/roleService";
 import { PencilIcon, TrashBinIcon, PlugInIcon } from "@/icons";
 import { useToast } from "@/context/ToastContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 const DEFAULT_PER_PAGE = 10;
 
@@ -28,8 +29,10 @@ export default function RolesPage() {
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
   const [formData, setFormData] = useState({ name: "", description: "" });
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // Cerrojos: bloquean los botones del modal mientras hay una petición en curso
+  // (y cortan el segundo click del doble click).
+  const { pending: saving, run: runSave } = useSubmitLock();
+  const { pending: deleting, run: runDelete } = useSubmitLock();
 
   const fetchRoles = async (page = currentPage) => {
     setLoading(true);
@@ -73,25 +76,24 @@ export default function RolesPage() {
     setEditingRole(null);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSaving(true);
-    try {
-      if (editingRole) {
-        await roleService.updateRole(editingRole.id, formData);
-        showToast("success", "Rol actualizado", `El rol "${formData.name}" fue actualizado correctamente.`);
-      } else {
-        await roleService.createRole(formData);
-        showToast("success", "Rol creado", `El rol "${formData.name}" fue creado correctamente.`);
+    runSave(async () => {
+      try {
+        if (editingRole) {
+          await roleService.updateRole(editingRole.id, formData);
+          showToast("success", "Rol actualizado", `El rol "${formData.name}" fue actualizado correctamente.`);
+        } else {
+          await roleService.createRole(formData);
+          showToast("success", "Rol creado", `El rol "${formData.name}" fue creado correctamente.`);
+        }
+        await fetchRoles();
+        handleCloseModal();
+      } catch (err: any) {
+        setError(err.message || "Ocurrió un error al guardar.");
       }
-      await fetchRoles();
-      handleCloseModal();
-    } catch (err: any) {
-      setError(err.message || "Ocurrió un error al guardar.");
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const askDelete = (role: Role) => {
@@ -99,21 +101,20 @@ export default function RolesPage() {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = async () => {
-    if (!roleToDelete) return;
-    setDeleting(true);
-    try {
-      await roleService.deleteRole(roleToDelete.id);
-      showToast("success", "Rol eliminado", `El rol "${roleToDelete.name}" fue eliminado.`);
-      await fetchRoles();
-    } catch (err: any) {
-      showToast("error", "Error al eliminar", err.message || "No se pudo eliminar el rol.");
-    } finally {
-      setDeleting(false);
-      setIsDeleteModalOpen(false);
-      setRoleToDelete(null);
-    }
-  };
+  const confirmDelete = () =>
+    runDelete(async () => {
+      if (!roleToDelete) return;
+      try {
+        await roleService.deleteRole(roleToDelete.id);
+        showToast("success", "Rol eliminado", `El rol "${roleToDelete.name}" fue eliminado.`);
+        await fetchRoles();
+      } catch (err: any) {
+        showToast("error", "Error al eliminar", err.message || "No se pudo eliminar el rol.");
+      } finally {
+        setIsDeleteModalOpen(false);
+        setRoleToDelete(null);
+      }
+    });
 
   return (
     <div>
@@ -243,7 +244,7 @@ export default function RolesPage() {
               />
             </div>
             <div className="flex items-center gap-3 mt-6 justify-end">
-              <Button size="sm" variant="outline" type="button" onClick={handleCloseModal}>
+              <Button size="sm" variant="outline" type="button" onClick={handleCloseModal} disabled={saving}>
                 Cancelar
               </Button>
               <Button size="sm" type="submit" disabled={saving}>

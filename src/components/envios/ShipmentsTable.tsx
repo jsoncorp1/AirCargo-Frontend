@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
 import Badge from "@/components/ui/badge/Badge";
@@ -109,17 +110,20 @@ export default function ShipmentsTable({
     [deleteModal]
   );
 
-  const handleDelete = async () => {
-    if (!selectedId) return;
-    try {
-      await shipmentService.deleteShipment(selectedId);
-      showToast("success", "Envío eliminado", "El envío ha sido eliminado exitosamente.");
-      deleteModal.closeModal();
-      onDataChange();
-    } catch (err: any) {
-      showToast("error", "Error al eliminar", err.message || "No se pudo eliminar el envío.");
-    }
-  };
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const handleDelete = () =>
+    runDelete(async () => {
+      if (!selectedId) return;
+      try {
+        await shipmentService.deleteShipment(selectedId);
+        showToast("success", "Envío eliminado", "El envío ha sido eliminado exitosamente.");
+        deleteModal.closeModal();
+        onDataChange();
+      } catch (err: any) {
+        showToast("error", "Error al eliminar", err.message || "No se pudo eliminar el envío.");
+      }
+    });
 
   const selectedBasic = shipments.find(s => s.id === selectedId);
 
@@ -161,7 +165,7 @@ export default function ShipmentsTable({
                   Peso (kg)
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Costo Total
+                  Precio Artículos
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Costo Envío
@@ -243,8 +247,10 @@ export default function ShipmentsTable({
                       {shipment.totalWeight} kg
                     </TableCell>
 
+                    {/* Valor de los artículos de la orden; el costo de envío va
+                        en su propia columna y no se suma acá. */}
                     <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                      Bs {((orderTotals[shipment.orderDeliveryId] ?? 0) + shipment.shippingPrice).toFixed(2)}
+                      Bs {(orderTotals[shipment.orderDeliveryId] ?? 0).toFixed(2)}
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">
@@ -360,15 +366,17 @@ export default function ShipmentsTable({
           <div className="flex justify-end gap-3">
             <button
               onClick={deleteModal.closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={deleting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>
             <button
               onClick={handleDelete}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors"
+              disabled={deleting}
+              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sí, eliminar
+              {deleting ? "Eliminando…" : "Sí, eliminar"}
             </button>
           </div>
         </div>

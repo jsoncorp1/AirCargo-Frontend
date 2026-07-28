@@ -24,6 +24,7 @@ import {
 import { BolivianDepartment, BOLIVIAN_DEPARTMENT_LABELS } from "@/services/supplierService";
 import { PencilIcon, TrashBinIcon, GridIcon } from "@/icons";
 import { useToast } from "@/context/ToastContext";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,9 @@ export default function SucursalesPage() {
   const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selected, setSelected] = useState<BranchOffice | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo compartido por guardar y eliminar: bloquea los botones del modal
+  // mientras hay una petición en curso (y corta el segundo click del doble click).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
 
@@ -147,59 +150,56 @@ export default function SucursalesPage() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSubmitting(true);
-    try {
-      const payload: CreateBranchOfficeRequest = {
-        code: formData.code.trim(),
-        bolivianDepartment: formData.bolivianDepartment,
-        city: formData.city.trim(),
-        address: formData.address.trim() || null,
-        latitude: formData.latitude.trim() ? Number(formData.latitude) : null,
-        longitude: formData.longitude.trim() ? Number(formData.longitude) : null,
-        phone: formData.phone.trim(),
-      };
+    runSubmit(async () => {
+      try {
+        const payload: CreateBranchOfficeRequest = {
+          code: formData.code.trim(),
+          bolivianDepartment: formData.bolivianDepartment,
+          city: formData.city.trim(),
+          address: formData.address.trim() || null,
+          latitude: formData.latitude.trim() ? Number(formData.latitude) : null,
+          longitude: formData.longitude.trim() ? Number(formData.longitude) : null,
+          phone: formData.phone.trim(),
+        };
 
-      if (modalMode === "create") {
-        await branchOfficeService.createBranchOffice(payload);
-        showToast("success", "Sucursal creada", `"${payload.code}" fue creada exitosamente.`);
-      } else if (modalMode === "edit" && selected) {
-        await branchOfficeService.updateBranchOffice(selected.id, payload);
-        showToast("success", "Sucursal actualizada", `"${payload.code}" fue actualizada exitosamente.`);
+        if (modalMode === "create") {
+          await branchOfficeService.createBranchOffice(payload);
+          showToast("success", "Sucursal creada", `"${payload.code}" fue creada exitosamente.`);
+        } else if (modalMode === "edit" && selected) {
+          await branchOfficeService.updateBranchOffice(selected.id, payload);
+          showToast("success", "Sucursal actualizada", `"${payload.code}" fue actualizada exitosamente.`);
+        }
+
+        fetchBranchOffices();
+        closeModal();
+      } catch (err: unknown) {
+        const msg =
+          (err as { message?: string })?.message || "No se pudo completar la operación.";
+        setError(msg);
+        showToast("error", "Error", msg);
       }
-
-      fetchBranchOffices();
-      closeModal();
-    } catch (err: unknown) {
-      const msg =
-        (err as { message?: string })?.message || "No se pudo completar la operación.";
-      setError(msg);
-      showToast("error", "Error", msg);
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
-  const handleDelete = async () => {
-    if (!selected) return;
-    setSubmitting(true);
-    try {
-      await branchOfficeService.deleteBranchOffice(selected.id);
-      showToast("success", "Sucursal eliminada", `"${selected.code}" fue eliminada.`);
-      fetchBranchOffices();
-      closeModal();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        "Error al eliminar",
-        (err as { message?: string })?.message || "No se pudo eliminar."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const handleDelete = () =>
+    runSubmit(async () => {
+      if (!selected) return;
+      try {
+        await branchOfficeService.deleteBranchOffice(selected.id);
+        showToast("success", "Sucursal eliminada", `"${selected.code}" fue eliminada.`);
+        fetchBranchOffices();
+        closeModal();
+      } catch (err: unknown) {
+        showToast(
+          "error",
+          "Error al eliminar",
+          (err as { message?: string })?.message || "No se pudo eliminar."
+        );
+      }
+    });
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -427,7 +427,7 @@ export default function SucursalesPage() {
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
-              <Button size="sm" variant="outline" type="button" onClick={closeModal}>
+              <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={submitting}>
                 Cancelar
               </Button>
               <Button size="sm" type="submit" disabled={submitting}>
@@ -462,7 +462,8 @@ export default function SucursalesPage() {
           <div className="flex justify-end gap-3">
             <button
               onClick={closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={submitting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>

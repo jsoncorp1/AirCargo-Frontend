@@ -8,10 +8,13 @@ import AdminOrderDeliveriesTable from "@/components/admin/AdminOrderDeliveriesTa
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 
 const DEFAULT_PER_PAGE = 10;
-// El backend no soporta filtrar por estado (pendiente/atendida) como query param;
-// mientras ese filtro esté activo se trae un lote más grande y se pagina en cliente.
+// El backend filtra las órdenes sin atender con ?unattended=true, pero no tiene
+// un filtro para las ya atendidas: ese caso se resuelve en cliente sobre un lote
+// más grande. El listado ya viene acotado al departamento del admin.
 const STATUS_BATCH_SIZE = 200;
 
+// "pending" = bandeja de órdenes por atender (server-side, ?unattended=true);
+// "" = todas (también server-side); "attended" se filtra en cliente.
 type StatusFilter = "" | "pending" | "attended";
 
 export default function AdminOrdenesPage() {
@@ -22,16 +25,19 @@ export default function AdminOrdenesPage() {
   const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
-  const isFiltering = statusFilter !== "";
+  // Solo "atendidas" se pagina en cliente; "" y "pending" los resuelve el backend.
+  const isFiltering = statusFilter === "attended";
 
   const fetchPage = useCallback(async (page: number) => {
     setPageLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(page, perPage);
+      const res = await orderDeliveryService.getDeliveries(page, perPage, {
+        unattended: statusFilter === "pending",
+      });
       setPageOrders(res.data);
       setPageTotalPages(res.totalPages);
       setPageTotalCount(res.count);
@@ -40,7 +46,7 @@ export default function AdminOrdenesPage() {
     } finally {
       setPageLoading(false);
     }
-  }, [perPage]);
+  }, [perPage, statusFilter]);
 
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
@@ -53,6 +59,12 @@ export default function AdminOrdenesPage() {
       setBatchLoading(false);
     }
   }, []);
+
+  // Tras atender una orden hay que refrescar la página y los contadores.
+  const fetchOrders = useCallback(() => {
+    fetchPage(currentPage);
+    fetchBatch();
+  }, [fetchPage, fetchBatch, currentPage]);
 
   useEffect(() => {
     fetchPage(currentPage);
@@ -67,11 +79,10 @@ export default function AdminOrdenesPage() {
     setCurrentPage(1);
   }, [perPage]);
 
-  const filteredOrders = useMemo(() => {
-    if (statusFilter === "pending") return allOrders.filter((o) => !o.isAttended);
-    if (statusFilter === "attended") return allOrders.filter((o) => o.isAttended);
-    return allOrders;
-  }, [allOrders, statusFilter]);
+  const filteredOrders = useMemo(
+    () => (statusFilter === "attended" ? allOrders.filter((o) => o.isAttended) : allOrders),
+    [allOrders, statusFilter]
+  );
 
   const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
   const paginatedFiltered = filteredOrders.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -86,9 +97,9 @@ export default function AdminOrdenesPage() {
 
   const statusTabs: TabItem[] = useMemo(
     () => [
-      { value: "", label: "Todas", count: allOrders.length },
-      { value: "pending", label: "Pendientes", count: allOrders.filter((o) => !o.isAttended).length },
+      { value: "pending", label: "Por atender", count: allOrders.filter((o) => !o.isAttended).length },
       { value: "attended", label: "Atendidas", count: allOrders.filter((o) => o.isAttended).length },
+      { value: "", label: "Todas", count: allOrders.length },
     ],
     [allOrders]
   );
@@ -152,7 +163,10 @@ export default function AdminOrdenesPage() {
         </div>
       </div>
 
-      <ComponentCard title="Órdenes de Entrega">
+      <ComponentCard
+        title="Órdenes de Entrega"
+        desc="Solo las órdenes cuyo departamento de origen coincide con el de tu sucursal. Desde aquí se atienden convirtiéndolas en envío."
+      >
         <div className="mb-5">
           <Tabs items={statusTabs} value={statusFilter} onChange={handleStatusChange} />
         </div>
@@ -164,6 +178,7 @@ export default function AdminOrdenesPage() {
           onPageChange={setCurrentPage}
           perPage={perPage}
           onPerPageChange={setPerPage}
+          onDataChange={fetchOrders}
         />
       </ComponentCard>
     </div>

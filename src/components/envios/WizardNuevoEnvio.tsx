@@ -6,6 +6,7 @@ import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
 import SelectField from "@/components/form/Select";
 import Input from "@/components/form/input/InputField";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { empresaService } from "@/services/empresaService";
 import { articuloService } from "@/services/articuloService";
 import { conductorService } from "@/services/conductorService";
@@ -27,7 +28,8 @@ export default function WizardNuevoEnvio() {
   const router = useRouter();
   const [step, setStep] = useState<WizardStep>(1);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  // Cerrojo: evita que un doble click en "Confirmar Envío" cree dos envíos.
+  const { pending: saving, run: runSubmit } = useSubmitLock();
 
   // Data
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -78,26 +80,25 @@ export default function WizardNuevoEnvio() {
   const handleNext = () => setStep(s => (s + 1) as WizardStep);
   const handlePrev = () => setStep(s => (s - 1) as WizardStep);
 
-  const handleSubmit = async () => {
-    setSaving(true);
-    try {
-      await envioService.createEnvio({
-        empresaId,
-        conductorId: conductorId || undefined,
-        origen,
-        departamentoDestino,
-        direccionDestino,
-        articulos: articulosSeleccionados.map(a => ({ articuloId: a.id, cantidad: a.cantidad })),
-        costoTotal,
-      });
-      alert("¡Envío creado exitosamente!");
-      router.push("/envios");
-    } catch (error) {
-      console.error(error);
-      alert("Error al crear el envío");
-      setSaving(false);
-    }
-  };
+  const handleSubmit = () =>
+    runSubmit(async () => {
+      try {
+        await envioService.createEnvio({
+          empresaId,
+          conductorId: conductorId || undefined,
+          origen,
+          departamentoDestino,
+          direccionDestino,
+          articulos: articulosSeleccionados.map(a => ({ articuloId: a.id, cantidad: a.cantidad })),
+          costoTotal,
+        });
+        alert("¡Envío creado exitosamente!");
+        router.push("/envios");
+      } catch (error) {
+        console.error(error);
+        alert("Error al crear el envío");
+      }
+    });
 
   const isStep1Valid = empresaId !== "";
   const isStep2Valid = articulosSeleccionados.length > 0;

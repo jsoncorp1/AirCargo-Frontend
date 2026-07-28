@@ -19,6 +19,7 @@ interface AuthContextType {
   role: string | null;
   isSupplierUser: boolean;
   isAdminUser: boolean;
+  isConductorUser: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
@@ -32,6 +33,9 @@ export const isSupplierRole = (role?: string | null): boolean =>
 
 export const isAdminRole = (role?: string | null): boolean =>
   role?.toLowerCase() === 'admin';
+
+export const isConductorRole = (role?: string | null): boolean =>
+  role?.toLowerCase() === 'conductor';
 
 const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
   const parts = token.split('.');
@@ -104,6 +108,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         router.push('/proveedor/ordenes');
       } else if (isAdminRole(sessionUser.role)) {
         router.push('/admin');
+      } else if (isConductorRole(sessionUser.role)) {
+        router.push('/conductor/envios');
       } else {
         router.push('/');
       }
@@ -130,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       role: user?.role ?? null,
       isSupplierUser: isSupplierRole(user?.role),
       isAdminUser: isAdminRole(user?.role),
+      isConductorUser: isConductorRole(user?.role),
       isAuthenticated: !!user,
       isLoading,
       login,

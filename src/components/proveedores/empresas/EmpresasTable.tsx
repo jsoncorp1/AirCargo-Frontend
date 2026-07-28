@@ -16,6 +16,7 @@ import SelectField from "@/components/form/Select";
 import { Modal } from "@/components/ui/modal";
 import Pagination from "@/components/tables/Pagination";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
   BOLIVIAN_DEPARTMENT_LABELS,
   BolivianDepartment,
@@ -172,19 +173,22 @@ export default function EmpresasTable() {
     }
   };
 
-  const confirmDelete = async () => {
-    if (empresaToDelete) {
-      try {
-        await supplierService.deleteSupplier(empresaToDelete.id);
-        showToast("success", "Empresa eliminada", `La empresa fue eliminada.`);
-        fetchAll();
-      } catch (e: any) {
-        showToast("error", "Error al eliminar", e.message || "No se pudo eliminar la empresa.");
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const confirmDelete = () =>
+    runDelete(async () => {
+      if (empresaToDelete) {
+        try {
+          await supplierService.deleteSupplier(empresaToDelete.id);
+          showToast("success", "Empresa eliminada", `La empresa fue eliminada.`);
+          fetchAll();
+        } catch (e: any) {
+          showToast("error", "Error al eliminar", e.message || "No se pudo eliminar la empresa.");
+        }
       }
-    }
-    deleteModal.closeModal();
-    setEmpresaToDelete(null);
-  };
+      deleteModal.closeModal();
+      setEmpresaToDelete(null);
+    });
 
   return (
     <div className="space-y-5">
@@ -348,8 +352,8 @@ export default function EmpresasTable() {
             ¿Eliminar <strong>{empresaToDelete?.name}</strong>? Se eliminarán también sus usuarios y artículos asociados. Esta acción no se puede deshacer.
           </p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={deleteModal.closeModal}>Cancelar</Button>
-            <Button onClick={confirmDelete}>Eliminar</Button>
+            <Button variant="outline" onClick={deleteModal.closeModal} disabled={deleting}>Cancelar</Button>
+            <Button onClick={confirmDelete} disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar"}</Button>
           </div>
         </div>
       </Modal>

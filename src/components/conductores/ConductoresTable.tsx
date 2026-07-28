@@ -23,6 +23,7 @@ import { conductorService } from "@/services/conductorService";
 import { GroupIcon, CheckCircleIcon, CloseLineIcon, PlusIcon, MoreDotIcon, EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import ConductorForm, { ConductorFormData } from "./ConductorForm";
 
 const PAGE_SIZE = 8;
@@ -110,14 +111,17 @@ export default function ConductoresTable() {
     formModal.closeModal();
   };
 
-  const confirmDelete = async () => {
-    if (conductorToDelete) {
-      await conductorService.deleteConductor(conductorToDelete.id);
-      await fetchConductores();
-    }
-    deleteModal.closeModal();
-    setConductorToDelete(null);
-  };
+  const { pending: deleting, run: runDelete } = useSubmitLock();
+
+  const confirmDelete = () =>
+    runDelete(async () => {
+      if (conductorToDelete) {
+        await conductorService.deleteConductor(conductorToDelete.id);
+        await fetchConductores();
+      }
+      deleteModal.closeModal();
+      setConductorToDelete(null);
+    });
 
   if (loading && conductores.length === 0) {
     return <div className="p-10 text-center text-gray-500">Cargando conductores...</div>;
@@ -259,8 +263,8 @@ export default function ConductoresTable() {
             ¿Eliminar a <strong>{conductorToDelete?.nombre}</strong>? Esta acción no se puede deshacer.
           </p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={deleteModal.closeModal}>Cancelar</Button>
-            <Button onClick={confirmDelete}>Eliminar</Button>
+            <Button variant="outline" onClick={deleteModal.closeModal} disabled={deleting}>Cancelar</Button>
+            <Button onClick={confirmDelete} disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar"}</Button>
           </div>
         </div>
       </Modal>

@@ -16,7 +16,6 @@ import { Modal } from "@/components/ui/modal";
 import { articleService, Article } from "@/services/articleService";
 import { BoxCubeIcon, CheckCircleIcon, CloseLineIcon, EyeIcon } from "@/icons";
 import { useModal } from "@/hooks/useModal";
-import { useAuth } from "@/context/AuthContext";
 
 const DEFAULT_PER_PAGE = 10;
 // El backend no soporta búsqueda de texto como query param; mientras el buscador
@@ -30,8 +29,6 @@ function getStockBadge(stock: number) {
 }
 
 export default function SupplierArticulosTable() {
-  const { companyId } = useAuth();
-
   // Página real del servidor: se usa cuando no hay búsqueda activa.
   const [pageArticulos, setPageArticulos] = useState<Article[]>([]);
   const [pageTotalPages, setPageTotalPages] = useState(1);
@@ -51,19 +48,20 @@ export default function SupplierArticulosTable() {
 
   const fetchPage = useCallback(async (page: number) => {
     setPageLoading(true);
-    const resp = await articleService.getArticles(page, perPage, companyId ?? undefined);
+    // El backend ya limita el listado al proveedor del usuario autenticado.
+    const resp = await articleService.getArticles(page, perPage);
     setPageArticulos(resp.data);
     setPageTotalPages(resp.totalPages);
     setPageTotalCount(resp.count);
     setPageLoading(false);
-  }, [companyId, perPage]);
+  }, [perPage]);
 
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
-    const resp = await articleService.getArticles(1, SEARCH_BATCH_SIZE, companyId ?? undefined);
+    const resp = await articleService.getArticles(1, SEARCH_BATCH_SIZE);
     setBatchArticulos(resp.data);
     setBatchLoading(false);
-  }, [companyId]);
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

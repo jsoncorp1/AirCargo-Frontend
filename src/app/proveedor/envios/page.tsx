@@ -3,62 +3,107 @@
 import React, { useEffect, useState, useCallback } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
-import { shipmentService, ShipmentPaginatedItem } from "@/services/shipmentService";
+import {
+  shipmentService,
+  ShipmentPaginatedItem,
+  ShipmentStatus,
+  SHIPMENT_STATUS_LABELS,
+} from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import SupplierShipmentsTable from "@/components/proveedor/SupplierShipmentsTable";
-import { useAuth } from "@/context/AuthContext";
+import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
+import ShipmentDateRangeFilter, {
+  DateRange,
+  lastWeekRange,
+} from "@/components/envios/ShipmentDateRangeFilter";
 
 const DEFAULT_PER_PAGE = 10;
 
+// Los envíos nacen "En tránsito" al atender la orden, así que ese es el primer
+// tab; "Pendiente" solo aparecería en "Todos". El filtro lo aplica el backend.
+const STATUS_TABS: TabItem[] = [
+  { value: "InTransit", label: SHIPMENT_STATUS_LABELS.InTransit },
+  { value: "Observed", label: SHIPMENT_STATUS_LABELS.Observed },
+  { value: "Delivered", label: SHIPMENT_STATUS_LABELS.Delivered },
+  { value: "Rejected", label: SHIPMENT_STATUS_LABELS.Rejected },
+  { value: "Returned", label: SHIPMENT_STATUS_LABELS.Returned },
+  { value: "", label: "Todos" },
+];
+
 export default function ProveedorEnviosPage() {
-  const { companyId } = useAuth();
   const [shipments, setShipments] = useState<ShipmentPaginatedItem[]>([]);
-  const [orderTotals, setOrderTotals] = useState<Record<string, number>>({});
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalShipmentsCount, setTotalShipmentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  const [orderTotals, setOrderTotals] = useState<Record<string, number>>({});
+  const [orderDates, setOrderDates] = useState<Record<string, string>>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
-  const [totalPages, setTotalPages] = useState(1);
 
-  const [totalShipmentsCount, setTotalShipmentsCount] = useState(0);
-  const [totalWeight, setTotalWeight] = useState(0);
-  const [totalRevenue, setTotalRevenue] = useState(0);
+  // Filtros: estado y rango de fechas de emisión de la guía. Los dos los
+  // resuelve el backend. Por defecto se muestra la última semana.
+  const [status, setStatus] = useState<ShipmentStatus | "">("");
+  const [dateRange, setDateRange] = useState<DateRange>(() => lastWeekRange());
+
+  const hasFilters = Boolean(status || dateRange.from || dateRange.to);
 
   const fetchShipments = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, ordersRes] = await Promise.all([
-        shipmentService.getShipments(currentPage, perPage, { supplierId: companyId ?? undefined }),
-        orderDeliveryService.getDeliveries(1, 200, companyId ?? undefined),
-      ]);
+      // El backend ya limita los listados al proveedor del usuario autenticado.
+      const res = await shipmentService.getShipments(currentPage, perPage, {
+        status: status || undefined,
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+      });
       setShipments(res.data);
       setTotalPages(res.totalPages);
       setTotalShipmentsCount(res.count);
-
-      const totals: Record<string, number> = {};
-      ordersRes.data.forEach((o) => { totals[o.id] = o.totalPrice; });
-      setOrderTotals(totals);
-
-      const pageWeight = res.data.reduce((sum, s) => sum + s.totalWeight, 0);
-      const pageRevenue = res.data.reduce((sum, s) => sum + s.shippingPrice, 0);
-
-      setTotalWeight(pageWeight);
-      setTotalRevenue(pageRevenue);
     } catch (err) {
       console.error("Error fetching shipments", err);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, perPage, companyId]);
+  }, [currentPage, perPage, status, dateRange.from, dateRange.to]);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await orderDeliveryService.getDeliveries(1, 200);
+      const totals: Record<string, number> = {};
+      const dates: Record<string, string> = {};
+      res.data.forEach((o) => {
+        totals[o.id] = o.totalPrice;
+        dates[o.id] = o.createdAt;
+      });
+      setOrderTotals(totals);
+      setOrderDates(dates);
+    } catch (err) {
+      console.error("Error fetching orders", err);
+    }
+  }, []);
 
   useEffect(() => {
     fetchShipments();
   }, [fetchShipments]);
 
-  // Volver a la página 1 al cambiar el tamaño de página.
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Volver a la página 1 al cambiar el tamaño de página o cualquier filtro.
   useEffect(() => {
     setCurrentPage(1);
-  }, [perPage]);
+  }, [perPage, status, dateRange.from, dateRange.to]);
+
+  const totalWeight = shipments.reduce((sum, s) => sum + s.totalWeight, 0);
+  const totalRevenue = shipments.reduce((sum, s) => sum + s.shippingPrice, 0);
+
+  const clearFilters = () => {
+    setStatus("");
+    setDateRange({});
+  };
 
   return (
     <div>
@@ -73,7 +118,7 @@ export default function ProveedorEnviosPage() {
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Total Envíos
+              {hasFilters ? "Envíos Encontrados" : "Total Envíos"}
             </p>
             <p className="text-2xl font-bold text-gray-800 dark:text-white/90">
               {loading ? "—" : totalShipmentsCount}
@@ -114,10 +159,46 @@ export default function ProveedorEnviosPage() {
         </div>
       </div>
 
-      <ComponentCard title="Mis Envíos">
+      <ComponentCard
+        title="Mis Envíos"
+        desc="Envíos generados a partir de tus órdenes de entrega. La fecha corresponde al momento en que se atendió la orden y se emitió la guía."
+      >
+        {/* ── Filtros: estado (tabs) y rango de fechas de emisión de guía ── */}
+        <div className="mb-5 space-y-3">
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              Estado
+            </p>
+            <Tabs
+              items={STATUS_TABS}
+              value={status}
+              onChange={(value) => setStatus(value as ShipmentStatus | "")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <ShipmentDateRangeFilter
+              className="sm:w-72"
+              value={dateRange}
+              onChange={setDateRange}
+            />
+
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="self-start pb-3 text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-600 hover:underline dark:text-gray-400 dark:hover:text-brand-400 sm:self-center sm:pb-2.5"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+
         <SupplierShipmentsTable
           shipments={shipments}
           orderTotals={orderTotals}
+          orderDates={orderDates}
           loading={loading}
           totalPages={totalPages}
           currentPage={currentPage}

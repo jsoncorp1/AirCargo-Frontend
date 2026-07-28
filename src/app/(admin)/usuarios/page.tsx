@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Pagination from "@/components/tables/Pagination";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { userService, User, CreateUserRequest } from "@/services/userService";
 import { roleService, Role } from "@/services/roleService";
 import { supplierService, Supplier } from "@/services/supplierService";
@@ -108,7 +109,9 @@ export default function UsuariosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  // Cerrojo compartido por guardar y eliminar: bloquea los botones del modal
+  // mientras hay una petición en curso (y corta el segundo click del doble click).
+  const { pending: submitting, run: runSubmit } = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
 
   // ── Form state ───────────────────────────────────────────────────────────────
@@ -170,9 +173,13 @@ export default function UsuariosPage() {
   const loading = isFiltering ? batchLoading : pageLoading;
 
   const selectedRole = roles.find((r) => r.id === formData.roleId);
+  const selectedRoleName = selectedRole?.name?.toLowerCase() ?? "";
   const isProveedorRole =
-    selectedRole?.name?.toLowerCase().includes("empresa") ||
-    selectedRole?.name?.toLowerCase().includes("proveedor");
+    selectedRoleName.includes("empresa") || selectedRoleName.includes("proveedor");
+  // El backend valida coherencia rol ↔ alcance: admin y conductor requieren
+  // sucursal (y no pueden tener proveedor); usuarioempresa requiere proveedor
+  // (y no puede tener sucursal).
+  const isBranchRole = selectedRoleName === "admin" || selectedRoleName === "conductor";
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
 
@@ -279,74 +286,76 @@ export default function UsuariosPage() {
 
   // ── Form submit ───────────────────────────────────────────────────────────────
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSubmitting(true);
-    try {
-      const payload: any = { ...formData };
+    runSubmit(async () => {
+      try {
+        const payload: any = { ...formData };
 
-      if (!isProveedorRole) {
-        delete payload.supplierId;
-      } else if (!payload.supplierId) {
-        throw new Error("Debe seleccionar un proveedor para este rol.");
+        // Coherencia rol ↔ alcance (el backend la rechaza con 400 si no se cumple):
+        // usuarioempresa ⇒ proveedor obligatorio, sin sucursal;
+        // admin/conductor ⇒ sucursal obligatoria, sin proveedor.
+        if (isProveedorRole) {
+          if (!payload.supplierId) {
+            throw new Error("Debe seleccionar un proveedor para este rol.");
+          }
+          payload.branchOfficeId = null;
+        } else if (isBranchRole) {
+          if (!payload.branchOfficeId) {
+            throw new Error("Debe seleccionar una sucursal para este rol.");
+          }
+          payload.supplierId = null;
+        } else {
+          // superadmin: la sucursal es opcional y no lleva proveedor.
+          delete payload.supplierId;
+          payload.branchOfficeId = payload.branchOfficeId || null;
+        }
+
+        if (modalMode === "create") {
+          await userService.createUser(payload as CreateUserRequest);
+          showToast(
+            "success",
+            "Usuario creado",
+            `"${formData.fullName}" fue creado exitosamente.`
+          );
+        } else if (modalMode === "edit" && selectedUser) {
+          // Remove password from payload if empty (don't update password if not filled)
+          if (!payload.password) delete payload.password;
+          await userService.updateUser(selectedUser.id, payload);
+          showToast(
+            "success",
+            "Usuario actualizado",
+            `"${formData.fullName}" fue actualizado exitosamente.`
+          );
+        }
+
+        fetchAllUsers();
+        closeModal();
+      } catch (err: any) {
+        const msg = err.message || "No se pudo completar la operación.";
+        setError(msg);
+        showToast("error", "Error", msg);
       }
-
-      // La sucursal es opcional y no aplica a usuarios de proveedores.
-      // Se manda null para limpiar la asignación al editar.
-      if (isProveedorRole) {
-        delete payload.branchOfficeId;
-      } else {
-        payload.branchOfficeId = payload.branchOfficeId || null;
-      }
-
-      if (modalMode === "create") {
-        await userService.createUser(payload as CreateUserRequest);
-        showToast(
-          "success",
-          "Usuario creado",
-          `"${formData.fullName}" fue creado exitosamente.`
-        );
-      } else if (modalMode === "edit" && selectedUser) {
-        // Remove password from payload if empty (don't update password if not filled)
-        if (!payload.password) delete payload.password;
-        await userService.updateUser(selectedUser.id, payload);
-        showToast(
-          "success",
-          "Usuario actualizado",
-          `"${formData.fullName}" fue actualizado exitosamente.`
-        );
-      }
-
-      fetchAllUsers();
-      closeModal();
-    } catch (err: any) {
-      const msg = err.message || "No se pudo completar la operación.";
-      setError(msg);
-      showToast("error", "Error", msg);
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
-  const handleDelete = async () => {
-    if (!selectedUser) return;
-    setSubmitting(true);
-    try {
-      await userService.deleteUser(selectedUser.id);
-      showToast(
-        "success",
-        "Usuario eliminado",
-        `"${selectedUser.fullName}" fue eliminado.`
-      );
-      fetchAllUsers();
-      closeModal();
-    } catch (err: any) {
-      showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const handleDelete = () =>
+    runSubmit(async () => {
+      if (!selectedUser) return;
+      try {
+        await userService.deleteUser(selectedUser.id);
+        showToast(
+          "success",
+          "Usuario eliminado",
+          `"${selectedUser.fullName}" fue eliminado.`
+        );
+        fetchAllUsers();
+        closeModal();
+      } catch (err: any) {
+        showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
+      }
+    });
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -532,7 +541,7 @@ export default function UsuariosPage() {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {modalMode === "create"
                 ? "Completa los campos para registrar un nuevo usuario en el sistema."
-                : `Modificando el usuario: ${selectedUser?.fullName}`}
+                : `Modificando el usuario: ${selectedUser?.fullName}. Si cambias su rol, proveedor o sucursal, deberá volver a iniciar sesión.`}
             </p>
           </div>
 
@@ -657,19 +666,26 @@ export default function UsuariosPage() {
               </div>
             )}
 
-            {/* Branch office (optional, not for supplier users) */}
+            {/* Branch office (required for admin/conductor, optional for superadmin) */}
             {!isProveedorRole && (
               <div>
-                <Label>Sucursal</Label>
+                <Label required={isBranchRole}>Sucursal</Label>
                 <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
-                  La sucursal del usuario se usa como origen al atender envíos. Un usuario sin sucursal no puede atender envíos.
+                  {isBranchRole
+                    ? "Los roles admin y conductor requieren una sucursal: define qué envíos pueden ver y atender."
+                    : "La sucursal del usuario se usa como origen al atender envíos. Un usuario sin sucursal no puede atender envíos."}
                 </p>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
                   value={formData.branchOfficeId}
                   onChange={(e) => setFormData({ ...formData, branchOfficeId: e.target.value })}
+                  required={isBranchRole}
                 >
-                  <option value="">Sin sucursal</option>
+                  {isBranchRole ? (
+                    <option value="" disabled>Seleccione la sucursal</option>
+                  ) : (
+                    <option value="">Sin sucursal</option>
+                  )}
                   {branchOffices.map((b) => (
                     <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
                   ))}
@@ -679,7 +695,7 @@ export default function UsuariosPage() {
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
-              <Button size="sm" variant="outline" type="button" onClick={closeModal}>
+              <Button size="sm" variant="outline" type="button" onClick={closeModal} disabled={submitting}>
                 Cancelar
               </Button>
               <Button size="sm" type="submit" disabled={submitting}>
@@ -717,14 +733,15 @@ export default function UsuariosPage() {
           <div className="flex justify-end gap-3">
             <button
               onClick={closeModal}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
+              disabled={submitting}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
             >
               Cancelar
             </button>
             <button
               onClick={handleDelete}
               disabled={submitting}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:opacity-60"
+              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? "Eliminando…" : "Sí, eliminar"}
             </button>
