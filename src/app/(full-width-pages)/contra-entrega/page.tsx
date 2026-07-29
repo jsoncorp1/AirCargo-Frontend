@@ -45,7 +45,7 @@ function Navbar() {
       <div className="container mx-auto px-4 md:px-8 flex items-center justify-between">
         {/* Logo Image */}
         <Link href="/" className="flex items-center">
-          <div className={`relative transition-all duration-300 ${scrolled ? "h-20 w-80 invert opacity-90" : "h-[160px] w-[550px] opacity-100"}`}>
+          <div className={`relative transition-all duration-300 ${scrolled ? "h-15 w-45 invert opacity-90" : "h-[160px] w-[550px] opacity-100"}`}>
             <Image
               src="/images/logo/aircargologolanding.png"
               alt="AirCargo Express"
@@ -378,9 +378,9 @@ export default function ContraEntregaLandingPage() {
         <div className="relative z-10 container mx-auto px-4 md:px-8 py-20">
           <div className="max-w-2xl animate-fade-in-up">
 
-            <h1 className="text-4xl md:text-6xl xl:text-[4.5rem] font-extrabold text-white leading-[1.05] mb-6 tracking-tight drop-shadow-md">
+            {/* <h1 className="text-4xl md:text-6xl xl:text-[4.5rem] font-extrabold text-white leading-[1.05] mb-6 tracking-tight drop-shadow-md">
               Vende y cobra <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 to-brand-500">al entregar</span>
-            </h1>
+            </h1> */}
 
             <p className="text-lg md:text-xl text-gray-200 leading-relaxed mb-10 max-w-xl font-light">
               <strong className="font-semibold text-white">AIRCARGO EXPRESS</strong> gestiona la distribución y cobranza de tus pedidos. Tú enfócate en vender, nosotros hacemos el resto.

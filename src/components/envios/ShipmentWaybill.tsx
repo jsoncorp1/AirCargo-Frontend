@@ -96,7 +96,7 @@ export default function ShipmentWaybill({
   const totalShippingCost = lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0);
 
   return (
-    <div className="mx-auto w-full max-w-[320px] overflow-hidden rounded-2xl border border-gray-300 bg-white text-gray-900 shadow-md">
+    <div className="mx-auto w-full max-w-[320px] rounded-2xl border border-gray-300 bg-white text-gray-900 shadow-md">
       {/* Logo + referencia */}
       <div className="flex flex-col items-center gap-1.5 bg-gray-50 px-4 pt-5 pb-4">
         <div className="relative h-14 w-36">
@@ -106,7 +106,10 @@ export default function ShipmentWaybill({
           Callcenter: {CALLCENTER_PHONE}
         </p>
         {isExpress && (
-          <span className="mt-1 rounded-full bg-error-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+          <span
+            style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
+            className="mt-1 inline-block rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+          >
             Envío Expreso
           </span>
         )}
@@ -135,7 +138,7 @@ export default function ShipmentWaybill({
           </div>
           <div className="min-w-0 flex-1">
             <SectionLabel>Emisor</SectionLabel>
-            <p className="truncate text-sm font-medium">{senderFullName || "—"}</p>
+            <p className="break-words text-sm font-medium">{senderFullName || "—"}</p>
             <p className="text-xs text-gray-500">{senderPhone || "—"}</p>
             {senderAddress && <p className="text-xs text-gray-500">{senderAddress}</p>}
           </div>
@@ -146,7 +149,7 @@ export default function ShipmentWaybill({
           </div>
           <div className="min-w-0 flex-1">
             <SectionLabel>Destinatario</SectionLabel>
-            <p className="truncate text-sm font-medium">{clientFullName || "—"}</p>
+            <p className="break-words text-sm font-medium">{clientFullName || "—"}</p>
             <p className="text-xs text-gray-500">{clientPhone || "—"}</p>
             {clientAddress && <p className="text-xs text-gray-500">{clientAddress}</p>}
           </div>
@@ -198,7 +201,7 @@ export default function ShipmentWaybill({
         <div className="mt-2 space-y-1.5">
           {lines.map((line, idx) => (
             <div key={idx} className="flex items-center justify-between gap-2 text-xs">
-              <span className="flex-1 truncate">{line.quantity}x {line.articleName || "Artículo desconocido"}</span>
+              <span className="flex-1 break-all">{line.quantity}x {line.articleName || "Artículo desconocido"}</span>
               <span className="shrink-0 text-gray-500">{line.weight.toFixed(2)} kg</span>
               <span className="shrink-0 font-medium">Bs {line.shippingCost.toFixed(2)}</span>
             </div>

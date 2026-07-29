@@ -362,7 +362,48 @@ export default function ShipmentForm({
   const captureWaybill = async () => {
     if (!waybillRef.current) return null;
     const html2canvas = (await import("html2canvas")).default;
-    return html2canvas(waybillRef.current, { scale: 3, backgroundColor: "#ffffff" });
+
+    // Clone the node so we can remove overflow/truncate restrictions
+    // that would cause html2canvas to clip content.
+    const original = waybillRef.current;
+    const clone = original.cloneNode(true) as HTMLElement;
+
+    // Strip every overflow:hidden and text-overflow:ellipsis from all nodes
+    const allEls = clone.querySelectorAll("*") as NodeListOf<HTMLElement>;
+    const fixEl = (el: HTMLElement) => {
+      el.style.overflow    = "visible";
+      el.style.textOverflow = "clip";
+      el.style.whiteSpace  = "normal";
+      el.style.maxWidth    = "none";
+      // remove tailwind truncate class
+      el.classList.remove("truncate", "overflow-hidden");
+    };
+    fixEl(clone);
+    allEls.forEach(fixEl);
+
+    // Position off-screen so layout is calculated but not visible
+    clone.style.position = "fixed";
+    clone.style.top      = "-9999px";
+    clone.style.left     = "-9999px";
+    clone.style.zIndex   = "-1";
+    clone.style.width    = `${original.offsetWidth}px`;
+
+    document.body.appendChild(clone);
+    try {
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+        width: clone.scrollWidth,
+        height: clone.scrollHeight,
+        windowWidth: clone.scrollWidth,
+        windowHeight: clone.scrollHeight,
+      });
+      return canvas;
+    } finally {
+      document.body.removeChild(clone);
+    }
   };
 
   const handlePrint = async () => {
@@ -370,24 +411,41 @@ export default function ShipmentForm({
     try {
       const canvas = await captureWaybill();
       if (!canvas) return;
-      const printWindow = window.open("", "_blank", "width=420,height=720");
+      const printWindow = window.open("", "_blank", "width=600,height=900");
       if (!printWindow) {
         showToast("error", "Error", "El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.");
         return;
       }
       const dataUrl = canvas.toDataURL("image/png");
+      // Calculate natural aspect ratio to fill the page perfectly
+      const aspectRatio = canvas.width / canvas.height;
       printWindow.document.write(`<!DOCTYPE html>
         <html>
           <head>
             <title>Guía ${guia}</title>
             <style>
-              @page { margin: 0; }
-              body { margin: 0; display: flex; justify-content: center; padding: 16px; }
-              img { width: 100%; max-width: 320px; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              @page {
+                size: ${aspectRatio >= 1 ? 'landscape' : 'portrait'};
+                margin: 0;
+              }
+              html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+              }
+              img {
+                display: block;
+                width: 100vw;
+                height: 100vh;
+                object-fit: contain;
+                object-position: center;
+              }
             </style>
           </head>
           <body>
-            <img src="${dataUrl}" onload="window.focus(); window.print();" />
+            <img src="${dataUrl}" onload="window.focus(); window.print(); window.onafterprint = function() { window.close(); };" />
           </body>
         </html>`);
       printWindow.document.close();
@@ -405,8 +463,34 @@ export default function ShipmentForm({
       const canvas = await captureWaybill();
       if (!canvas) return;
       const { jsPDF } = await import("jspdf");
-      const pdf = new jsPDF({ unit: "px", format: [canvas.width, canvas.height] });
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
+
+      // Convert pixel dimensions to mm (96dpi -> mm: px / (96 / 25.4))
+      const PX_TO_MM = 25.4 / 96;
+      // We captured at scale:2, so logical size is canvas/2
+      const logicalW = canvas.width / 2;
+      const logicalH = canvas.height / 2;
+      const widthMm  = logicalW  * PX_TO_MM;
+      const heightMm = logicalH  * PX_TO_MM;
+
+      const orientation = widthMm >= heightMm ? "landscape" : "portrait";
+
+      const pdf = new jsPDF({
+        orientation,
+        unit: "mm",
+        format: [widthMm, heightMm],
+        compress: true,
+      });
+
+      pdf.addImage(
+        canvas.toDataURL("image/png"),
+        "PNG",
+        0,
+        0,
+        widthMm,
+        heightMm,
+        undefined,
+        "FAST"
+      );
       pdf.save(`guia-${guia || "envio"}.pdf`);
     } catch (err) {
       console.error(err);

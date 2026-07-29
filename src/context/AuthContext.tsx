@@ -107,11 +107,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isSupplierRole(sessionUser.role)) {
         router.push('/proveedor/ordenes');
       } else if (isAdminRole(sessionUser.role)) {
-        router.push('/admin');
+        router.push('/dashboard');
       } else if (isConductorRole(sessionUser.role)) {
         router.push('/conductor/envios');
       } else {
-        router.push('/');
+        router.push('/dashboard');
       }
     } catch (error) {
       throw error;
