@@ -22,7 +22,7 @@ import StatCard from "@/components/proveedores/StatCard";
 import { useModal } from "@/hooks/useModal";
 import { useProveedoresData } from "@/context/ProveedoresContext";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
-import { Articulo } from "@/data/mock/articulos";
+import { Articulo } from "@/context/ProveedoresContext";
 import { BoxIcon, BoxIconLine, AlertIcon, PlusIcon, MoreDotIcon, EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 
 const PAGE_SIZE = 8;

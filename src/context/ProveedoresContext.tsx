@@ -1,9 +1,42 @@
 "use client";
 
 import React, { createContext, useContext, useState, useMemo, ReactNode } from "react";
-import { Empresa, empresasIniciales } from "@/data/mock/empresas";
-import { UsuarioProveedor, usuariosIniciales } from "@/data/mock/usuarios";
-import { Articulo, articulosIniciales } from "@/data/mock/articulos";
+
+export interface Empresa {
+  id: string;
+  nombre: string;
+  nit: string;
+  contacto: string;
+  email: string;
+  telefono: string;
+  ciudad: string;
+  direccion: string;
+  estado: "Activo" | "Inactivo";
+  fechaRegistro: string;
+}
+
+export interface UsuarioProveedor {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  email: string;
+  telefono: string;
+  rol: "Admin" | "Operador";
+  estado: "Activo" | "Inactivo";
+  fechaRegistro: string;
+}
+
+export interface Articulo {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  sku: string;
+  categoria: string;
+  precio: number;
+  stock: number;
+  estado: "Activo" | "Inactivo";
+  fechaRegistro: string;
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = (prefix: string) =>
@@ -27,9 +60,9 @@ interface ProveedoresContextValue {
 const ProveedoresContext = createContext<ProveedoresContextValue | null>(null);
 
 export function ProveedoresProvider({ children }: { children: ReactNode }) {
-  const [empresas, setEmpresas] = useState<Empresa[]>(empresasIniciales);
-  const [usuarios, setUsuarios] = useState<UsuarioProveedor[]>(usuariosIniciales);
-  const [articulos, setArticulos] = useState<Articulo[]>(articulosIniciales);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioProveedor[]>([]);
+  const [articulos, setArticulos] = useState<Articulo[]>([]);
 
   const value = useMemo<ProveedoresContextValue>(
     () => ({

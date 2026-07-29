@@ -22,7 +22,7 @@ import StatCard from "@/components/proveedores/StatCard";
 import { useModal } from "@/hooks/useModal";
 import { useProveedoresData } from "@/context/ProveedoresContext";
 import UsuarioForm, { UsuarioFormData } from "./UsuarioForm";
-import { UsuarioProveedor } from "@/data/mock/usuarios";
+import { UsuarioProveedor } from "@/context/ProveedoresContext";
 import { UserIcon, CheckCircleIcon, CloseLineIcon, PlusIcon, MoreDotIcon, EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 
 const PAGE_SIZE = 8;

@@ -6,8 +6,10 @@ import Input from "@/components/form/input/InputField";
 import SelectField from "@/components/form/Select";
 import Switch from "@/components/form/switch/Switch";
 import Button from "@/components/ui/button/Button";
-import { UsuarioProveedor, UsuarioEstado, UsuarioRol } from "@/data/mock/usuarios";
-import { Empresa } from "@/data/mock/empresas";
+import { UsuarioProveedor, Empresa } from "@/context/ProveedoresContext";
+
+type UsuarioEstado = "Activo" | "Inactivo";
+type UsuarioRol = "Admin" | "Operador";
 
 export type UsuarioFormData = Omit<UsuarioProveedor, "id" | "fechaRegistro">;
 
@@ -20,7 +22,7 @@ interface UsuarioFormProps {
   onCancel: () => void;
 }
 
-const roles: UsuarioRol[] = ["Administrador", "Operador", "Despachador"];
+const roles: UsuarioRol[] = ["Admin", "Operador"];
 
 export default function UsuarioForm({
   mode,

@@ -6,8 +6,9 @@ import Input from "@/components/form/input/InputField";
 import SelectField from "@/components/form/Select";
 import Switch from "@/components/form/switch/Switch";
 import Button from "@/components/ui/button/Button";
-import { Articulo, ArticuloEstado } from "@/data/mock/articulos";
-import { Empresa } from "@/data/mock/empresas";
+import { Articulo, Empresa } from "@/context/ProveedoresContext";
+
+type ArticuloEstado = "Activo" | "Inactivo";
 
 export type ArticuloFormData = Omit<Articulo, "id" | "fechaRegistro">;
 
@@ -31,6 +32,7 @@ export default function ArticuloForm({
   const emptyData: ArticuloFormData = {
     nombre: "",
     sku: "",
+    categoria: "",
     empresaId: defaultEmpresaId ?? empresas[0]?.id ?? "",
     precio: 0,
     stock: 0,

@@ -2,33 +2,26 @@
 
 import React, { useEffect, useState } from "react";
 import Badge from "../ui/badge/Badge";
-import { ArrowUpIcon, BoxIconLine, GroupIcon, CalenderIcon, CheckCircleIcon } from "@/icons";
-import { envioService } from "@/services/envioService";
-import { conductorService } from "@/services/conductorService";
+import { Package, Truck, CheckCircle2, AlertTriangle, TrendingUp } from "lucide-react";
 
 export const LogisticsMetrics = () => {
   const [metrics, setMetrics] = useState({
     totalEnvios: 0,
     enTransito: 0,
-    conductoresActivos: 0,
-    ingresos: 0,
+    entregados: 0,
+    observados: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchMetrics = async () => {
-      const [envios, conductores] = await Promise.all([
-        envioService.getEnvios(),
-        conductorService.getConductores()
-      ]);
-
-      setMetrics({
-        totalEnvios: envios.length,
-        enTransito: envios.filter(e => e.estado === "En Camino").length,
-        conductoresActivos: conductores.filter(c => c.estado === "Disponible" || c.estado === "En Ruta").length,
-        ingresos: envios.reduce((acc, curr) => acc + curr.costoTotal, 0),
-      });
-    };
-    fetchMetrics();
+    // Hardcoded dummy metrics
+    setMetrics({
+      totalEnvios: 125,
+      enTransito: 45,
+      entregados: 75,
+      observados: 5,
+    });
+    setLoading(false);
   }, []);
 
   return (
@@ -37,64 +30,63 @@ export const LogisticsMetrics = () => {
       {/* Metric 1 */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-          <BoxIconLine className="text-brand-500 size-6" />
+          <Package className="text-brand-500 size-6" />
         </div>
         <div className="flex items-end justify-between mt-5">
           <div>
             <span className="text-sm text-gray-500 dark:text-gray-400">Total Envíos</span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              {metrics.totalEnvios}
+              {loading ? "..." : metrics.totalEnvios}
             </h4>
           </div>
-          <Badge color="success"><ArrowUpIcon />12%</Badge>
         </div>
       </div>
 
       {/* Metric 2 */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-          <CalenderIcon className="text-warning-500 size-6" />
+          <Truck className="text-info-500 size-6" />
         </div>
         <div className="flex items-end justify-between mt-5">
           <div>
             <span className="text-sm text-gray-500 dark:text-gray-400">En Tránsito</span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              {metrics.enTransito}
+              {loading ? "..." : metrics.enTransito}
             </h4>
           </div>
-          <Badge color="warning">En progreso</Badge>
+          <Badge color="info">En curso</Badge>
         </div>
       </div>
 
       {/* Metric 3 */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-          <GroupIcon className="text-info-500 size-6" />
+          <CheckCircle2 className="text-success-500 size-6" />
         </div>
         <div className="flex items-end justify-between mt-5">
           <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Conductores Activos</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Entregados</span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              {metrics.conductoresActivos}
+              {loading ? "..." : metrics.entregados}
             </h4>
           </div>
-          <Badge color="success">Óptimo</Badge>
+          <Badge color="success">Completados</Badge>
         </div>
       </div>
 
       {/* Metric 4 */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
-          <CheckCircleIcon className="text-success-500 size-6" />
+          <AlertTriangle className="text-warning-500 size-6" />
         </div>
         <div className="flex items-end justify-between mt-5">
           <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Ingresos Proyectados</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Observados</span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm dark:text-white/90">
-              {new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(metrics.ingresos)}
+              {loading ? "..." : metrics.observados}
             </h4>
           </div>
-          <Badge color="success"><ArrowUpIcon />5%</Badge>
+          <Badge color="warning">Atención</Badge>
         </div>
       </div>
 

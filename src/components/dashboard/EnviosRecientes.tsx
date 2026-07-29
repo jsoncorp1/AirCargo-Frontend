@@ -9,39 +9,34 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
-import { Envio } from "@/data/mock/envios";
-import { envioService } from "@/services/envioService";
-import { Empresa } from "@/data/mock/empresas";
-import { empresaService } from "@/services/empresaService";
+import { 
+  shipmentService, 
+  ShipmentPaginatedItem, 
+  SHIPMENT_STATUS_LABELS, 
+  SHIPMENT_STATUS_BADGE 
+} from "@/services/shipmentService";
 import Link from "next/link";
+import { Eye } from "lucide-react";
 
 export default function EnviosRecientes() {
-  const [envios, setEnvios] = useState<Envio[]>([]);
-  const [empresas, setEmpresas] = useState<Record<string, Empresa>>({});
+  const [envios, setEnvios] = useState<ShipmentPaginatedItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      const enviosData = await envioService.getEnvios();
-      const empresasData = await empresaService.getEmpresas();
-      
-      const empMap: Record<string, Empresa> = {};
-      empresasData.forEach(e => empMap[e.id] = e);
-      
-      setEmpresas(empMap);
-      setEnvios(enviosData.slice(0, 5)); // Solo los 5 más recientes
+      try {
+        setLoading(true);
+        // Traer los últimos 5
+        const res = await shipmentService.getShipments(1, 5);
+        setEnvios(res.data);
+      } catch (err) {
+        console.error("Error fetching recent shipments", err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
-
-  const getBadgeColor = (estado: string) => {
-    switch (estado) {
-      case "Entregado": return "success";
-      case "En Camino": return "warning";
-      case "Pendiente": return "error";
-      case "Asignado": return "info";
-      default: return "light";
-    }
-  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
@@ -53,50 +48,71 @@ export default function EnviosRecientes() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href="/envios" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200">
+          <Link href="/admin/envios" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200">
             Ver Todos
           </Link>
         </div>
       </div>
       <div className="max-w-full overflow-x-auto">
         <Table>
-          <TableHeader className="border-gray-100 dark:border-gray-800 border-y">
+          <TableHeader className="border-gray-100 dark:border-gray-800 border-y bg-gray-50/50 dark:bg-gray-800/50">
             <TableRow>
-              <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">ID Envío</TableCell>
-              <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Empresa Origen</TableCell>
-              <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Destino</TableCell>
-              <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Monto</TableCell>
-              <TableCell isHeader className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Guía / Código</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Cliente</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Destino</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Monto</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
+              <TableCell isHeader className="py-3 font-semibold text-gray-500 text-start text-theme-xs dark:text-gray-400">Acción</TableCell>
             </TableRow>
           </TableHeader>
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {envios.map((envio) => (
-              <TableRow key={envio.id}>
-                <TableCell className="py-3 font-mono text-theme-sm text-brand-500">
-                  {envio.id}
-                </TableCell>
-                <TableCell className="py-3">
-                  <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                    {empresas[envio.empresaId]?.nombre || "Desconocida"}
-                  </p>
-                  <span className="text-gray-500 text-theme-xs dark:text-gray-400">
-                    {new Date(envio.fechaCreacion).toLocaleDateString()}
-                  </span>
-                </TableCell>
-                <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {envio.departamentoDestino}
-                </TableCell>
-                <TableCell className="py-3 text-gray-800 font-medium text-theme-sm dark:text-white/90">
-                  Bs {envio.costoTotal}
-                </TableCell>
-                <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  <Badge size="sm" color={getBadgeColor(envio.estado) as any}>
-                    {envio.estado}
-                  </Badge>
-                </TableCell>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-gray-500">Cargando...</TableCell>
               </TableRow>
-            ))}
+            ) : envios.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-gray-500">No hay envíos recientes</TableCell>
+              </TableRow>
+            ) : (
+              envios.map((envio) => (
+                <TableRow key={envio.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                  <TableCell className="py-3">
+                    <p className="font-mono text-theme-sm font-semibold text-brand-600 dark:text-brand-400">
+                      {envio.waybillNumber}
+                    </p>
+                    <span className="text-gray-400 text-theme-xs dark:text-gray-500">
+                      {envio.code}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                      {envio.clientFullName}
+                    </p>
+                    <span className="text-gray-500 text-theme-xs dark:text-gray-400">
+                      {new Date(envio.createdAt).toLocaleDateString()}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-3 text-gray-600 font-medium text-theme-sm dark:text-gray-300">
+                    {envio.destinationBranchOfficeCode || "N/A"}
+                  </TableCell>
+                  <TableCell className="py-3 text-gray-800 font-semibold text-theme-sm dark:text-white/90">
+                    Bs {envio.shippingPrice.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Badge size="sm" color={SHIPMENT_STATUS_BADGE[envio.status]}>
+                      {SHIPMENT_STATUS_LABELS[envio.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Link href={`/admin/envios/${envio.id}/tracking`} className="text-gray-400 hover:text-brand-500 transition-colors">
+                      <Eye className="w-5 h-5" />
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

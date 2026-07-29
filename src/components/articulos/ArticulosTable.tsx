@@ -15,7 +15,7 @@ import Pagination from "@/components/tables/Pagination";
 import { Modal } from "@/components/ui/modal";
 import { articleService, Article } from "@/services/articleService";
 import { Supplier, supplierService } from "@/services/supplierService";
-import { Articulo } from "@/data/mock/articulos";
+
 import {
   BoxCubeIcon,
   PlusIcon,
@@ -33,6 +33,19 @@ const DEFAULT_PER_PAGE = 10;
 // El backend no soporta búsqueda de texto ni filtro de estado como query params (solo supplierId);
 // mientras alguno de esos dos filtros esté activo se trae un lote más grande y se filtra en cliente.
 const SEARCH_BATCH_SIZE = 200;
+
+// Local view-model that maps the backend Article DTO to the shape expected by this component.
+interface Articulo {
+  id: string;
+  empresaId: string;
+  nombre: string;
+  sku: string;
+  precio: number;
+  stock: number;
+  estado: "Activo" | "Inactivo";
+  fechaRegistro: string;
+}
+
 
 function mapArticulo(a: Article): Articulo {
   return {
