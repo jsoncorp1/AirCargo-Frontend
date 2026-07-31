@@ -100,7 +100,7 @@ export default function ShipmentWaybill({
       {/* Logo + referencia */}
       <div className="flex flex-col items-center gap-1.5 bg-gray-50 px-4 pt-5 pb-4">
         <div className="relative h-14 w-36">
-          <Image src="/images/logo/airlogo.jpg" alt="AirCargo" fill className="object-contain" />
+          <Image src="/images/logo/logoaircargoazul.png" alt="AirCargo" fill className="object-contain" />
         </div>
         <p className="text-[11px] font-semibold tracking-wide text-gray-500">
           Callcenter: {CALLCENTER_PHONE}

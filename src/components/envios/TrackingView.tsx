@@ -4,13 +4,14 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
-import { 
-  shipmentService, 
-  Shipment, 
+import {
+  shipmentService,
+  Shipment,
   SHIPMENT_STATUS_LABELS,
-  ShipmentStatus 
+  ShipmentStatus
 } from "@/services/shipmentService";
 import { Package, MapPin, CheckCircle2, ChevronRight, Hash, Phone, User, Weight, DollarSign } from "lucide-react";
+import Image from "next/image";
 
 export default function TrackingView() {
   const params = useParams();
@@ -43,7 +44,7 @@ export default function TrackingView() {
   const timelineStates: ShipmentStatus[] = ["Pending", "InTransit", "Delivered"];
   // If state is Observed/Rejected/Returned, we insert it after InTransit dynamically or replace Delivered
   let activeStates = [...timelineStates];
-  
+
   if (envio.status === "Observed") {
     activeStates = ["Pending", "InTransit", "Observed"];
   } else if (envio.status === "Rejected") {
@@ -61,15 +62,15 @@ export default function TrackingView() {
         <ComponentCard title="Estado del Envío">
           <div className="p-5">
             <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-4 space-y-8 pb-4">
-              
+
               {activeStates.map((st, index) => {
                 const isCompleted = currentStateIndex >= index;
                 const isCurrent = currentStateIndex === index;
-                
+
                 let dotColor = "bg-gray-200 dark:bg-gray-700";
                 let textColor = "text-gray-400";
                 let borderColor = "ring-white dark:ring-gray-900";
-                
+
                 if (isCompleted) {
                   if (st === "Observed" || st === "Rejected" || st === "Returned") {
                     dotColor = "bg-error-500";
@@ -80,8 +81,8 @@ export default function TrackingView() {
                   }
                 }
                 if (isCurrent) {
-                  borderColor = st === "Observed" || st === "Rejected" || st === "Returned" 
-                    ? "ring-error-100 dark:ring-error-900/30" 
+                  borderColor = st === "Observed" || st === "Rejected" || st === "Returned"
+                    ? "ring-error-100 dark:ring-error-900/30"
                     : "ring-brand-100 dark:ring-brand-900/30";
                 }
 
@@ -97,9 +98,9 @@ export default function TrackingView() {
                       {isCompleted ? (isCurrent ? "Estado actual" : "Completado") : "Pendiente"}
                     </p>
                     {isCurrent && envio.observation && (
-                       <p className="text-xs text-error-500 mt-2 bg-error-50/50 p-2 rounded border border-error-100 dark:bg-error-500/10 dark:border-error-500/20">
-                         Obs: {envio.observation}
-                       </p>
+                      <p className="text-xs text-error-500 mt-2 bg-error-50/50 p-2 rounded border border-error-100 dark:bg-error-500/10 dark:border-error-500/20">
+                        Obs: {envio.observation}
+                      </p>
                     )}
                   </div>
                 );
@@ -111,19 +112,30 @@ export default function TrackingView() {
 
       {/* RIGHT COLUMN: INFO */}
       <div className="lg:col-span-2 space-y-6">
-        
+
         {/* ROUTE SUMMARY */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
           <div className="flex items-start justify-between mb-8 pb-6 border-b border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-brand-50 flex items-center justify-center text-brand-500 dark:bg-brand-500/10">
-                <Package className="w-6 h-6" />
+            <div className="flex items-center gap-4">
+              <div className="relative w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden p-2">
+                <Image
+                  src="/images/logo/logoaircargoazul.png"
+                  alt="AirCargo Logo"
+                  fill
+                  className="object-contain p-1 dark:hidden"
+                />
+                <Image
+                  src="/images/logo/logoaircargoblanco.png"
+                  alt="AirCargo Logo"
+                  fill
+                  className="object-contain p-1 hidden dark:block"
+                />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-800 dark:text-white/90">Envío {envio.code}</h3>
                 <p className="text-sm text-gray-500 flex items-center gap-2">
-                  <Hash className="w-4 h-4" /> {envio.waybillNumber} 
-                  <span className="text-gray-300">|</span> 
+                  <Hash className="w-4 h-4" /> {envio.waybillNumber}
+                  <span className="text-gray-300">|</span>
                   {new Date(envio.createdAt).toLocaleString()}
                 </p>
               </div>
@@ -135,45 +147,45 @@ export default function TrackingView() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative">
             <div className="flex gap-4">
-               <div className="mt-1 h-10 w-10 shrink-0 rounded-full bg-brand-50 flex items-center justify-center text-brand-500 dark:bg-brand-500/10">
-                 <MapPin className="size-5" />
-               </div>
-               <div>
-                 <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Origen</p>
-                 <p className="font-semibold text-gray-800 dark:text-white text-lg leading-tight">{envio.originBranchOfficeCity || envio.originDepartment}</p>
-                 <p className="text-sm text-gray-500 mt-1">{envio.originBranchOfficeCode || "Sucursal Origen"}</p>
-                 
-                 <div className="mt-4 space-y-1">
-                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                     <User className="w-4 h-4 text-gray-400" /> {envio.senderFullName}
-                   </p>
-                   <p className="text-sm text-gray-500 flex items-center gap-2">
-                     <Phone className="w-4 h-4 text-gray-400" /> {envio.senderPhone}
-                   </p>
-                 </div>
-               </div>
+              <div className="mt-1 h-10 w-10 shrink-0 rounded-full bg-brand-50 flex items-center justify-center text-brand-500 dark:bg-brand-500/10">
+                <MapPin className="size-5" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Origen</p>
+                <p className="font-semibold text-gray-800 dark:text-white text-lg leading-tight">{envio.originBranchOfficeCity || envio.originDepartment}</p>
+                <p className="text-sm text-gray-500 mt-1">{envio.originBranchOfficeCode || "Sucursal Origen"}</p>
+
+                <div className="mt-4 space-y-1">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-400" /> {envio.senderFullName}
+                  </p>
+                  <p className="text-sm text-gray-500 flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-400" /> {envio.senderPhone}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="hidden md:flex absolute left-1/2 top-4 -ml-4 items-center justify-center text-gray-300 dark:text-gray-600">
-               <ChevronRight className="w-8 h-8" />
+              <ChevronRight className="w-8 h-8" />
             </div>
 
             <div className="flex gap-4">
-               <div className="mt-1 h-10 w-10 shrink-0 rounded-full bg-success-50 flex items-center justify-center text-success-500 dark:bg-success-500/10">
-                 <MapPin className="size-5" />
-               </div>
-               <div>
-                 <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Destino</p>
-                 <p className="font-semibold text-gray-800 dark:text-white text-lg leading-tight">{envio.destinationBranchOfficeCity || envio.destinationDepartment}</p>
-                 <p className="text-sm text-gray-500 mt-1">{envio.destinationBranchOfficeCode || "Sucursal Destino"}</p>
-                 <p className="text-sm text-gray-500 mt-1">{envio.clientAddress}</p>
-                 
-                 <div className="mt-4 space-y-1">
-                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                     <User className="w-4 h-4 text-gray-400" /> {envio.clientFullName}
-                   </p>
-                 </div>
-               </div>
+              <div className="mt-1 h-10 w-10 shrink-0 rounded-full bg-success-50 flex items-center justify-center text-success-500 dark:bg-success-500/10">
+                <MapPin className="size-5" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Destino</p>
+                <p className="font-semibold text-gray-800 dark:text-white text-lg leading-tight">{envio.destinationBranchOfficeCity || envio.destinationDepartment}</p>
+                <p className="text-sm text-gray-500 mt-1">{envio.destinationBranchOfficeCode || "Sucursal Destino"}</p>
+                <p className="text-sm text-gray-500 mt-1">{envio.clientAddress}</p>
+
+                <div className="mt-4 space-y-1">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-400" /> {envio.clientFullName}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -183,34 +195,34 @@ export default function TrackingView() {
           <div className="p-5">
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6 flex flex-wrap gap-6 border border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                   <Package className="w-5 h-5 text-gray-500" />
-                 </div>
-                 <div>
-                   <p className="text-xs text-gray-500 font-medium">Bultos</p>
-                   <p className="font-semibold text-gray-800 dark:text-white">{envio.packageCount}</p>
-                 </div>
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <Package className="w-5 h-5 text-gray-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Bultos</p>
+                  <p className="font-semibold text-gray-800 dark:text-white">{envio.packageCount}</p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                   <Weight className="w-5 h-5 text-gray-500" />
-                 </div>
-                 <div>
-                   <p className="text-xs text-gray-500 font-medium">Peso Total</p>
-                   <p className="font-semibold text-gray-800 dark:text-white">{envio.totalWeight.toFixed(2)} kg</p>
-                 </div>
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <Weight className="w-5 h-5 text-gray-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Peso Total</p>
+                  <p className="font-semibold text-gray-800 dark:text-white">{envio.totalWeight.toFixed(2)} kg</p>
+                </div>
               </div>
               <div className="flex items-center gap-3 ml-auto">
-                 <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-lg shadow-sm border border-brand-100 dark:border-brand-500/20">
-                   <DollarSign className="w-5 h-5 text-brand-500" />
-                 </div>
-                 <div>
-                   <p className="text-xs text-gray-500 font-medium uppercase">Costo de Envío</p>
-                   <p className="font-bold text-lg text-brand-600 dark:text-brand-400">Bs {envio.shippingPrice.toFixed(2)}</p>
-                 </div>
+                <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-lg shadow-sm border border-brand-100 dark:border-brand-500/20">
+                  <DollarSign className="w-5 h-5 text-brand-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium uppercase">Costo de Envío</p>
+                  <p className="font-bold text-lg text-brand-600 dark:text-brand-400">Bs {envio.shippingPrice.toFixed(2)}</p>
+                </div>
               </div>
             </div>
-            
+
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Descripción / Contenido:</p>
             <p className="text-gray-600 dark:text-gray-400 text-sm bg-gray-50 dark:bg-gray-800/30 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
               {envio.packageDescription || "Sin descripción detallada."}
@@ -239,10 +251,10 @@ export default function TrackingView() {
             )}
 
             {envio.deliveryComment && (
-               <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-4">
-                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Comentarios de entrega:</p>
-                 <p className="text-sm text-gray-600 dark:text-gray-400 italic">"{envio.deliveryComment}"</p>
-               </div>
+              <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-4">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Comentarios de entrega:</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 italic">"{envio.deliveryComment}"</p>
+              </div>
             )}
           </div>
         </ComponentCard>
