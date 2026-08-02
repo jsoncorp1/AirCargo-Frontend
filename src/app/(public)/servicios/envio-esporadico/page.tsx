@@ -53,7 +53,7 @@ export default function EnvioEsporadicoPage() {
   };
 
   return (
-    <div className="bg-[#f4f4f4] min-h-screen font-sans text-gray-800 antialiased pt-24 pb-20">
+    <div className="bg-[#f4f4f4] min-h-screen font-sans text-gray-800 antialiased pt-16 md:pt-20 lg:pt-24 pb-16 lg:pb-20">
       <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
         
         {/* DISEÑO ESTILO "PRODUCTO E-COMMERCE" */}
@@ -61,7 +61,7 @@ export default function EnvioEsporadicoPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2">
             
             {/* LADO IZQUIERDO: Carrusel de Fotos del Proceso */}
-            <div className="relative p-6 bg-gray-50 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-gray-100">
+            <div className="relative p-4 md:p-6 bg-gray-50 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-gray-100">
               <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden shadow-md bg-white">
                 {CAROUSEL_IMAGES.map((img, index) => (
                   <Image 
@@ -79,12 +79,12 @@ export default function EnvioEsporadicoPage() {
               </div>
               
               {/* Miniaturas (Thumbnails) */}
-              <div className="flex gap-3 mt-6 w-full justify-center">
+              <div className="flex gap-2 md:gap-3 mt-4 md:mt-6 w-full justify-center">
                 {CAROUSEL_IMAGES.map((img, index) => (
                   <button 
                     key={index}
                     onClick={() => setActiveImage(index)}
-                    className={`relative w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${activeImage === index ? 'border-brand-600 scale-110 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                    className={`relative w-12 h-12 md:w-16 md:h-16 rounded-md overflow-hidden border-2 transition-all ${activeImage === index ? 'border-brand-600 scale-110 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
                   >
                     <Image src={img} alt="Miniatura" fill className="object-cover" />
                   </button>
@@ -93,7 +93,7 @@ export default function EnvioEsporadicoPage() {
             </div>
 
             {/* LADO DERECHO: Detalles del Servicio */}
-            <div className="p-8 lg:p-10 flex flex-col justify-center">
+            <div className="p-5 md:p-8 lg:p-10 flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-3">
                 <div className="flex text-yellow-400">
                   {[...Array(5)].map((_, i) => (

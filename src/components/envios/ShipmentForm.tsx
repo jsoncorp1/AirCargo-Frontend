@@ -30,6 +30,8 @@ import {
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import ShipmentWaybill from "./ShipmentWaybill";
+import ShipmentLetterPdf from "./ShipmentLetterPdf";
+import { exportElementToPDF } from "@/utils/pdfExport";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
@@ -100,6 +102,7 @@ export default function ShipmentForm({
   const { pending: submitting, run: runSubmit } = useSubmitLock();
   const [exporting, setExporting] = useState<"print" | "pdf" | null>(null);
   const waybillRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<HTMLDivElement>(null);
 
   // Data sources
   const [orders, setOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
@@ -413,6 +416,22 @@ export default function ShipmentForm({
     }
   };
 
+  const handleExportPdf = async () => {
+    if (!pdfRef.current) return;
+    try {
+      setExporting("pdf");
+      await exportElementToPDF(pdfRef.current, {
+        filename: `Guia_${guia || "Envio"}.pdf`,
+        format: 'letter'
+      });
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Error", "Hubo un error al generar el PDF.");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const goodsValue = lines.reduce((acc, line) => acc + line.quantity * line.unitPrice, 0);
   const totalCost = lines.reduce((acc, line) => acc + (line.shippingCost || 0), 0);
   const totalWeight = lines.reduce((acc, line) => acc + (line.weight || 0), 0);
@@ -475,6 +494,42 @@ export default function ShipmentForm({
               fecha={fecha}
               hora={hora}
               createdBy={createdBy}
+            />
+          </div>
+          <div className="absolute top-[-9999px] left-[-9999px]">
+            <ShipmentLetterPdf
+              ref={pdfRef}
+              envio={{
+                id: shipmentId || "",
+                orderDeliveryId: orderDeliveryId,
+                waybillNumber: "",
+                code: guia,
+                originDepartment: orderInfo?.originDepartment ?? "",
+                senderFullName: orderInfo?.senderFullName ?? "",
+                senderPhone: orderInfo?.senderPhone ?? "",
+                senderAddress: orderInfo?.senderAddress ?? "",
+                clientFullName: cliente,
+                clientAddress: orderInfo?.clientAddress ?? "",
+                clientPhone: orderInfo?.clientPhone ?? "",
+                destinationDepartment: orderInfo?.destinationDepartment ?? "",
+                totalWeight: lines.reduce((acc, l) => acc + (l.weight || 0), 0),
+                shippingPrice: lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0),
+                packageCount: packageCount,
+                packageDescription: packageDescription,
+                createdAt: fecha && hora ? `${fecha} ${hora}` : new Date().toISOString(),
+                createdBy: createdBy,
+                details: lines.map((l, i) => ({
+                  id: String(i),
+                  orderDeliveryDetailId: "",
+                  articleName: l.articleName,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  weight: l.weight,
+                  shippingCost: l.shippingCost
+                })),
+                status: status || "Pending",
+                deliveryType: orderInfo?.deliveryType ?? "Prepaid",
+              } as any}
             />
           </div>
 
@@ -545,6 +600,18 @@ export default function ShipmentForm({
             }
           >
             {exporting === "print" ? "Preparando..." : "Imprimir Guía"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={exporting !== null}
+            startIcon={
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            }
+          >
+            {exporting === "pdf" ? "Exportando..." : "Descargar PDF"}
           </Button>
         </div>
       </div>

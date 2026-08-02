@@ -57,7 +57,7 @@ const AdminSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
+      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white/95 backdrop-blur-xl dark:bg-gray-900/95 text-gray-900 h-screen transition-all duration-400 ease-[cubic-bezier(0.4,0,0.2,1)] z-50 border-r border-gray-100/50 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]
         ${isExpanded || isMobileOpen
           ? "w-[290px]"
           : isHovered
@@ -70,17 +70,16 @@ const AdminSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex  ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-          }`}
+        className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"} group cursor-pointer`}
       >
-        <Link href="/admin" className="flex items-center gap-2">
+        <Link href="/admin" className="flex items-center gap-2 transition-transform duration-300 ease-in-out group-hover:scale-105">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
-              <img src="/images/logo/logoaircargoazul.png" alt="AirCargo Logo" width={160} height={40} className="dark:hidden block object-contain" />
-              <img src="/images/logo/logoaircargoblanco.png" alt="AirCargo Logo" width={160} height={40} className="hidden dark:block object-contain" />
+              <img src="/images/logo/logoaircargoazul.png" alt="AirCargo Logo" width={160} height={40} className="dark:hidden block object-contain drop-shadow-sm transition-all duration-300 group-hover:grayscale group-hover:opacity-80" />
+              <img src="/images/logo/logoaircargoblanco.png" alt="AirCargo Logo" width={160} height={40} className="hidden dark:block object-contain drop-shadow-sm transition-all duration-300 group-hover:grayscale group-hover:opacity-80" />
             </>
           ) : (
-            <span className="text-2xl font-black text-brand-600 tracking-tighter">AC</span>
+            <span className="text-2xl font-black text-brand-600 tracking-tighter drop-shadow-md group-hover:text-brand-700 transition-colors">AC</span>
           )}
         </Link>
       </div>
@@ -89,8 +88,8 @@ const AdminSidebar: React.FC = () => {
           <div className="flex flex-col gap-4">
             <div>
               <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+                className={`mb-3 text-[11px] font-bold tracking-widest uppercase flex leading-[20px] text-gray-400/80 ${
+                  !isExpanded && !isHovered ? "lg:justify-center" : "justify-start ml-2"
                 }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}

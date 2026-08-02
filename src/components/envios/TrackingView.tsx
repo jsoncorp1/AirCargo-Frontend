@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
@@ -10,8 +10,11 @@ import {
   SHIPMENT_STATUS_LABELS,
   ShipmentStatus
 } from "@/services/shipmentService";
-import { Package, MapPin, CheckCircle2, ChevronRight, Hash, Phone, User, Weight, DollarSign } from "lucide-react";
+import { Package, MapPin, CheckCircle2, ChevronRight, Hash, Phone, User, Weight, DollarSign, Printer, FileDown } from "lucide-react";
 import Image from "next/image";
+import { exportElementToPDF } from "@/utils/pdfExport";
+import ShipmentWaybill from "./ShipmentWaybill";
+import ShipmentLetterPdf from "./ShipmentLetterPdf";
 
 export default function TrackingView() {
   const params = useParams();
@@ -20,6 +23,24 @@ export default function TrackingView() {
 
   const [envio, setEnvio] = useState<Shipment | null>(null);
   const [loading, setLoading] = useState(true);
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!pdfRef.current || !envio) return;
+    try {
+      setIsExporting(true);
+      await exportElementToPDF(pdfRef.current, {
+        filename: `Envio_${envio.code}.pdf`,
+        format: 'letter'
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al generar el PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -58,7 +79,7 @@ export default function TrackingView() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* LEFT COLUMN: TIMELINE */}
-      <div className="lg:col-span-1">
+      <div className="lg:col-span-1 print:hidden">
         <ComponentCard title="Estado del Envío">
           <div className="p-5">
             <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-4 space-y-8 pb-4">
@@ -111,7 +132,7 @@ export default function TrackingView() {
       </div>
 
       {/* RIGHT COLUMN: INFO */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className="lg:col-span-2 space-y-6 print:hidden">
 
         {/* ROUTE SUMMARY */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -140,9 +161,17 @@ export default function TrackingView() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
-              Volver
-            </Button>
+            <div className="flex items-center gap-2 print:hidden">
+              <Button variant="outline" size="sm" onClick={() => window.print()} className="flex items-center gap-2">
+                <Printer className="w-4 h-4" /> Imprimir Ticket
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExporting} className="flex items-center gap-2">
+                <FileDown className="w-4 h-4" /> {isExporting ? "Exportando..." : "Exportar PDF"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+                Volver
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative">
@@ -258,6 +287,32 @@ export default function TrackingView() {
             )}
           </div>
         </ComponentCard>
+      </div>
+      {/* COMPONENTES OCULTOS PARA IMPRESIÓN / EXPORTACIÓN */}
+      <div className="hidden print:flex print:justify-center w-full bg-white">
+        <ShipmentWaybill 
+          code={envio.code}
+          originDepartment={envio.originDepartment}
+          destinationDepartment={envio.destinationDepartment}
+          senderFullName={envio.senderFullName}
+          senderPhone={envio.senderPhone}
+          senderAddress={envio.senderAddress || ""}
+          clientFullName={envio.clientFullName}
+          clientPhone={(envio as any).clientPhone || ""}
+          clientAddress={envio.clientAddress}
+          deliveryType={(envio as any).deliveryType || "Prepaid"}
+          isExpress={false}
+          packageCount={envio.packageCount}
+          packageDescription={envio.packageDescription || ""}
+          lines={envio.details || []}
+          fecha={new Date(envio.createdAt).toLocaleDateString()}
+          hora={new Date(envio.createdAt).toLocaleTimeString()}
+          createdBy={envio.senderFullName}
+        />
+      </div>
+
+      <div className="absolute top-0 left-[-9999px]">
+        <ShipmentLetterPdf envio={envio} ref={pdfRef} />
       </div>
     </div>
   );
