@@ -152,6 +152,7 @@ export interface ShipmentListFilters {
   // Ambos extremos son inclusive y el backend cubre el día completo en `dateTo`.
   dateFrom?: string;
   dateTo?: string;
+  searchTerm?: string;
 }
 
 export interface ShipmentsPaginatedResponse {

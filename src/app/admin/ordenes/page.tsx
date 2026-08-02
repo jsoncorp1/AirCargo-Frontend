@@ -62,9 +62,10 @@ export default function AdminOrdenesPage() {
 
   // Tras atender una orden hay que refrescar la página y los contadores.
   const fetchOrders = useCallback(() => {
-    fetchPage(currentPage);
+    setCurrentPage(1);
+    fetchPage(1);
     fetchBatch();
-  }, [fetchPage, fetchBatch, currentPage]);
+  }, [fetchPage, fetchBatch]);
 
   useEffect(() => {
     fetchPage(currentPage);

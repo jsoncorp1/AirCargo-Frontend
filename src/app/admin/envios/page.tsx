@@ -179,10 +179,10 @@ export default function AdminEnviosPage() {
             : "Tu usuario no tiene sucursal asignada, por lo que no puede atender envíos."
         }
       >
-        <div className="mb-5 space-y-3">
-          <div>
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-              Bandeja
+        <div className="mb-6 flex flex-col xl:flex-row xl:items-end gap-5 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="flex-1">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Bandeja de Sucursal
             </p>
             <Tabs
               items={bandejaTabs}
@@ -190,9 +190,9 @@ export default function AdminEnviosPage() {
               onChange={(value) => setBandeja(value as Bandeja)}
             />
           </div>
-          <div>
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-              Estado
+          <div className="flex-1">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Estado de Envío
             </p>
             <Tabs
               items={statusTabs}
@@ -200,11 +200,16 @@ export default function AdminEnviosPage() {
               onChange={(value) => setStatus(value as ShipmentStatus | "")}
             />
           </div>
-          <ShipmentDateRangeFilter
-            className="sm:w-72"
-            value={dateRange}
-            onChange={setDateRange}
-          />
+          <div className="xl:w-72">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Rango de Fechas
+            </p>
+            <ShipmentDateRangeFilter
+              className="w-full"
+              value={dateRange}
+              onChange={setDateRange}
+            />
+          </div>
         </div>
         <AdminShipmentsTable
           shipments={shipments}

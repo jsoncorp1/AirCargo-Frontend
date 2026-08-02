@@ -59,7 +59,10 @@ export default function AdminShipmentsTable({
 }: AdminShipmentsTableProps) {
   const viewModal = useModal();
   const statusModal = useModal();
+  const assignModal = useModal();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedShipmentIds, setSelectedShipmentIds] = useState<string[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<string>("");
 
   const openView = useCallback(
     (id: string) => {
@@ -77,15 +80,64 @@ export default function AdminShipmentsTable({
     [statusModal]
   );
 
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedShipmentIds(shipments.map(s => s.id));
+    } else {
+      setSelectedShipmentIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedShipmentIds(prev => [...prev, id]);
+    } else {
+      setSelectedShipmentIds(prev => prev.filter(item => item !== id));
+    }
+  };
+
+  const handleAssignSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriver) return;
+    setTimeout(() => {
+      alert(`Se asignaron ${selectedShipmentIds.length} envíos al conductor ${selectedDriver}`);
+      setSelectedShipmentIds([]);
+      setSelectedDriver("");
+      assignModal.closeModal();
+    }, 500);
+  };
+
   const selectedBasic = shipments.find((s) => s.id === selectedId);
 
   return (
     <>
+      {selectedShipmentIds.length > 0 && (
+        <div className="mb-4 p-3 bg-brand-50 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-800 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-300">
+          <p className="text-sm text-brand-700 dark:text-brand-300 font-medium">
+            <span className="font-bold">{selectedShipmentIds.length}</span> envíos seleccionados
+          </p>
+          <button 
+            onClick={() => assignModal.openModal()}
+            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors"
+          >
+            Asignar a Conductor
+          </button>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
+                <TableCell isHeader className="px-5 py-3.5 w-12">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                    checked={shipments.length > 0 && selectedShipmentIds.length === shipments.length}
+                    onChange={handleSelectAll}
+                  />
+                </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Fecha
                 </TableCell>
@@ -121,7 +173,7 @@ export default function AdminShipmentsTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : shipments.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={9}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={10}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -136,8 +188,16 @@ export default function AdminShipmentsTable({
                 shipments.map((shipment) => (
                   <TableRow
                     key={shipment.id}
-                    className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
+                    className={`transition-colors ${selectedShipmentIds.includes(shipment.id) ? 'bg-brand-50/50 dark:bg-brand-900/20' : 'hover:bg-gray-50/70 dark:hover:bg-white/[0.02]'}`}
                   >
+                    <TableCell className="px-5 py-4">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                        checked={selectedShipmentIds.includes(shipment.id)}
+                        onChange={(e) => handleSelectOne(shipment.id, e.target.checked)}
+                      />
+                    </TableCell>
                     <TableCell className="px-5 py-4 text-theme-sm">
                       <p className="text-gray-700 dark:text-gray-300">
                         {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
@@ -262,6 +322,49 @@ export default function AdminShipmentsTable({
             onSaved={() => onDataChange?.()}
           />
         )}
+      </Modal>
+
+      <Modal
+        isOpen={assignModal.isOpen}
+        onClose={assignModal.closeModal}
+        className="max-w-[420px] m-4 z-50"
+      >
+        <div className="p-6">
+          <h4 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
+            Asignar {selectedShipmentIds.length} envíos a Conductor
+          </h4>
+          <form onSubmit={handleAssignSubmit}>
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seleccione Conductor (Mock)</label>
+              <select 
+                value={selectedDriver}
+                onChange={(e) => setSelectedDriver(e.target.value)}
+                required
+                className="w-full h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              >
+                <option value="" disabled>Elegir conductor...</option>
+                <option value="Juan Pérez">Juan Pérez - Moto 1</option>
+                <option value="Carlos Gómez">Carlos Gómez - Furgoneta A</option>
+                <option value="Miguel Suárez">Miguel Suárez - Moto 2</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={assignModal.closeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700"
+              >
+                Asignar Envíos
+              </button>
+            </div>
+          </form>
+        </div>
       </Modal>
     </>
   );

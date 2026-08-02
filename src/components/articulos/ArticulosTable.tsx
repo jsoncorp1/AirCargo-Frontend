@@ -1,53 +1,23 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import Badge from "@/components/ui/badge/Badge";
-import Input from "@/components/form/input/InputField";
-import SelectField from "@/components/form/Select";
-import Pagination from "@/components/tables/Pagination";
 import { Modal } from "@/components/ui/modal";
-import { articleService, Article } from "@/services/articleService";
-import { Supplier, supplierService } from "@/services/supplierService";
-
-import {
-  BoxCubeIcon,
-  PlusIcon,
-  EyeIcon,
-  PencilIcon,
-  TrashBinIcon,
-} from "@/icons";
 import Button from "@/components/ui/button/Button";
 import { useModal } from "@/hooks/useModal";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
+import { articleService, Article } from "@/services/articleService";
+import { Supplier, supplierService } from "@/services/supplierService";
 import ArticuloForm, { ArticuloFormData } from "./ArticuloForm";
 import { useToast } from "@/context/ToastContext";
 
+import ArticulosSummary from "./ArticulosSummary";
+import ArticulosToolbar from "./ArticulosToolbar";
+import ArticulosList, { ArticuloLocal } from "./ArticulosList";
+
 const DEFAULT_PER_PAGE = 10;
-// El backend no soporta búsqueda de texto ni filtro de estado como query params (solo supplierId);
-// mientras alguno de esos dos filtros esté activo se trae un lote más grande y se filtra en cliente.
 const SEARCH_BATCH_SIZE = 200;
 
-// Local view-model that maps the backend Article DTO to the shape expected by this component.
-interface Articulo {
-  id: string;
-  empresaId: string;
-  nombre: string;
-  sku: string;
-  precio: number;
-  stock: number;
-  estado: "Activo" | "Inactivo";
-  fechaRegistro: string;
-}
-
-
-function mapArticulo(a: Article): Articulo {
+function mapArticulo(a: Article): ArticuloLocal {
   return {
     id: a.id,
     nombre: a.name,
@@ -63,13 +33,11 @@ function mapArticulo(a: Article): Articulo {
 export default function ArticulosTable() {
   const { showToast } = useToast();
 
-  // Página real del servidor: se usa cuando no hay búsqueda ni filtro de estado activos
-  // (el filtro por proveedor sí lo soporta el backend, así que se aplica en ambos modos).
-  const [pageArticulos, setPageArticulos] = useState<Articulo[]>([]);
+  const [pageArticulos, setPageArticulos] = useState<ArticuloLocal[]>([]);
   const [pageTotalPages, setPageTotalPages] = useState(1);
   const [pageLoading, setPageLoading] = useState(true);
-  // Lote grande para búsqueda/estado.
-  const [batchArticulos, setBatchArticulos] = useState<Articulo[]>([]);
+
+  const [batchArticulos, setBatchArticulos] = useState<ArticuloLocal[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
 
   const [empresas, setEmpresas] = useState<Supplier[]>([]);
@@ -83,35 +51,47 @@ export default function ArticulosTable() {
   const [filterResetKey, setFilterResetKey] = useState(0);
 
   const [formMode, setFormMode] = useState<"create" | "edit" | "view">("create");
-  const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
-  const [articuloToDelete, setArticuloToDelete] = useState<Articulo | null>(null);
+  const [selectedArticulo, setSelectedArticulo] = useState<ArticuloLocal | null>(null);
+  const [articuloToDelete, setArticuloToDelete] = useState<ArticuloLocal | null>(null);
 
   const formModal = useModal();
   const deleteModal = useModal();
 
-  const isFiltering = Boolean(searchTerm.trim()) || Boolean(estadoFilter);
+  const isFiltering = Boolean(searchTerm.trim()) || Boolean(estadoFilter) || Boolean(empresaFilter);
 
   const fetchPage = useCallback(async (page: number, supplierId: string) => {
     setPageLoading(true);
-    const resp = await articleService.getArticles(page, perPage, supplierId || undefined);
-    setPageArticulos(resp.data.map(mapArticulo));
-    setPageTotalPages(resp.totalPages);
+    try {
+      const resp = await articleService.getArticles(page, perPage, supplierId || undefined);
+      setPageArticulos(resp.data.map(mapArticulo));
+      setPageTotalPages(resp.totalPages);
+    } catch (e) {
+      console.error(e);
+    }
     setPageLoading(false);
   }, [perPage]);
 
   const fetchBatch = useCallback(async (supplierId: string) => {
     setBatchLoading(true);
-    const resp = await articleService.getArticles(1, SEARCH_BATCH_SIZE, supplierId || undefined);
-    setBatchArticulos(resp.data.map(mapArticulo));
+    try {
+      const resp = await articleService.getArticles(1, SEARCH_BATCH_SIZE, supplierId || undefined);
+      setBatchArticulos(resp.data.map(mapArticulo));
+    } catch (e) {
+      console.error(e);
+    }
     setBatchLoading(false);
   }, []);
 
   const fetchSuppliers = useCallback(async () => {
-    const resp = await supplierService.getSuppliers(1, SEARCH_BATCH_SIZE);
-    setEmpresas(resp.data);
-    const map: Record<string, string> = {};
-    resp.data.forEach((e) => (map[e.id] = e.name));
-    setEmpresaMap(map);
+    try {
+      const resp = await supplierService.getSuppliers(1, SEARCH_BATCH_SIZE);
+      setEmpresas(resp.data);
+      const map: Record<string, string> = {};
+      resp.data.forEach((e) => (map[e.id] = e.name));
+      setEmpresaMap(map);
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
 
   const fetchAll = useCallback(() => {
@@ -121,26 +101,21 @@ export default function ArticulosTable() {
   }, [fetchPage, fetchBatch, fetchSuppliers, currentPage, empresaFilter]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPage(currentPage, empresaFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, empresaFilter, perPage]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBatch(empresaFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaFilter]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSuppliers();
   }, [fetchSuppliers]);
 
-  // Volver a la página 1 al activar/cambiar un filtro o el tamaño de página.
   useEffect(() => {
     setCurrentPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, estadoFilter, empresaFilter, perPage]);
 
   const filtered = useMemo(() => {
@@ -170,11 +145,10 @@ export default function ArticulosTable() {
     setFilterResetKey((k) => k + 1);
   };
 
-  // Modal helpers
   const openCreate = () => { setFormMode("create"); setSelectedArticulo(null); formModal.openModal(); };
-  const openEdit = (art: Articulo) => { setFormMode("edit"); setSelectedArticulo(art); formModal.openModal(); };
-  const openView = (art: Articulo) => { setFormMode("view"); setSelectedArticulo(art); formModal.openModal(); };
-  const askDelete = (art: Articulo) => { setArticuloToDelete(art); deleteModal.openModal(); };
+  const openEdit = (art: ArticuloLocal) => { setFormMode("edit"); setSelectedArticulo(art); formModal.openModal(); };
+  const openView = (art: ArticuloLocal) => { setFormMode("view"); setSelectedArticulo(art); formModal.openModal(); };
+  const askDelete = (art: ArticuloLocal) => { setArticuloToDelete(art); deleteModal.openModal(); };
 
   const handleSubmit = async (data: ArticuloFormData) => {
     try {
@@ -209,161 +183,47 @@ export default function ArticulosTable() {
       setArticuloToDelete(null);
     });
 
-  const getStockBadge = (stock: number) => {
-    if (stock === 0) return <Badge size="sm" color="error">Sin Stock</Badge>;
-    if (stock < 20) return <Badge size="sm" color="warning">Stock Bajo</Badge>;
-    return <Badge size="sm" color="success">Disponible</Badge>;
-  };
-
+  // Cálculos para el componente Summary
+  const totalArticulos = batchArticulos.length;
+  const stockBajo = batchArticulos.filter(a => a.stock < 20).length;
+  const valorTotal = batchArticulos.reduce((sum, a) => sum + (a.precio * a.stock), 0);
 
   return (
-    <div className="space-y-5">
-      {/* ACCIÓN PRINCIPAL */}
-      <div className="flex justify-end">
-        <Button startIcon={<PlusIcon />} onClick={openCreate}>Nuevo Artículo</Button>
-      </div>
+    <div className="space-y-6">
+      <ArticulosSummary 
+        totalArticulos={totalArticulos}
+        stockBajo={stockBajo}
+        valorTotal={valorTotal}
+        loading={batchLoading}
+      />
 
-      {/* FILTROS */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="min-w-[200px] flex-1">
-          <Input
-            placeholder="Buscar por artículo, sku, proveedor..."
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-          />
-        </div>
-        <div className="w-full sm:w-44">
-          <SelectField
-            key={`estado-${filterResetKey}`}
-            placeholder="Todos los estados"
-            options={[
-              { value: "Activo", label: "Activo" },
-              { value: "Inactivo", label: "Inactivo" },
-            ]}
-            onChange={(val) => { setEstadoFilter(val as "" | "Activo" | "Inactivo"); setCurrentPage(1); }}
-          />
-        </div>
-        <div className="w-full sm:w-52">
-          <SelectField
-            key={`proveedor-${filterResetKey}`}
-            placeholder="Todos los proveedores"
-            options={empresas.map(e => ({ value: e.id, label: e.name }))}
-            onChange={(val) => { setEmpresaFilter(val); setCurrentPage(1); }}
-          />
-        </div>
-        <Button variant="outline" onClick={clearFilters}>Limpiar filtros</Button>
-      </div>
+      <ArticulosToolbar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        estadoFilter={estadoFilter}
+        onEstadoChange={setEstadoFilter}
+        empresaFilter={empresaFilter}
+        onEmpresaChange={setEmpresaFilter}
+        empresasOptions={empresas.map(e => ({ value: e.id, label: e.name }))}
+        onClearFilters={clearFilters}
+        onAddArticulo={openCreate}
+        filterResetKey={filterResetKey}
+      />
 
-      {/* TABLA */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="max-w-full overflow-x-auto">
-          <Table>
-            <TableHeader className="border-gray-100 dark:border-gray-800 border-y">
-              <TableRow>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Artículo</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Proveedor</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Precio</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Stock</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">Acciones</TableCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="px-5 py-4">
-                      <div className="space-y-2">
-                        <div className="h-4 w-36 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
-                        <div className="h-3 w-20 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-5 py-4"><div className="h-4 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
-                    <TableCell className="px-5 py-4"><div className="h-4 w-20 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
-                    <TableCell className="px-5 py-4"><div className="h-4 w-12 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" /></TableCell>
-                    <TableCell className="px-5 py-4"><div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" /></TableCell>
-                    <TableCell className="px-5 py-4"><div className="ml-auto h-7 w-44 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" /></TableCell>
-                  </TableRow>
-                ))
-              ) : paginated.length === 0 ? (
-                <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
-                        <BoxCubeIcon className="size-7 text-gray-400" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No se encontraron artículos</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">Ajusta los filtros o registra un nuevo artículo.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-              paginated.map((art) => (
-                <TableRow key={art.id}>
-                  <TableCell className="px-5 py-4">
-                    <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{art.nombre}</p>
-                    <span className="font-mono text-gray-400 text-theme-xs">{art.sku}</span>
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">
-                    {empresaMap[art.empresaId] || "–"}
-                  </TableCell>
-                  <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                    {new Intl.NumberFormat("es-BO", { style: "currency", currency: "BOB" }).format(art.precio)}
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-theme-sm text-gray-700 dark:text-gray-300 font-medium">{art.stock}</span>
-                      {getStockBadge(art.stock)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <Badge size="sm" color={art.estado === "Activo" ? "success" : "light"}>
-                      {art.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openView(art)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
-                        title="Ver"
-                      >
-                        <EyeIcon className="size-4" /> Ver
-                      </button>
-                      <button
-                        onClick={() => openEdit(art)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                        title="Editar"
-                      >
-                        <PencilIcon className="size-4" /> Editar
-                      </button>
-                      <button
-                        onClick={() => askDelete(art)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                        title="Eliminar"
-                      >
-                        <TrashBinIcon className="size-4" /> Eliminar
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            perPage={perPage}
-            onPerPageChange={setPerPage}
-          />
-        </div>
-      </div>
+      <ArticulosList
+        articulos={paginated}
+        loading={loading}
+        empresaMap={empresaMap}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+        onPerPageChange={setPerPage}
+        onView={openView}
+        onEdit={openEdit}
+        onDelete={askDelete}
+      />
 
-      {/* MODAL FORMULARIO */}
       <Modal isOpen={formModal.isOpen} onClose={formModal.closeModal} className="max-w-[680px] m-4 z-50">
         <ArticuloForm
           key={selectedArticulo?.id ?? "new"}
@@ -381,16 +241,22 @@ export default function ArticulosTable() {
         />
       </Modal>
 
-      {/* MODAL ELIMINAR */}
       <Modal isOpen={deleteModal.isOpen} onClose={deleteModal.closeModal} className="max-w-[420px] m-4 z-50">
         <div className="p-6">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-error-50 dark:bg-error-500/10">
+            <svg className="size-6 text-error-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
           <h4 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white/90">Eliminar artículo</h4>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            ¿Eliminar <strong className="text-gray-800 dark:text-white">{articuloToDelete?.nombre}</strong>? Esta acción no se puede deshacer.
+            ¿Estás seguro de eliminar <strong className="text-gray-800 dark:text-white">{articuloToDelete?.nombre}</strong>? Esta acción no se puede deshacer.
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={deleteModal.closeModal} disabled={deleting}>Cancelar</Button>
-            <Button onClick={confirmDelete} disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar"}</Button>
+            <Button onClick={confirmDelete} disabled={deleting} className="bg-error-500 hover:bg-error-600 text-white border-transparent">
+              {deleting ? "Eliminando…" : "Sí, eliminar"}
+            </Button>
           </div>
         </div>
       </Modal>

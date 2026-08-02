@@ -1,129 +1,170 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import Badge from "@/components/ui/badge/Badge";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useToast } from "@/context/ToastContext";
-import Pagination from "@/components/tables/Pagination";
-import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon, TaskIcon } from "@/icons";
-import ShipmentForm from "@/components/envios/ShipmentForm";
+import Button from "@/components/ui/button/Button";
+import { TrashBinIcon } from "@/icons";
+
 import {
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
 } from "@/services/orderDeliveryService";
+
 import OrderDeliveryForm from "./OrderDeliveryForm";
+import ShipmentForm from "@/components/envios/ShipmentForm";
+import OrdenesSummary from "./OrdenesSummary";
+import OrdenesToolbar from "./OrdenesToolbar";
+import OrdenesList from "./OrdenesList";
+import { TabItem } from "@/components/ui/tabs/Tabs";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
-
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  Corporate: "Corporativa",
-  Sporadic: "Esporádica",
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+const DEFAULT_PER_PAGE = 10;
+const STATUS_BATCH_SIZE = 500;
 
 type FormMode = "create" | "edit" | "view";
+type StatusFilter = "" | "pending" | "attended";
 
-interface OrderDeliveriesTableProps {
-  orders: OrderDeliveryPaginatedItem[];
-  loading: boolean;
-  totalPages: number;
-  currentPage: number;
-  onPageChange: (page: number) => void;
-  perPage?: number;
-  onPerPageChange?: (perPage: number) => void;
-  onDataChange: () => void;
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function SkeletonRow() {
-  return (
-    <TableRow>
-      {[24, 60, 48, 24, 32, 28, 20, 32].map((w, i) => (
-        <TableCell key={i} className="px-5 py-4">
-          <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
-        </TableCell>
-      ))}
-    </TableRow>
-  );
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function OrderDeliveriesTable({
-  orders,
-  loading,
-  totalPages,
-  currentPage,
-  onPageChange,
-  perPage,
-  onPerPageChange,
-  onDataChange,
-}: OrderDeliveriesTableProps) {
+export default function OrderDeliveriesTable() {
   const { showToast } = useToast();
   const formModal = useModal();
   const attendModal = useModal();
   const deleteModal = useModal();
 
+  // ─── Data State ──────────────────────────────────────────────────────────
+  const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [pageTotalPages, setPageTotalPages] = useState(1);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [batchLoading, setBatchLoading] = useState(true);
+
+  // ─── Filters & Pagination ────────────────────────────────────────────────
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateFilter, setDateFilter] = useState<string>("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ─── Fetch Logic ─────────────────────────────────────────────────────────
+  const fetchPage = useCallback(async () => {
+    setPageLoading(true);
+    try {
+      const res = await orderDeliveryService.getDeliveries(currentPage, perPage, {
+        unattended: statusFilter === "pending",
+      });
+      setPageOrders(res.data);
+      setPageTotalPages(res.totalPages);
+    } catch (err) {
+      console.error("Error fetching orders", err);
+    } finally {
+      setPageLoading(false);
+    }
+  }, [currentPage, perPage, statusFilter]);
 
-  const openCreate = useCallback(() => {
-    setSelectedId(null);
-    setFormMode("create");
-    formModal.openModal();
-  }, [formModal]);
+  const fetchBatch = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
+      setAllOrders(res.data);
+    } catch (err) {
+      console.error("Error fetching orders", err);
+    } finally {
+      setBatchLoading(false);
+    }
+  }, []);
 
-  const openView = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("view");
-      formModal.openModal();
-    },
-    [formModal]
+  const fetchAll = useCallback(() => {
+    fetchPage();
+    fetchBatch();
+  }, [fetchPage, fetchBatch]);
+
+  useEffect(() => {
+    fetchPage();
+  }, [fetchPage]);
+
+  useEffect(() => {
+    fetchBatch();
+  }, [fetchBatch]);
+
+  // Volver a la página 1 al cambiar filtros o paginación
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchTerm, dateFilter, perPage]);
+
+  // ─── Client-side Filtering ───────────────────────────────────────────────
+  
+  // Is filtering active if searching by text, date, or looking at "attended" explicitly
+  const isFiltering = Boolean(searchTerm.trim()) || Boolean(dateFilter) || statusFilter === "attended" || statusFilter === "";
+
+  const filteredOrders = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return allOrders.filter((o) => {
+      // 1. Status Filter
+      if (statusFilter === "pending" && o.isAttended) return false;
+      if (statusFilter === "attended" && !o.isAttended) return false;
+
+      // 2. Search Term Filter
+      const matchesSearch =
+        !term ||
+        o.clientFullName.toLowerCase().includes(term) ||
+        (o.supplierName && o.supplierName.toLowerCase().includes(term)) ||
+        o.destinationDepartment.toLowerCase().includes(term);
+
+      // 3. Date Filter
+      let matchesDate = true;
+      if (dateFilter) {
+        const orderDate = new Date(o.createdAt).toISOString().split('T')[0];
+        matchesDate = orderDate === dateFilter;
+      }
+
+      return matchesSearch && matchesDate;
+    });
+  }, [allOrders, statusFilter, searchTerm, dateFilter]);
+
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
+  const paginatedFiltered = filteredOrders.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  // Si no hay búsqueda de texto ni fecha, y estamos en "pending", usamos pageOrders (server paginated).
+  // Sino, usamos filteredOrders (client paginated).
+  const isServerPaging = statusFilter === "pending" && !searchTerm && !dateFilter;
+  const paginated = isServerPaging ? pageOrders : paginatedFiltered;
+  const totalPages = isServerPaging ? pageTotalPages : filteredTotalPages;
+  const loading = isServerPaging ? pageLoading : batchLoading;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setDateFilter("");
+    setCurrentPage(1);
+  };
+
+  // ─── Summary Computations ───────────────────────────────────────────────
+  
+  const ordenesPendientes = allOrders.filter(o => !o.isAttended).length;
+  const ordenesAtendidas = allOrders.filter(o => o.isAttended).length;
+  const volumenTotal = filteredOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+
+  const statusTabs: TabItem[] = useMemo(
+    () => [
+      { value: "pending", label: "Por atender", count: ordenesPendientes },
+      { value: "attended", label: "Atendidas", count: ordenesAtendidas },
+      { value: "", label: "Todas", count: allOrders.length },
+    ],
+    [ordenesPendientes, ordenesAtendidas, allOrders.length]
   );
 
-  const openEdit = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("edit");
-      formModal.openModal();
-    },
-    [formModal]
-  );
+  // ─── Handlers ────────────────────────────────────────────────────────────
 
-  const openAttend = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      attendModal.openModal();
-    },
-    [attendModal]
-  );
-
-  const askDelete = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      deleteModal.openModal();
-    },
-    [deleteModal]
-  );
+  const openCreate = useCallback(() => { setSelectedId(null); setFormMode("create"); formModal.openModal(); }, [formModal]);
+  const openView = useCallback((id: string) => { setSelectedId(id); setFormMode("view"); formModal.openModal(); }, [formModal]);
+  const openEdit = useCallback((id: string) => { setSelectedId(id); setFormMode("edit"); formModal.openModal(); }, [formModal]);
+  const openAttend = useCallback((id: string) => { setSelectedId(id); attendModal.openModal(); }, [attendModal]);
+  const askDelete = useCallback((id: string) => { setSelectedId(id); deleteModal.openModal(); }, [deleteModal]);
 
   const { pending: deleting, run: runDelete } = useSubmitLock();
 
@@ -134,227 +175,77 @@ export default function OrderDeliveriesTable({
         await orderDeliveryService.deleteDelivery(selectedId);
         showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
         deleteModal.closeModal();
-        onDataChange();
+        fetchAll();
       } catch (error: unknown) {
         showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
       }
     });
 
-  const selectedOrderBasic = orders.find(o => o.id === selectedId);
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  const selectedOrderBasic = allOrders.find(o => o.id === selectedId);
 
   return (
-    <>
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 active:bg-brand-700 transition-colors"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nueva Orden de Entrega
-        </button>
-      </div>
+    <div className="space-y-6">
+      <OrdenesSummary
+        ordenesPendientes={ordenesPendientes}
+        ordenesAtendidas={ordenesAtendidas}
+        volumenTotal={volumenTotal}
+        loading={batchLoading}
+      />
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="border-b border-gray-100 dark:border-gray-800">
-              <TableRow>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Fecha
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Cliente / Destino
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Proveedor
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Origen
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Tipo Entrega
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Total
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Estado
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Acciones
-                </TableCell>
-              </TableRow>
-            </TableHeader>
+      <OrdenesToolbar
+        statusTabs={statusTabs}
+        statusFilter={statusFilter}
+        onStatusChange={(val) => setStatusFilter(val as StatusFilter)}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        dateFilter={dateFilter}
+        onDateChange={setDateFilter}
+        onClearFilters={clearFilters}
+        onAddOrder={openCreate}
+      />
 
-            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-              ) : orders.length === 0 ? (
-                <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={8}>
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
-                        <BoxCubeIcon className="size-7 text-gray-400" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        No hay órdenes registradas
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Crea la primera orden de entrega para tus clientes.
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                orders.map((order) => (
-                  <TableRow
-                    key={order.id}
-                    className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
-                  >
-                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
-                      {new Date(order.createdAt).toLocaleDateString("es-BO")}
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {order.clientFullName}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.destinationDepartment}
-                      </p>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <span className="text-theme-sm text-gray-600 dark:text-gray-300">
-                        {order.supplierName ?? "Cliente esporádico"}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.orderType === "Sporadic" ? "info" : "primary"}>
-                        {ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
-                          {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
-                        </Badge>
-                        {order.isExpress && (
-                          <Badge size="sm" color="error">Expreso</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                      Bs {order.totalPrice.toFixed(2)}
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.isAttended ? "success" : "light"}>
-                        {order.isAttended ? "Atendida" : "Pendiente"}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openView(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
-                          title="Ver detalle"
-                        >
-                          <EyeIcon className="size-4 shrink-0" /> Ver
-                        </button>
-                        {!order.isAttended && (
-                          <button
-                            onClick={() => openAttend(order.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-500/10 dark:hover:text-brand-300 transition-colors"
-                            title="Atender la orden y generar la guía del envío"
-                          >
-                            <TaskIcon className="size-4 shrink-0" /> Atender
-                          </button>
-                        )}
-                        {order.orderType !== "Sporadic" && (
-                          <button
-                            onClick={() => openEdit(order.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                            title="Editar"
-                          >
-                            <PencilIcon className="size-4 shrink-0" /> Editar
-                          </button>
-                        )}
-                        <button
-                          onClick={() => askDelete(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                          title="Eliminar"
-                        >
-                          <TrashBinIcon className="size-4 shrink-0" /> Eliminar
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex justify-end border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            perPage={perPage}
-            onPerPageChange={onPerPageChange}
-          />
-        </div>
-      </div>
+      <OrdenesList
+        orders={paginated}
+        loading={loading}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+        onPerPageChange={setPerPage}
+        onView={openView}
+        onEdit={openEdit}
+        onAttend={openAttend}
+        onDelete={askDelete}
+      />
 
       {/* Form Modal */}
-      <Modal
-        isOpen={formModal.isOpen}
-        onClose={formModal.closeModal}
-        className="max-w-[700px] m-4 z-50"
-      >
+      <Modal isOpen={formModal.isOpen} onClose={formModal.closeModal} className="max-w-[700px] m-4 z-50">
         {formModal.isOpen && (
           <OrderDeliveryForm
             key={selectedId ?? "new"}
             mode={formMode}
             orderId={selectedId}
             onClose={formModal.closeModal}
-            onSaved={onDataChange}
+            onSaved={fetchAll}
           />
         )}
       </Modal>
 
-      {/* Atender: crea el envío de la orden (queda atendida y aparece en Envíos) */}
-      <Modal
-        isOpen={attendModal.isOpen}
-        onClose={attendModal.closeModal}
-        className="max-w-[700px] m-4 z-50"
-      >
+      {/* Atender: crea el envío de la orden */}
+      <Modal isOpen={attendModal.isOpen} onClose={attendModal.closeModal} className="max-w-[700px] m-4 z-50">
         {attendModal.isOpen && selectedId && (
           <ShipmentForm
             key={`attend-${selectedId}`}
             mode="create"
             presetOrderDeliveryId={selectedId}
             onClose={attendModal.closeModal}
-            onSaved={onDataChange}
+            onSaved={fetchAll}
           />
         )}
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={deleteModal.isOpen}
-        onClose={deleteModal.closeModal}
-        className="max-w-[420px] m-4 z-50"
-      >
+      <Modal isOpen={deleteModal.isOpen} onClose={deleteModal.closeModal} className="max-w-[420px] m-4 z-50">
         <div className="p-6">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-error-50 dark:bg-error-500/10">
             <TrashBinIcon className="size-6 text-error-500" />
@@ -366,30 +257,22 @@ export default function OrderDeliveriesTable({
             ¿Estás segura de eliminar esta orden?
           </p>
           {selectedOrderBasic && (
-            <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40">
-              <p className="font-medium text-gray-800 dark:text-white">Cliente: {selectedOrderBasic.clientFullName}</p>
-              <p className="text-gray-500">Destino: {selectedOrderBasic.destinationDepartment}</p>
+            <div className="mb-5 mt-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800">
+              <p className="font-medium text-gray-800 dark:text-white/90">Cliente: {selectedOrderBasic.clientFullName}</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-1">Destino: {selectedOrderBasic.destinationDepartment}</p>
             </div>
           )}
           <p className="mb-6 text-xs text-error-500">Esta acción no se puede deshacer y puede afectar los envíos asociados.</p>
           <div className="flex justify-end gap-3">
-            <button
-              onClick={deleteModal.closeModal}
-              disabled={deleting}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]"
-            >
+            <Button variant="outline" onClick={deleteModal.closeModal} disabled={deleting}>
               Cancelar
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded-lg bg-error-500 px-4 py-2 text-sm font-semibold text-white hover:bg-error-600 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            </Button>
+            <Button onClick={handleDelete} disabled={deleting} className="bg-error-500 hover:bg-error-600 text-white border-transparent">
               {deleting ? "Eliminando…" : "Sí, eliminar"}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 }

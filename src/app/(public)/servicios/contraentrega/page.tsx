@@ -1,251 +1,304 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CheckCircleIcon, UserIcon, BoxIcon, TimeIcon } from "@/icons";
+import { CheckCircleIcon } from "@/icons";
+
+const CAROUSEL_IMAGES = [
+  "/images/paso1-1.png",
+  "/images/paso2-2.png",
+  "/images/paso3-3.png",
+  "/images/paso4-4.png",
+];
+
+const TESTIMONIALS = [
+  {
+    id: 1,
+    name: "María Gómez",
+    store: "Boutique La Paz",
+    text: "Desde que uso el pago contra entrega con AirCargo, mis ventas aumentaron un 40%. La gente confía más al pagar en su puerta.",
+    rating: 5,
+  },
+  {
+    id: 2,
+    name: "Carlos Méndez",
+    store: "TechStore Bolivia",
+    text: "La liquidación del dinero es súper puntual. Reciben el efectivo o el QR y a los días ya lo tengo en mi cuenta. Muy profesionales.",
+    rating: 5,
+  },
+  {
+    id: 3,
+    name: "Lucía Fernández",
+    store: "Cosméticos LF",
+    text: "Mis clientes están felices porque los mensajeros de AirCargo son muy amables. El mejor servicio de Courier que he probado.",
+    rating: 5,
+  }
+];
 
 export default function ContraentregaPage() {
-  const [activeImage, setActiveImage] = useState("/images/4.jpg");
-  const thumbnails = [
-    "/images/4.jpg",
-    "/images/1.jpg",
-    "/images/2.jpg",
-    "/images/3.jpg",
-  ];
+  const [activeImage, setActiveImage] = useState(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(1);
+
+  // Auto-play para el carrusel (estilo galería de producto)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveImage((prev) => (prev + 1) % CAROUSEL_IMAGES.length);
+    }, 6500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const toggleFaq = (index: number) => {
+    if (openFaq === index) setOpenFaq(null);
+    else setOpenFaq(index);
+  };
 
   return (
-    <div className="bg-white min-h-screen pb-20">
-      {/* BREADCRUMBS */}
-      <div className="bg-gray-50 border-b border-gray-100 py-3">
-        <div className="container mx-auto px-4 md:px-8 text-sm text-gray-500">
-          <Link href="/" className="hover:text-brand-600 transition-colors">Inicio</Link>
-          <span className="mx-2">/</span>
-          <span>Servicios</span>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900 font-semibold">Contraentrega</span>
-        </div>
-      </div>
+    <div className="bg-[#f4f4f4] min-h-screen font-sans text-gray-800 antialiased pt-16 pb-12">
+      <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
 
-      <div className="container mx-auto px-4 md:px-8 py-10 md:py-16">
-        {/* PRODUCT STYLE LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 mb-20">
-          
-          {/* Columna Izquierda: Galería de Imágenes */}
-          <div className="flex flex-col gap-4">
-            <div className="relative w-full aspect-square md:aspect-[4/3] rounded-2xl overflow-hidden shadow-lg border border-gray-100 bg-gray-50">
-              <Image 
-                src={activeImage} 
-                alt="Servicio Contraentrega" 
-                fill 
-                className="object-cover"
-                priority
-              />
-              <div className="absolute top-4 left-4 bg-brand-600 text-white text-xs font-bold uppercase px-3 py-1 rounded-full shadow-md">
-                Servicio Estrella
+        {/* DISEÑO ESTILO "PRODUCTO E-COMMERCE" MEJORADO (COMPACTO Y GRANDE) */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-12">
+
+          {/* FILA 1: Carrusel y Descripción Principal */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 border-b border-gray-100">
+            {/* LADO IZQUIERDO: Carrusel de Fotos del Proceso (Más grande - 7 columnas) */}
+            <div className="lg:col-span-7 relative p-6 bg-gray-50 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-gray-100">
+              <div className="relative w-full aspect-[16/10] rounded-xl overflow-hidden shadow-md bg-white">
+                {CAROUSEL_IMAGES.map((img, index) => (
+                  <Image
+                    key={index}
+                    src={img}
+                    alt={`Proceso Contraentrega ${index + 1}`}
+                    fill
+                    className={`object-cover object-center transition-opacity duration-1000 ${activeImage === index ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                    priority={index === 0}
+                  />
+                ))}
+                <div className="absolute top-4 left-4 z-20 bg-brand-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md uppercase tracking-wider">
+                  Proceso Real
+                </div>
               </div>
-            </div>
-            
-            {/* Thumbnails */}
-            <div className="flex gap-4 overflow-x-auto pb-2 snap-x">
-              {thumbnails.map((img, i) => (
-                <button 
-                  key={i}
-                  onClick={() => setActiveImage(img)}
-                  className={`relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 snap-start border-2 transition-all ${
-                    activeImage === img ? "border-brand-600 shadow-md" : "border-transparent opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <Image src={img} alt={`Thumbnail ${i}`} fill className="object-cover" />
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Columna Derecha: Detalles del Servicio */}
-          <div className="flex flex-col">
-            <h1 className="text-3xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight leading-tight">
-              Servicio de Contraentrega (COD)
-            </h1>
-            
-            {/* Reseñas / Rating */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex text-yellow-400">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <svg key={star} className="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+              {/* Miniaturas (Thumbnails) */}
+              <div className="flex gap-3 mt-6 w-full justify-center">
+                {CAROUSEL_IMAGES.map((img, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setActiveImage(index)}
+                    className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-md overflow-hidden border-2 transition-all ${activeImage === index ? 'border-brand-600 scale-110 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                  >
+                    <Image src={img} alt="Miniatura" fill className="object-cover" />
+                  </button>
                 ))}
               </div>
-              <span className="text-gray-600 text-sm font-medium">4.9 (125 reseñas verificadas)</span>
             </div>
 
-            {/* Badges / Beneficios Rápidos */}
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-                <CheckCircleIcon className="w-6 h-6 text-green-600 mb-2" />
-                <span className="text-xs font-bold text-green-800 uppercase">Seguridad 100%</span>
-                <span className="text-xs text-green-600">Cobro garantizado</span>
+            {/* LADO DERECHO: Detalles (5 columnas) */}
+            <div className="lg:col-span-5 p-8 lg:p-10 flex flex-col justify-center">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex text-yellow-400">
+                  {[...Array(5)].map((_, i) => (
+                    <svg key={i} className="w-5 h-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                  ))}
+                </div>
+                <span className="text-gray-500 text-sm font-semibold">(4.9/5 basado en 500+ clientes)</span>
               </div>
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-                <BoxIcon className="w-6 h-6 text-blue-600 mb-2" />
-                <span className="text-xs font-bold text-blue-800 uppercase">Cobertura</span>
-                <span className="text-xs text-blue-600">Eje Troncal Nacional</span>
-              </div>
-            </div>
 
-            {/* Price Area */}
-            <div className="bg-gray-50 rounded-xl p-6 mb-8 border border-gray-100">
-              <p className="text-sm text-gray-500 font-semibold mb-1 uppercase tracking-wider">Inversión / Costo</p>
-              <div className="flex items-end gap-3">
-                <span className="text-4xl font-black text-brand-600">Cotización</span>
-                <span className="text-gray-600 font-medium pb-1">personalizada por volumen</span>
-              </div>
-            </div>
+              <h1 className="text-3xl lg:text-4xl font-black text-gray-900 mb-4 tracking-tight leading-tight">
+                Servicio Contraentrega
+              </h1>
 
-            {/* Descripción */}
-            <div className="mb-10">
-              <h3 className="text-lg font-bold text-gray-900 mb-3">Descripción del Servicio</h3>
-              <p className="text-gray-600 leading-relaxed mb-4">
-                El modelo perfecto para romper la desconfianza en ventas online. Tu cliente paga en el momento exacto en que recibe el paquete (en efectivo o QR). Nosotros nos encargamos de todo el proceso logístico y de recaudación.
+              <p className="text-brand-600 font-bold mb-2">¿Qué es el Servicio de Contraentrega?</p>
+              <p className="text-gray-600 mb-6 text-sm lg:text-base leading-relaxed">
+                Nosotros nos encargamos de entregar tus productos directamente al cliente y cobrar el pago en el momento de la entrega. Tu empresa no tiene que preocuparse por coordinar repartidores, recibir el dinero o hacer seguimiento a cada entrega. Nosotros realizamos todo el proceso por ti.
               </p>
-              <ul className="space-y-2 text-gray-600">
-                <li className="flex items-center gap-2"><CheckCircleIcon className="w-4 h-4 text-brand-500" /> Liquidaciones puntuales a tu cuenta</li>
-                <li className="flex items-center gap-2"><CheckCircleIcon className="w-4 h-4 text-brand-500" /> Recolección en tu almacén</li>
-                <li className="flex items-center gap-2"><CheckCircleIcon className="w-4 h-4 text-brand-500" /> Seguimiento en tiempo real</li>
-              </ul>
+
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <p className="text-sm font-bold text-gray-900 mb-3">El cliente puede pagar de forma segura mediante:</p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-sm">Bs</div>
+                    <p className="text-sm text-gray-700"><strong>Efectivo</strong></p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">QR</div>
+                    <p className="text-sm text-gray-700"><strong>Transferencia</strong> o pago mediante código QR</p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-4 border-t border-gray-200 pt-3">
+                  Una vez confirmado el pago, realizamos la liquidación correspondiente para que recibas el dinero recaudado de tus ventas.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* FILA 2: Cómo Funciona y CTA (Debajo del Carrusel y la Intro) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 bg-white">
+
+            {/* CÓMO FUNCIONA (Debajo del carrusel) */}
+            <div className="lg:col-span-7 p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-6 uppercase tracking-wider text-sm">¿Cómo funciona?</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">1</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Tú registras el pedido</p>
+                    <p className="text-xs text-gray-600 mt-1">Nos envías la información del cliente y del producto que debe entregarse.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">2</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Recogemos y entregamos</p>
+                    <p className="text-xs text-gray-600 mt-1">Nuestro equipo recoge el paquete y lo transporta hasta el domicilio del comprador.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">3</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Cobramos en la entrega</p>
+                    <p className="text-xs text-gray-600 mt-1">Cuando el cliente recibe el pedido, nuestro repartidor cobra el monto acordado.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">4</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Te transferimos el dinero</p>
+                    <p className="text-xs text-gray-600 mt-1">Una vez finalizada la entrega, realizamos la liquidación a tu empresa.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 mt-auto">
-              <Link 
-                href="/contacto" 
-                className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl text-center transition-colors shadow-lg shadow-brand-500/30 uppercase tracking-wide"
-              >
-                Solicitar Servicio
-              </Link>
-              <Link 
-                href="/signin" 
-                className="flex-1 bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-800 font-bold py-4 rounded-xl text-center transition-colors uppercase tracking-wide"
-              >
-                Cuenta Corporativa
-              </Link>
+            {/* CTA (Al lado de cómo funciona) */}
+            <div className="lg:col-span-5 p-8 lg:p-10 flex flex-col justify-center bg-gray-50">
+              <div className="bg-white rounded-xl p-6 border border-brand-100 shadow-sm text-center h-full flex flex-col justify-center">
+                <p className="text-gray-600 text-sm mb-6 leading-relaxed flex-1">
+                  Solicita una cotización gratuita.
+                </p>
+                <Link
+                  href="/contacto"
+                  className="inline-block w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 px-8 rounded-lg transition-colors shadow-md shadow-brand-500/20 uppercase tracking-wide text-sm"
+                >
+                  Solicitar Cotización
+                </Link>
+              </div>
             </div>
 
           </div>
         </div>
-      </div>
 
-      {/* ═══ CONFIANZA Y TESTIMONIOS ═════════════════════════════════════════ */}
-      <section id="testimonios" className="py-20 bg-gray-50 border-y border-gray-100">
-        <div className="container mx-auto px-4 md:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
-              La confianza de entregar y cobrar
-            </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Nuestra tasa de entrega efectiva es la más alta del mercado. Diseñado exclusivamente para e-commerce.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center max-w-6xl mx-auto">
-            {/* Tarjeta 70% */}
-            <div className="lg:col-span-1 bg-white rounded-3xl p-8 border border-brand-100 shadow-xl shadow-brand-500/5 relative overflow-hidden h-full flex flex-col justify-center">
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                <CheckCircleIcon className="w-40 h-40 text-brand-600" />
-              </div>
-              <div className="relative z-10 text-center">
-                <h3 className="text-6xl font-black text-brand-600 mb-2 drop-shadow-sm">70%</h3>
-                <h4 className="text-xl font-bold text-gray-900 mb-3">Efectividad comprobada</h4>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Mientras otros couriers promedian 30-40% en contraentrega, nosotros logramos 70% garantizando que tu producto se entregue y se cobre.
-                </p>
-              </div>
-            </div>
-            
-            {/* Testimonios */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
-                <div className="flex gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <UserIcon className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h5 className="font-bold text-gray-900">Carlos M.</h5>
-                    <p className="text-sm text-gray-500">Tienda de Tecnología (E-commerce)</p>
-                  </div>
-                  <div className="ml-auto flex text-yellow-400">
-                    {[1,2,3,4,5].map(i=><svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
-                  </div>
+        {/* OPINIONES (Testimonios para dar confianza) */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">Lo que opinan nuestros comercios aliados</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((testimonial) => (
+              <div key={testimonial.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                <div className="flex text-yellow-400 mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <svg key={i} className="w-5 h-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                  ))}
                 </div>
-                <p className="text-gray-700 italic">
-                  "Mande 1500 envíos en junio y me entregaron 1100; los otros 400 no quisieron. La verdad es el mejor % que he tenido con un currier."
-                </p>
-              </div>
-
-              <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100 ml-0 lg:ml-12">
-                <div className="flex gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <UserIcon className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div>
-                    <h5 className="font-bold text-gray-900">Jonathan</h5>
-                    <p className="text-sm text-gray-500">Cliente Final</p>
-                  </div>
-                  <div className="ml-auto flex text-yellow-400">
-                    {[1,2,3,4,5].map(i=><svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
-                  </div>
+                <p className="text-gray-600 italic mb-6 flex-1">"{testimonial.text}"</p>
+                <div>
+                  <p className="font-bold text-gray-900">{testimonial.name}</p>
+                  <p className="text-xs text-brand-600 font-semibold uppercase tracking-wider">{testimonial.store}</p>
                 </div>
-                <p className="text-gray-700">
-                  "Recibí la caja que pedí por internet en la puerta de mi casa, pagando los 699 Bs exactos del valor de la mercadería. Súper seguro y rápido."
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ FAQ ═════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-4 md:px-8 max-w-4xl">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-4">Preguntas Frecuentes</h2>
-            <p className="text-gray-600">Todo lo que necesitas saber sobre el servicio Contraentrega.</p>
-          </div>
-          
-          <div className="grid gap-4">
-            {[
-              {
-                q: "¿Cuántos días tarda la entrega?",
-                a: "En el eje troncal (Santa Cruz, La Paz, Cochabamba) las entregas se realizan en un plazo de 24 a 48 horas hábiles. Para otras ciudades, de 48 a 72 horas."
-              },
-              {
-                q: "¿Hasta qué hora puedo generar una orden para que salga el mismo día?",
-                a: "Puedes registrar tus envíos hasta las 17:30. Todos los paquetes registrados antes de esa hora serán despachados esa misma noche."
-              },
-              {
-                q: "¿Cómo recibo el dinero de mis cobros?",
-                a: "Realizamos liquidaciones mediante transferencia bancaria directamente a tu cuenta corporativa en los días acordados según tu volumen."
-              },
-              {
-                q: "¿Qué pasa si el cliente final rechaza el paquete?",
-                a: "Contamos con un protocolo de devolución. El paquete retorna a nuestras oficinas y te notificamos para la recolección, cobrando únicamente la tarifa base de retorno."
-              },
-              {
-                q: "¿Pueden cobrar mediante QR al momento de la entrega?",
-                a: "Sí, nuestros repartidores están equipados para generar cobros mediante código QR al instante, garantizando total seguridad sin manejar efectivo."
-              }
-            ].map((faq, i) => (
-              <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl p-6 hover:shadow-md transition-shadow">
-                <h4 className="text-lg font-bold text-gray-900 mb-2 flex items-start gap-3">
-                  <span className="text-brand-600 font-black">Q.</span> {faq.q}
-                </h4>
-                <p className="text-gray-600 pl-8">{faq.a}</p>
               </div>
             ))}
           </div>
         </div>
-      </section>
+
+        {/* PREGUNTAS FRECUENTES (FAQ Completo proporcionado) */}
+        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-8 lg:p-12 mb-10">
+          <h2 className="text-3xl font-bold text-gray-900 mb-10 text-center">Preguntas Frecuentes (FAQ)</h2>
+
+          <div className="space-y-4">
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(1)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">1. ¿A qué ciudades de Bolivia realizan envíos con Pago Contra Entrega?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 1 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 1 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-3">Realizamos envíos con cobro al recibir el paquete en las siguientes coberturas a nivel nacional:</p>
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-2"><strong>Eje Troncal y Capitales:</strong> La Paz, Cochabamba, Santa Cruz, Oruro, Potosí, Sucre, Tarija y Cobija.</p>
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-4"><strong>Provincias y Puntos Estratégicos:</strong> Riberalta, Guayaramerín, Rurrenabaque y Yacuiba.</p>
+                  <p className="text-gray-600 text-sm sm:text-base italic">Si tu localidad no figura en la lista, déjame tus datos para verificar la ruta.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(2)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">2. ¿Cuánto tiempo tarda en llegar mi pedido?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 2 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 2 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed">El tiempo estimado de entrega a nivel nacional es de <strong>24 a 48 horas hábiles</strong> a partir del envio realizado. Te mantendremos informado sobre el estado de tu paquete en tránsito en los días hábiles.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(3)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">3. ¿Qué métodos de pago puedo utilizar al momento de recibir mi paquete?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 3 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 3 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-3">Para tu mayor comodidad y seguridad, puedes pagar al mensajero en el momento exacto de la entrega mediante:</p>
+                  <ul className="list-disc pl-5 space-y-2 text-gray-600 text-sm sm:text-base">
+                    <li><strong>Efectivo</strong> (te recomendamos tener el monto exacto).</li>
+                    <li><strong>Transferencia QR</strong> (rápido, directo y desde cualquier aplicación bancaria de Bolivia).</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(4)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">4. ¿Cómo coordinan la entrega de mi paquete?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 4 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 4 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed">Nos comunicamos con su cliente vía llamada telefónica y mensaje de WhatsApp para confirmar su ubicación exacta y la hora de la entrega. Nuestro equipo hará todo el seguimiento necesario para asegurar que se entregue su pedido sin contratiempos.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(5)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">5. ¿Debo pagar algo por adelantado para pago contra entrega?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 5 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 5 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed">No. El gran beneficio del servicio Contra Entrega es que el cliente final solo abona el dinero en el momento en que recibe el producto en sus manos, garantizando total confianza en la transacción.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => toggleFaq(6)} className="w-full flex justify-between items-center p-5 sm:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                <h3 className="font-bold text-gray-900 text-left pr-8 text-sm sm:text-base">6. ¿Qué pasa si el cliente no contesta o no está en su domicilio?</h3>
+                <svg className={`w-5 h-5 flex-shrink-0 text-brand-600 transform transition-transform ${openFaq === 6 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {openFaq === 6 && (
+                <div className="p-5 sm:p-6 bg-white border-t border-gray-200">
+                  <p className="text-gray-600 text-sm sm:text-base leading-relaxed">En esta situación el mensajero reprograma la entrega al día siguiente, o se pone en contacto con el cliente para preguntar qué fecha u hora posterior le resulta más conveniente para recibir su entrega exitosamente.</p>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

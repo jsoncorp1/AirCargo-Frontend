@@ -24,7 +24,7 @@ export default function ProveedorOrdenesPage() {
   const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
@@ -58,9 +58,10 @@ export default function ProveedorOrdenesPage() {
   }, []);
 
   const fetchOrders = useCallback(() => {
-    fetchPage(currentPage);
+    setCurrentPage(1);
+    fetchPage(1);
     fetchBatch();
-  }, [fetchPage, fetchBatch, currentPage]);
+  }, [fetchPage, fetchBatch]);
 
   useEffect(() => {
     fetchPage(currentPage);
@@ -92,11 +93,10 @@ export default function ProveedorOrdenesPage() {
   const totalSales = paginatedOrders.reduce((sum, o) => sum + o.totalPrice, 0);
   const attendedOrders = paginatedOrders.filter((o) => o.isAttended).length;
 
+  // El cliente pidió no mostrar "Atendidas". Solo verá las pendientes.
   const statusTabs: TabItem[] = useMemo(
     () => [
       { value: "pending", label: "Pendientes", count: allOrders.filter((o) => !o.isAttended).length },
-      { value: "attended", label: "Atendidas", count: allOrders.filter((o) => o.isAttended).length },
-      { value: "", label: "Todas", count: allOrders.length },
     ],
     [allOrders]
   );

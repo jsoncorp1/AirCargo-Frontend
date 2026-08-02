@@ -14,13 +14,23 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <BoxCubeIcon />,
-    name: "Registrar Envío Esporádico",
-    path: "/admin/envios/esporadico",
+    name: "Dashboard",
+    path: "/admin",
   },
   {
     icon: <PageIcon />,
-    name: "Atender Órdenes de Entrega",
+    name: "Atender Órdenes",
     path: "/admin/ordenes",
+  },
+  {
+    icon: <BoxCubeIcon />,
+    name: "Registrar Envío",
+    path: "/admin/envios/esporadico",
+  },
+  {
+    icon: <ListIcon />,
+    name: "Informe de Envíos",
+    path: "/admin/envios",
   },
   {
     icon: <UserCircleIcon />,
@@ -28,9 +38,14 @@ const navItems: NavItem[] = [
     path: "/admin/conductores",
   },
   {
-    icon: <ListIcon />,
-    name: "Informe de Envíos",
-    path: "/admin/envios",
+    icon: <PageIcon />,
+    name: "Liquidaciones",
+    path: "/admin/liquidaciones",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Clientes Potenciales",
+    path: "/admin/leads",
   },
 ];
 
@@ -58,13 +73,14 @@ const AdminSidebar: React.FC = () => {
         className={`py-8 flex  ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
           }`}
       >
-        <Link href="/admin/envios/esporadico" className="flex items-center gap-2">
+        <Link href="/admin" className="flex items-center gap-2">
           {isExpanded || isHovered || isMobileOpen ? (
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">
-              Air<span className="text-brand-500">Cargo</span>
-            </span>
+            <>
+              <img src="/images/logo/logoaircargoazul.png" alt="AirCargo Logo" width={160} height={40} className="dark:hidden block object-contain" />
+              <img src="/images/logo/logoaircargoblanco.png" alt="AirCargo Logo" width={160} height={40} className="hidden dark:block object-contain" />
+            </>
           ) : (
-            <span className="text-2xl font-bold text-brand-500">AC</span>
+            <span className="text-2xl font-black text-brand-600 tracking-tighter">AC</span>
           )}
         </Link>
       </div>

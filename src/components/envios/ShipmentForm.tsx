@@ -359,142 +359,55 @@ export default function ShipmentForm({
     });
   };
 
-  const captureWaybill = async () => {
-    if (!waybillRef.current) return null;
-    const html2canvas = (await import("html2canvas")).default;
-
-    // Clone the node so we can remove overflow/truncate restrictions
-    // that would cause html2canvas to clip content.
-    const original = waybillRef.current;
-    const clone = original.cloneNode(true) as HTMLElement;
-
-    // Strip every overflow:hidden and text-overflow:ellipsis from all nodes
-    const allEls = clone.querySelectorAll("*") as NodeListOf<HTMLElement>;
-    const fixEl = (el: HTMLElement) => {
-      el.style.overflow    = "visible";
-      el.style.textOverflow = "clip";
-      el.style.whiteSpace  = "normal";
-      el.style.maxWidth    = "none";
-      // remove tailwind truncate class
-      el.classList.remove("truncate", "overflow-hidden");
-    };
-    fixEl(clone);
-    allEls.forEach(fixEl);
-
-    // Position off-screen so layout is calculated but not visible
-    clone.style.position = "fixed";
-    clone.style.top      = "-9999px";
-    clone.style.left     = "-9999px";
-    clone.style.zIndex   = "-1";
-    clone.style.width    = `${original.offsetWidth}px`;
-
-    document.body.appendChild(clone);
-    try {
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: clone.scrollWidth,
-        height: clone.scrollHeight,
-        windowWidth: clone.scrollWidth,
-        windowHeight: clone.scrollHeight,
-      });
-      return canvas;
-    } finally {
-      document.body.removeChild(clone);
-    }
-  };
-
-  const handlePrint = async () => {
+  const handlePrint = () => {
     setExporting("print");
     try {
-      const canvas = await captureWaybill();
-      if (!canvas) return;
-      const printWindow = window.open("", "_blank", "width=600,height=900");
+      if (!waybillRef.current) return;
+      const printWindow = window.open("", "_blank", "width=800,height=900");
       if (!printWindow) {
         showToast("error", "Error", "El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.");
         return;
       }
-      const dataUrl = canvas.toDataURL("image/png");
-      // Calculate natural aspect ratio to fill the page perfectly
-      const aspectRatio = canvas.width / canvas.height;
+
+      // Obtener los estilos de Tailwind actuales
+      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map(style => style.outerHTML)
+        .join('\n');
+
+      const waybillHtml = waybillRef.current.outerHTML;
+
       printWindow.document.write(`<!DOCTYPE html>
         <html>
           <head>
-            <title>Guía ${guia}</title>
+            <title>Guía ${guia || "envío"}</title>
+            ${styles}
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               @page {
-                size: ${aspectRatio >= 1 ? 'landscape' : 'portrait'};
+                size: 80mm 200mm;
                 margin: 0;
               }
               html, body {
-                width: 100%;
-                height: 100%;
+                width: 80mm;
+                background: white;
                 margin: 0;
                 padding: 0;
               }
-              img {
-                display: block;
-                width: 100vw;
-                height: 100vh;
-                object-fit: contain;
-                object-position: center;
+              /* Forzar impresión de fondos (necesario para bg-black etc en Tailwind) */
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
             </style>
           </head>
-          <body>
-            <img src="${dataUrl}" onload="window.focus(); window.print(); window.onafterprint = function() { window.close(); };" />
+          <body onload="setTimeout(function() { window.print(); window.close(); }, 500)">
+            ${waybillHtml}
           </body>
         </html>`);
       printWindow.document.close();
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "No se pudo generar la vista de impresión.");
-    } finally {
-      setExporting(null);
-    }
-  };
-
-  const handleExportPdf = async () => {
-    setExporting("pdf");
-    try {
-      const canvas = await captureWaybill();
-      if (!canvas) return;
-      const { jsPDF } = await import("jspdf");
-
-      // Convert pixel dimensions to mm (96dpi -> mm: px / (96 / 25.4))
-      const PX_TO_MM = 25.4 / 96;
-      // We captured at scale:2, so logical size is canvas/2
-      const logicalW = canvas.width / 2;
-      const logicalH = canvas.height / 2;
-      const widthMm  = logicalW  * PX_TO_MM;
-      const heightMm = logicalH  * PX_TO_MM;
-
-      const orientation = widthMm >= heightMm ? "landscape" : "portrait";
-
-      const pdf = new jsPDF({
-        orientation,
-        unit: "mm",
-        format: [widthMm, heightMm],
-        compress: true,
-      });
-
-      pdf.addImage(
-        canvas.toDataURL("image/png"),
-        "PNG",
-        0,
-        0,
-        widthMm,
-        heightMm,
-        undefined,
-        "FAST"
-      );
-      pdf.save(`guia-${guia || "envio"}.pdf`);
-    } catch (err) {
-      console.error(err);
-      showToast("error", "Error", "No se pudo exportar la guía a PDF.");
     } finally {
       setExporting(null);
     }
@@ -564,6 +477,59 @@ export default function ShipmentForm({
               createdBy={createdBy}
             />
           </div>
+
+          {/* MOCK UI: Historial de Observaciones y Evidencias */}
+          <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
+            <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Historial de Observaciones (Próximamente)</h5>
+            <div className="space-y-4">
+              {/* Mock Timeline Item 1 */}
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-brand-500 mt-1.5"></div>
+                  <div className="w-px h-full bg-gray-200 dark:bg-gray-700 mt-2"></div>
+                </div>
+                <div className="pb-4">
+                  <p className="text-xs text-gray-500">{fecha} {hora}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-white">Envío registrado en sucursal origen</p>
+                </div>
+              </div>
+              {/* Mock Timeline Item 2 */}
+              {status === "Delivered" && (
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="w-2.5 h-2.5 rounded-full bg-success-500 mt-1.5"></div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Recientemente</p>
+                    <p className="text-sm font-medium text-success-600 dark:text-success-400">Entregado al cliente exitosamente</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Conductor: Juan Pérez</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6 pb-4">
+            <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Evidencias Fotográficas (Próximamente)</h5>
+            {status === "Delivered" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center relative overflow-hidden group">
+                  <span className="text-xs text-gray-500">Foto de Paquete</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="https://images.unsplash.com/photo-1577705998148-6da4f3963bc8?w=300&q=80" alt="Mock 1" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center relative overflow-hidden group">
+                  <span className="text-xs text-gray-500">Firma / QR</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="https://images.unsplash.com/photo-1556740714-a8395b3bf30f?w=300&q=80" alt="Mock 2" className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl p-6 text-center border border-gray-200 dark:border-gray-800">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Las evidencias se mostrarán aquí una vez que el envío sea entregado u observado.</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0">
@@ -578,18 +544,7 @@ export default function ShipmentForm({
               </svg>
             }
           >
-            {exporting === "print" ? "Preparando..." : "Imprimir"}
-          </Button>
-          <Button
-            onClick={handleExportPdf}
-            disabled={exporting !== null}
-            startIcon={
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
-              </svg>
-            }
-          >
-            {exporting === "pdf" ? "Generando..." : "Exportar PDF"}
+            {exporting === "print" ? "Preparando..." : "Imprimir Guía"}
           </Button>
         </div>
       </div>
@@ -663,7 +618,14 @@ export default function ShipmentForm({
           ) : null}
 
           {(mode !== "create" || orderInfo) && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/40 sm:grid-cols-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
+              <h5 className="mb-4 flex items-center gap-2 text-sm font-bold text-brand-600 uppercase tracking-wider dark:text-brand-400">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                  1
+                </span>
+                Información de Cabecera
+              </h5>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
               {mode !== "create" && <InfoField label="N° de Guía" value={guia} />}
               {mode !== "create" && <InfoField label="Fecha" value={fecha} />}
               <InfoField label="Cliente" value={cliente} />
@@ -711,11 +673,19 @@ export default function ShipmentForm({
                   )}
                 </>
               )}
+              </div>
             </div>
           )}
 
           {/* Paquetes */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
+            <h5 className="mb-4 flex items-center gap-2 text-sm font-bold text-brand-600 uppercase tracking-wider dark:text-brand-400">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                2
+              </span>
+              Paquetes y Contenido
+            </h5>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div>
               <Label required>Cantidad de Paquetes</Label>
               <Input
@@ -738,12 +708,16 @@ export default function ShipmentForm({
               />
             </div>
           </div>
-
-          <div className="border-t border-gray-100 dark:border-gray-800"></div>
+          </div>
 
           {/* Details */}
-          <div>
-            <h5 className="mb-3 text-sm font-semibold text-brand-500 uppercase tracking-wider">Detalles de Envío</h5>
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
+            <h5 className="mb-4 flex items-center gap-2 text-sm font-bold text-brand-600 uppercase tracking-wider dark:text-brand-400">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                3
+              </span>
+              Artículos y Costos
+            </h5>
 
             {lines.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center dark:border-gray-700">

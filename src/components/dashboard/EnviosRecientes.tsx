@@ -17,10 +17,21 @@ import {
 } from "@/services/shipmentService";
 import Link from "next/link";
 import { Eye } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { useModal } from "@/hooks/useModal";
+import ShipmentForm from "@/components/envios/ShipmentForm";
 
 export default function EnviosRecientes() {
   const [envios, setEnvios] = useState<ShipmentPaginatedItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const viewModal = useModal();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const openView = (id: string) => {
+    setSelectedId(id);
+    viewModal.openModal();
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,7 +59,7 @@ export default function EnviosRecientes() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href="/admin/envios" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200">
+          <Link href="/envios" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200">
             Ver Todos
           </Link>
         </div>
@@ -106,9 +117,9 @@ export default function EnviosRecientes() {
                     </Badge>
                   </TableCell>
                   <TableCell className="py-3">
-                    <Link href={`/admin/envios/${envio.id}/tracking`} className="text-gray-400 hover:text-brand-500 transition-colors">
+                    <button onClick={() => openView(envio.id)} className="text-gray-400 hover:text-brand-500 transition-colors" title="Ver detalle">
                       <Eye className="w-5 h-5" />
-                    </Link>
+                    </button>
                   </TableCell>
                 </TableRow>
               ))
@@ -116,6 +127,17 @@ export default function EnviosRecientes() {
           </TableBody>
         </Table>
       </div>
+
+      <Modal isOpen={viewModal.isOpen} onClose={viewModal.closeModal} className="max-w-[700px] m-4 z-50">
+        {viewModal.isOpen && (
+          <ShipmentForm
+            mode="view"
+            shipmentId={selectedId}
+            onClose={viewModal.closeModal}
+            onSaved={() => {}}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

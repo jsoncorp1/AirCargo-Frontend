@@ -37,6 +37,10 @@ interface ShipmentsTableProps {
   perPage?: number;
   onPerPageChange?: (perPage: number) => void;
   onDataChange: () => void;
+  onNewShipment: () => void;
+  onEditShipment: (id: string) => void;
+  onViewShipment: (id: string) => void;
+  onStatusShipment: (id: string) => void;
 }
 
 function SkeletonRow() {
@@ -61,46 +65,14 @@ export default function ShipmentsTable({
   perPage,
   onPerPageChange,
   onDataChange,
+  onNewShipment,
+  onEditShipment,
+  onViewShipment,
+  onStatusShipment,
 }: ShipmentsTableProps) {
   const { showToast } = useToast();
-  const formModal = useModal();
   const deleteModal = useModal();
-  const statusModal = useModal();
-
-  const [formMode, setFormMode] = useState<FormMode>("create");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const openStatus = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      statusModal.openModal();
-    },
-    [statusModal]
-  );
-
-  const openCreate = useCallback(() => {
-    setSelectedId(null);
-    setFormMode("create");
-    formModal.openModal();
-  }, [formModal]);
-
-  const openView = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("view");
-      formModal.openModal();
-    },
-    [formModal]
-  );
-
-  const openEdit = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("edit");
-      formModal.openModal();
-    },
-    [formModal]
-  );
 
   const askDelete = useCallback(
     (id: string) => {
@@ -129,19 +101,7 @@ export default function ShipmentsTable({
 
   return (
     <>
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 active:bg-brand-700 transition-colors"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nuevo Envío
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
@@ -260,21 +220,21 @@ export default function ShipmentsTable({
                     <TableCell className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => openStatus(shipment.id)}
+                          onClick={() => onStatusShipment(shipment.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-warning-50 hover:text-warning-600 dark:hover:bg-warning-500/10 dark:hover:text-orange-400 transition-colors"
                           title="Cambiar estado / observar"
                         >
                           <TaskIcon className="size-4 shrink-0" /> Estado
                         </button>
                         <button
-                          onClick={() => openView(shipment.id)}
+                          onClick={() => onViewShipment(shipment.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
                           title="Ver detalle"
                         >
                           <EyeIcon className="size-4 shrink-0" /> Ver
                         </button>
                         <button
-                          onClick={() => openEdit(shipment.id)}
+                          onClick={() => onEditShipment(shipment.id)}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
                           title="Editar"
                         >
@@ -282,7 +242,7 @@ export default function ShipmentsTable({
                         </button>
                         <button
                           onClick={() => askDelete(shipment.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-error-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
                           title="Eliminar"
                         >
                           <TrashBinIcon className="size-4 shrink-0" /> Eliminar
@@ -306,40 +266,6 @@ export default function ShipmentsTable({
           />
         </div>
       </div>
-
-      <Modal
-        isOpen={formModal.isOpen}
-        onClose={formModal.closeModal}
-        className="max-w-[700px] m-4 z-50"
-      >
-        {formModal.isOpen && (
-          <ShipmentForm
-            key={selectedId ?? "new"}
-            mode={formMode}
-            shipmentId={selectedId}
-            onClose={formModal.closeModal}
-            onSaved={onDataChange}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={statusModal.isOpen}
-        onClose={statusModal.closeModal}
-        className="max-w-[480px] m-4 z-50"
-      >
-        {statusModal.isOpen && selectedBasic && (
-          <ShipmentStatusModal
-            key={selectedBasic.id}
-            shipmentId={selectedBasic.id}
-            code={selectedBasic.code}
-            currentStatus={selectedBasic.status}
-            currentObservation={selectedBasic.observation}
-            onClose={statusModal.closeModal}
-            onSaved={onDataChange}
-          />
-        )}
-      </Modal>
 
       <Modal
         isOpen={deleteModal.isOpen}

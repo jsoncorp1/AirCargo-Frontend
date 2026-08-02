@@ -55,11 +55,12 @@ const SupplierSidebar: React.FC = () => {
       >
         <Link href="/proveedor/ordenes" className="flex items-center gap-2">
           {isExpanded || isHovered || isMobileOpen ? (
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">
-              Air<span className="text-brand-500">Cargo</span>
-            </span>
+            <>
+              <img src="/images/logo/logoaircargoazul.png" alt="AirCargo Logo" width={160} height={40} className="dark:hidden block object-contain" />
+              <img src="/images/logo/logoaircargoblanco.png" alt="AirCargo Logo" width={160} height={40} className="hidden dark:block object-contain" />
+            </>
           ) : (
-            <span className="text-2xl font-bold text-brand-500">AC</span>
+            <span className="text-2xl font-black text-brand-600 tracking-tighter">AC</span>
           )}
         </Link>
       </div>

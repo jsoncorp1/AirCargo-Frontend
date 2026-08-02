@@ -167,6 +167,30 @@ export default function ShipmentStatusModal({
                 <option key={s} value={s}>{SHIPMENT_STATUS_LABELS[s]}</option>
               ))}
             </select>
+            
+            {status === "Delivered" && (
+              <div className="mt-4 p-4 rounded-xl border border-gray-200 bg-gray-50 dark:bg-gray-800/40 dark:border-gray-700 animate-in fade-in slide-in-from-top-2">
+                <p className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Evidencias Fotográficas (Requerido)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <svg className="w-6 h-6 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-xs text-gray-500 font-medium text-center">Foto del Paquete</span>
+                    <input type="file" className="hidden" accept="image/*" />
+                  </label>
+                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <svg className="w-6 h-6 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span className="text-xs text-gray-500 font-medium text-center">Firma o Remito</span>
+                    <input type="file" className="hidden" accept="image/*" />
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-brand-600 dark:text-brand-400 font-medium text-center">(Mock UI - No sube archivos realmente)</p>
+              </div>
+            )}
           </div>
         )}
 
