@@ -29,6 +29,7 @@ import {
   getShipmentErrorMessage,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
+import { useAuth } from "@/context/AuthContext";
 import ShipmentWaybill from "./ShipmentWaybill";
 import ShipmentLetterPdf from "./ShipmentLetterPdf";
 import { exportElementToPDF } from "@/utils/pdfExport";
@@ -92,6 +93,9 @@ export default function ShipmentForm({
   onSaved,
 }: ShipmentFormProps) {
   const { showToast } = useToast();
+  // El superadmin no tiene sucursal propia: debe indicar desde cuál atiende.
+  // Para admin/conductor el backend usa la suya e ignora lo que se mande.
+  const { isSuperAdminUser, branchOfficeLabel } = useAuth();
   const readOnly = mode === "view";
   // Modo "atender orden": create con la orden ya fijada desde el listado.
   const attendingOrder = mode === "create" && !!presetOrderDeliveryId;
@@ -111,6 +115,7 @@ export default function ShipmentForm({
 
   // Form State
   const [orderDeliveryId, setOrderDeliveryId] = useState<string>(presetOrderDeliveryId ?? "");
+  const [originBranchOfficeId, setOriginBranchOfficeId] = useState<string>("");
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState<string>("");
   const [packageCount, setPackageCount] = useState<number>(1);
   const [packageDescription, setPackageDescription] = useState<string>("");
@@ -319,12 +324,18 @@ export default function ShipmentForm({
       showToast("error", "Error", "Debe seleccionar la sucursal de destino.");
       return;
     }
+    if (mode === "create" && isSuperAdminUser && !originBranchOfficeId) {
+      showToast("error", "Error", "Debe seleccionar la sucursal de origen.");
+      return;
+    }
 
     runSubmit(async () => {
       try {
         if (mode === "create") {
           const payload: CreateShipmentRequest = {
             orderDeliveryId,
+            // Se manda siempre: el backend lo ignora para admin/conductor.
+            originBranchOfficeId: originBranchOfficeId || null,
             destinationBranchOfficeId,
             packageCount,
             packageDescription: packageDescription.trim(),
@@ -527,7 +538,7 @@ export default function ShipmentForm({
                   weight: l.weight,
                   shippingCost: l.shippingCost
                 })),
-                status: status || "Pending",
+                status: status || "AtOriginBranch",
                 deliveryType: orderInfo?.deliveryType ?? "Prepaid",
               } as any}
             />
@@ -664,7 +675,38 @@ export default function ShipmentForm({
                 </>
               )}
 
+              {/* Origen: solo el superadmin lo elige (es global, no tiene
+                  sucursal propia). Al resto se le muestra la suya, informativa. */}
               <div className={attendingOrder ? "" : "mt-4"}>
+                <Label required={isSuperAdminUser}>Sucursal de Origen</Label>
+                {isSuperAdminUser ? (
+                  <>
+                    <select
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                      value={originBranchOfficeId}
+                      onChange={(e) => setOriginBranchOfficeId(e.target.value)}
+                      required
+                    >
+                      <option value="" disabled>Seleccione la sucursal de origen</option>
+                      {branchOffices.map((b) => (
+                        <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                      Indica desde qué sucursal estás atendiendo este envío.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Input value={branchOfficeLabel} disabled className="bg-gray-50 text-gray-500" />
+                    <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                      Se registra automáticamente con la sucursal de tu usuario.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4">
                 <Label required>Sucursal de Destino</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
@@ -677,9 +719,6 @@ export default function ShipmentForm({
                     <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
                   ))}
                 </select>
-                <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-                  La sucursal de origen se registra automáticamente con la sucursal de tu usuario.
-                </p>
               </div>
             </div>
           ) : null}

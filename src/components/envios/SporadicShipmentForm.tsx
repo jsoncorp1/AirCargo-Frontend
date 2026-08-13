@@ -7,7 +7,7 @@ import {
   shipmentService,
   CreateSporadicShipmentRequest,
   SporadicShipmentResponse,
-  SHIPMENT_ERROR_MESSAGES,
+  getShipmentErrorMessage,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import { useAuth } from "@/context/AuthContext";
@@ -45,19 +45,10 @@ const emptyLine = (): SporadicLineFormState => ({
   shippingCost: "0",
 });
 
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === "object" && "message" in err) {
-    const msg = (err as { message?: unknown }).message;
-    if (typeof msg === "string" && msg.trim().length > 0) {
-      return SHIPMENT_ERROR_MESSAGES[msg] ?? msg;
-    }
-  }
-  return fallback;
-}
-
 export default function SporadicShipmentForm() {
   const { showToast } = useToast();
-  const { branchOfficeCode, branchOfficeCity } = useAuth();
+  // El superadmin es global: elige desde qué sucursal atiende el mostrador.
+  const { isSuperAdminUser, branchOfficeLabel } = useAuth();
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const [result, setResult] = useState<SporadicShipmentResponse | null>(null);
@@ -66,6 +57,7 @@ export default function SporadicShipmentForm() {
   // Sender State
   const [senderFullName, setSenderFullName] = useState("");
   const [senderPhone, setSenderPhone] = useState("");
+  const [originBranchOfficeId, setOriginBranchOfficeId] = useState("");
 
   // Destination State
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
@@ -80,8 +72,6 @@ export default function SporadicShipmentForm() {
 
   // Articles State
   const [lines, setLines] = useState<SporadicLineFormState[]>([emptyLine()]);
-
-  const originBranchLabel = [branchOfficeCode, branchOfficeCity].filter(Boolean).join(" — ");
 
   useEffect(() => {
     const fetchBranchOffices = async () => {
@@ -98,6 +88,7 @@ export default function SporadicShipmentForm() {
 
   const resetForm = () => {
     setDestinationBranchOfficeId("");
+    setOriginBranchOfficeId("");
     setSenderFullName("");
     setSenderPhone("");
     setDestinationDepartment(DEPARTAMENTOS[0].value);
@@ -139,10 +130,14 @@ export default function SporadicShipmentForm() {
     if (packageCount <= 0) return showToast("error", "Error", "La cantidad de paquetes debe ser mayor a cero.");
     if (!packageDescription.trim()) return showToast("error", "Error", "Debe describir los paquetes del envío.");
     if (!destinationBranchOfficeId) return showToast("error", "Error", "Seleccione la sucursal de destino.");
+    if (isSuperAdminUser && !originBranchOfficeId)
+      return showToast("error", "Error", "Seleccione la sucursal de origen.");
 
     runSubmit(async () => {
       try {
         const payload: CreateSporadicShipmentRequest = {
+          // Se manda siempre: el backend lo ignora para admin/conductor.
+          originBranchOfficeId: originBranchOfficeId || null,
           destinationBranchOfficeId,
           senderFullName: senderFullName.trim(),
           senderPhone: senderPhone.trim(),
@@ -167,7 +162,7 @@ export default function SporadicShipmentForm() {
         setResult(response);
         showToast("success", "Envío registrado", `Guía generada: ${response.code}`);
       } catch (error: unknown) {
-        showToast("error", "Error", getErrorMessage(error, "No se pudo registrar el envío."));
+        showToast("error", "Error", getShipmentErrorMessage(error, "No se pudo registrar el envío."));
       }
     });
   };
@@ -199,7 +194,11 @@ export default function SporadicShipmentForm() {
           setSenderFullName={setSenderFullName}
           senderPhone={senderPhone}
           setSenderPhone={setSenderPhone}
-          originBranchLabel={originBranchLabel}
+          originBranchLabel={branchOfficeLabel}
+          canChooseOriginBranch={isSuperAdminUser}
+          branchOffices={branchOffices}
+          originBranchOfficeId={originBranchOfficeId}
+          setOriginBranchOfficeId={setOriginBranchOfficeId}
         />
 
         <DestinationSection

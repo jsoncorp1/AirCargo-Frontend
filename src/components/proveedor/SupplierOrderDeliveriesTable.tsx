@@ -19,6 +19,8 @@ import {
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
 } from "@/services/orderDeliveryService";
+import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
+import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
 import SupplierOrderDeliveryForm from "./SupplierOrderDeliveryForm";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
@@ -106,12 +108,19 @@ export default function SupplierOrderDeliveriesTable({
     runDelete(async () => {
       if (!selectedId) return;
       try {
-        await orderDeliveryService.deleteDelivery(selectedId);
+        // Eliminar devuelve el stock al artículo: mismo token de concurrencia,
+        // mismo 409 sin cambios guardados. Reintentar no borra dos veces.
+        await withConcurrencyRetry(() => orderDeliveryService.deleteDelivery(selectedId));
         showToast("success", "Orden eliminada", "El registro ha sido eliminado exitosamente.");
         deleteModal.closeModal();
         onDataChange();
       } catch (error: unknown) {
-        showToast("error", "Error al eliminar", error instanceof Error ? error.message : "No se pudo eliminar la orden.");
+        showToast(
+          "error",
+          isConcurrencyConflict(error) ? "Conflicto de concurrencia" : "Error al eliminar",
+          getApiErrorMessage(error, "No se pudo eliminar la orden.")
+        );
+        if (isConcurrencyConflict(error)) onDataChange();
       }
     });
 

@@ -20,6 +20,8 @@ import {
   orderDeliveryService,
   CreateOrderDeliveryRequest,
 } from "@/services/orderDeliveryService";
+import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
+import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
 
 // unitPrice is kept as a raw string while editing so the user can type
 // decimals (e.g. "42.") without React snapping it back to 0 mid-keystroke —
@@ -202,24 +204,34 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
             isExpress,
             lines: submittedLines,
           };
-          await orderDeliveryService.createDelivery(payload);
+          // Crear/editar una orden descuenta stock: el backend protege
+          // `Article.Count` con un token de concurrencia y responde 409 sin
+          // guardar nada si otra operación lo tocó a la vez. Reintentar el mismo
+          // payload es seguro — no duplica la orden.
+          await withConcurrencyRetry(() => orderDeliveryService.createDelivery(payload));
           showToast("success", "Orden creada", "La orden de entrega fue creada exitosamente.");
         } else if (mode === "edit" && orderId) {
-          await orderDeliveryService.updateDelivery(orderId, {
-            destinationDepartment: department,
-            clientFullName,
-            clientPhone,
-            clientAddress,
-            deliveryType,
-            isExpress,
-            lines: submittedLines,
-          });
+          await withConcurrencyRetry(() =>
+            orderDeliveryService.updateDelivery(orderId, {
+              destinationDepartment: department,
+              clientFullName,
+              clientPhone,
+              clientAddress,
+              deliveryType,
+              isExpress,
+              lines: submittedLines,
+            })
+          );
           showToast("success", "Orden actualizada", "La orden de entrega fue actualizada exitosamente.");
         }
         onSaved();
         onClose();
       } catch (error: unknown) {
-        showToast("error", "Error", error instanceof Error ? error.message : "No se pudo guardar la orden.");
+        showToast(
+          "error",
+          isConcurrencyConflict(error) ? "Conflicto de concurrencia" : "Error",
+          getApiErrorMessage(error, "No se pudo guardar la orden.")
+        );
       }
     });
   };

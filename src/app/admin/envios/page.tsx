@@ -8,7 +8,7 @@ import {
   ShipmentPaginatedItem,
   ShipmentListFilters,
   ShipmentStatus,
-  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_FILTER_OPTIONS,
 } from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
@@ -102,15 +102,12 @@ export default function AdminEnviosPage() {
     { value: "all", label: "Todos" },
   ];
 
-  // Los envíos nacen "En tránsito" al atender la orden, así que ese es el primer
-  // tab; "Pendiente" solo aparecería en "Todos". El filtro lo aplica el backend.
+  // Todo el ciclo de vida, en orden. El envío nace esperando en la sucursal
+  // origen; el manifiesto lo lleva hasta la sucursal destino y el reparto hasta
+  // el cliente. El filtro lo aplica el backend.
   const statusTabs: TabItem[] = [
-    { value: "InTransit", label: SHIPMENT_STATUS_LABELS.InTransit },
-    { value: "Observed", label: SHIPMENT_STATUS_LABELS.Observed },
-    { value: "Delivered", label: SHIPMENT_STATUS_LABELS.Delivered },
-    { value: "Rejected", label: SHIPMENT_STATUS_LABELS.Rejected },
-    { value: "Returned", label: SHIPMENT_STATUS_LABELS.Returned },
     { value: "", label: "Todos" },
+    ...SHIPMENT_STATUS_FILTER_OPTIONS,
   ];
 
   return (

@@ -1,6 +1,7 @@
 import React from "react";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import { BranchOffice } from "@/services/branchOfficeService";
 
 interface SenderSectionProps {
   senderFullName: string;
@@ -8,6 +9,12 @@ interface SenderSectionProps {
   senderPhone: string;
   setSenderPhone: (val: string) => void;
   originBranchLabel: string;
+  // El superadmin no tiene sucursal propia: elige desde cuál atiende, y esa
+  // sucursal define además el departamento de origen de la orden generada.
+  canChooseOriginBranch: boolean;
+  branchOffices: BranchOffice[];
+  originBranchOfficeId: string;
+  setOriginBranchOfficeId: (val: string) => void;
 }
 
 export default function SenderSection({
@@ -16,6 +23,10 @@ export default function SenderSection({
   senderPhone,
   setSenderPhone,
   originBranchLabel,
+  canChooseOriginBranch,
+  branchOffices,
+  originBranchOfficeId,
+  setOriginBranchOfficeId,
 }: SenderSectionProps) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
@@ -50,15 +61,40 @@ export default function SenderSection({
         </div>
 
         <div>
-          <Label>Sucursal de Origen</Label>
-          <Input 
-            value={originBranchLabel || "Sin sucursal asignada"} 
-            disabled 
-            className="bg-gray-50 text-gray-500 font-medium"
-          />
-          <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-            Se asigna automáticamente.
-          </p>
+          <Label required={canChooseOriginBranch}>Sucursal de Origen</Label>
+          {canChooseOriginBranch ? (
+            <>
+              <select
+                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                value={originBranchOfficeId}
+                onChange={(e) => setOriginBranchOfficeId(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Seleccione la sucursal de origen
+                </option>
+                {branchOffices.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.code} — {b.city}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                Define el origen del envío y el departamento de la orden.
+              </p>
+            </>
+          ) : (
+            <>
+              <Input
+                value={originBranchLabel}
+                disabled
+                className="bg-gray-50 text-gray-500 font-medium"
+              />
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                Se asigna automáticamente.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ShipmentListFilters,
   ShipmentStatus,
-  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_FILTER_OPTIONS,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
 import { supplierService, Supplier } from "@/services/supplierService";
@@ -75,10 +75,7 @@ export default function EnviosToolbar({
 
   const statuses: { value: ShipmentStatus | ""; label: string }[] = [
     { value: "", label: "Todos los Envíos" },
-    ...Object.entries(SHIPMENT_STATUS_LABELS).map(([status, label]) => ({
-      value: status as ShipmentStatus,
-      label,
-    })),
+    ...SHIPMENT_STATUS_FILTER_OPTIONS,
   ];
 
   return (

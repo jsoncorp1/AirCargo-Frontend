@@ -13,7 +13,9 @@ export interface LoginResponse {
   roleId?: string;
   supplierId?: string;
   supplierName?: string;
-  // Sucursal del usuario (null si no tiene sucursal asignada).
+  // Sucursal del usuario. Viene en `null` cuando el usuario no pertenece a
+  // ninguna: es el caso del superadmin, que es global (ve todas las sucursales
+  // y elige desde cuál atiende al crear un envío).
   branchOfficeId?: string | null;
   branchOfficeCode?: string | null;
   branchOfficeCity?: string | null;

@@ -71,6 +71,16 @@ const baseNavItems: NavItem[] = [
     path: "/envios",
   },
   {
+    icon: <ListIcon />,
+    name: "Manifiestos",
+    path: "/manifiestos",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Reparto",
+    path: "/reparto",
+  },
+  {
     name: "Administración",
     icon: <PlugInIcon />,
     subItems: [

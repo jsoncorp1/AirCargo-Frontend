@@ -7,8 +7,9 @@ import Button from "@/components/ui/button/Button";
 import SelectField from "@/components/form/Select";
 import Input from "@/components/form/input/InputField";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
-import { shipmentService, CreateSporadicShipmentLineRequest, CreateSporadicShipmentRequest } from "@/services/shipmentService";
+import { shipmentService, CreateSporadicShipmentLineRequest, CreateSporadicShipmentRequest, getShipmentErrorMessage } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
+import { useAuth } from "@/context/AuthContext";
 import { User, MapPin, Package, CheckCircle2, Plus, Trash2, CheckSquare, Square } from "lucide-react";
 
 type WizardStep = 1 | 2 | 3 | 4;
@@ -17,7 +18,9 @@ export default function WizardNuevoEnvio() {
   const router = useRouter();
   const [step, setStep] = useState<WizardStep>(1);
   const { pending: saving, run: runSubmit } = useSubmitLock();
-  
+  // El superadmin es global: elige desde qué sucursal se registra el envío.
+  const { isSuperAdminUser, branchOfficeLabel } = useAuth();
+
   const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,6 +29,7 @@ export default function WizardNuevoEnvio() {
     senderFullName: "",
     senderPhone: "",
     senderAddress: "",
+    originBranchOfficeId: "",
     destinationBranchOfficeId: "",
     destinationDepartment: "",
     clientFullName: "",
@@ -83,22 +87,30 @@ export default function WizardNuevoEnvio() {
     runSubmit(async () => {
       try {
         if (!formData.destinationBranchOfficeId) throw new Error("Debe seleccionar una sucursal destino");
-        
+        if (isSuperAdminUser && !formData.originBranchOfficeId)
+          throw new Error("Debe seleccionar la sucursal de origen");
+
         const payload: CreateSporadicShipmentRequest = {
           ...formData as CreateSporadicShipmentRequest,
+          // Se manda siempre: el backend lo ignora para admin/conductor.
+          originBranchOfficeId: formData.originBranchOfficeId || null,
           lines
         };
 
         await shipmentService.createSporadicShipment(payload);
         alert("¡Envío creado exitosamente!");
         router.push("/admin/envios");
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(error);
-        alert(error.message || "Error al crear el envío");
+        alert(getShipmentErrorMessage(error, "Error al crear el envío"));
       }
     });
 
-  const isStep1Valid = formData.senderFullName && formData.senderPhone && formData.senderAddress;
+  const isStep1Valid =
+    formData.senderFullName &&
+    formData.senderPhone &&
+    formData.senderAddress &&
+    (!isSuperAdminUser || !!formData.originBranchOfficeId);
   const isStep2Valid = formData.destinationBranchOfficeId && formData.clientFullName && formData.clientPhone && formData.clientAddress;
   const isStep3Valid = formData.packageCount && formData.packageCount > 0 && formData.packageDescription && lines.length > 0 && lines.every(l => l.articleName && l.weight > 0 && l.shippingCost >= 0);
 
@@ -160,6 +172,23 @@ export default function WizardNuevoEnvio() {
                   value={formData.senderAddress || ""}
                   onChange={(e) => updateField("senderAddress", e.target.value)}
                 />
+              </div>
+              {/* Sucursal de origen: solo el superadmin la elige; para el resto
+                  el backend usa la del usuario e ignora lo que se mande. */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Sucursal de Origen</label>
+                {isSuperAdminUser ? (
+                  loading ? <p className="text-sm text-gray-500">Cargando sucursales...</p> : (
+                    <SelectField
+                      placeholder="Seleccione la sucursal de origen"
+                      defaultValue={formData.originBranchOfficeId || ""}
+                      options={branchOffices.map(b => ({ value: b.id, label: `${b.code} - ${b.city}` }))}
+                      onChange={(val) => updateField("originBranchOfficeId", val)}
+                    />
+                  )
+                ) : (
+                  <Input value={branchOfficeLabel} disabled />
+                )}
               </div>
             </div>
           )}

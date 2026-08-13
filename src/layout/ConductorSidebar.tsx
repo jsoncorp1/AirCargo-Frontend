@@ -14,7 +14,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <BoxCubeIcon />,
-    name: "Envíos",
+    name: "Mis Entregas",
     path: "/conductor/envios",
   },
   {

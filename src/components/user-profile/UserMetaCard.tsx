@@ -10,7 +10,7 @@ function getInitials(fullName?: string | null) {
 }
 
 export default function UserMetaCard() {
-  const { user, isSupplierUser, companyName, branchOfficeCode, branchOfficeCity } = useAuth();
+  const { user, isSupplierUser, companyName, branchOfficeCode, branchOfficeLabel } = useAuth();
 
   return (
     <div className="p-5 lg:p-8 border border-gray-100 rounded-2xl dark:border-gray-800 bg-white dark:bg-white/[0.02] shadow-sm">
@@ -52,10 +52,10 @@ export default function UserMetaCard() {
             ) : (
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                  Sucursal Asignada
+                  {branchOfficeCode ? "Sucursal Asignada" : "Alcance"}
                 </span>
                 <span className="text-sm text-brand-600 dark:text-brand-400 font-semibold">
-                  {branchOfficeCode ? `${branchOfficeCode} - ${branchOfficeCity}` : "Oficina Central / Sin sucursal"}
+                  {branchOfficeLabel}
                 </span>
               </div>
             )}

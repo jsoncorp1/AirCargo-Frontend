@@ -15,6 +15,8 @@ import {
   UpdateArticleReceiptRequest,
 } from "@/services/articleReceiptService";
 import { Article, articleService } from "@/services/articleService";
+import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
+import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
 
 import ArticleReceiptForm from "./ArticleReceiptForm";
 import RecepcionesSummary from "./RecepcionesSummary";
@@ -172,19 +174,37 @@ export default function ArticleReceiptsTable() {
   const openEdit = useCallback((receipt: ArticleReceipt) => { setSelected(receipt); setFormMode("edit"); formModal.openModal(); }, [formModal]);
   const askDelete = useCallback((receipt: ArticleReceipt) => { setSelected(receipt); deleteModal.openModal(); }, [deleteModal]);
 
+  // Las recepciones mueven el stock del artículo, que el backend protege con un
+  // token de concurrencia: si otra operación lo tocó a la vez, responde 409 y no
+  // guarda nada. Reintentar es seguro (no duplica) y suele resolverlo solo.
+  const notifyFailure = (title: string, err: unknown, fallback: string) => {
+    if (isConcurrencyConflict(err)) {
+      showToast("error", "Conflicto de concurrencia", getApiErrorMessage(err, fallback));
+      // Los datos en pantalla ya no reflejan el stock real: se refrescan para
+      // que el reintento manual parta de valores actuales.
+      fetchAll();
+      return;
+    }
+    showToast("error", title, getApiErrorMessage(err, fallback));
+  };
+
   const handleSubmit = async (data: CreateArticleReceiptRequest | UpdateArticleReceiptRequest) => {
     try {
       if (formMode === "create") {
-        await articleReceiptService.createReceipt(data as CreateArticleReceiptRequest);
+        await withConcurrencyRetry(() =>
+          articleReceiptService.createReceipt(data as CreateArticleReceiptRequest)
+        );
         showToast("success", "Recepción registrada", "El stock del artículo ha sido actualizado.");
       } else if (formMode === "edit" && selected) {
-        await articleReceiptService.updateReceipt(selected.id, data as UpdateArticleReceiptRequest);
+        await withConcurrencyRetry(() =>
+          articleReceiptService.updateReceipt(selected.id, data as UpdateArticleReceiptRequest)
+        );
         showToast("success", "Recepción actualizada", "Los cambios han sido guardados.");
       }
       formModal.closeModal();
       fetchAll();
-    } catch (err: any) {
-      showToast("error", "Error", err.message || "No se pudo completar la operación.");
+    } catch (err: unknown) {
+      notifyFailure("Error", err, "No se pudo completar la operación.");
     }
   };
 
@@ -194,12 +214,12 @@ export default function ArticleReceiptsTable() {
     runDelete(async () => {
       if (!selected) return;
       try {
-        await articleReceiptService.deleteReceipt(selected.id);
+        await withConcurrencyRetry(() => articleReceiptService.deleteReceipt(selected.id));
         showToast("success", "Recepción eliminada", "El registro ha sido eliminado.");
         deleteModal.closeModal();
         fetchAll();
-      } catch (err: any) {
-        showToast("error", "Error al eliminar", err.message || "No se pudo eliminar.");
+      } catch (err: unknown) {
+        notifyFailure("Error al eliminar", err, "No se pudo eliminar.");
       }
     });
 

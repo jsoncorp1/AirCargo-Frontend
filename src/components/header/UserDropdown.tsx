@@ -14,7 +14,7 @@ function getInitials(fullName?: string | null) {
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, companyName, branchOfficeCode, branchOfficeCity, logout } = useAuth();
+  const { user, companyName, branchOfficeLabel, isSupplierUser, logout } = useAuth();
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     e.stopPropagation();
@@ -84,9 +84,11 @@ export default function UserDropdown() {
                 Empresa: {companyName}
               </span>
             )}
-            {(branchOfficeCode || branchOfficeCity) && (
+            {/* Un usuario de proveedor no opera sucursales; para el resto se
+                muestra la suya, o "Todas las sucursales" si es global. */}
+            {!isSupplierUser && (
               <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400 truncate">
-                Sucursal: {[branchOfficeCode, branchOfficeCity].filter(Boolean).join(" — ")}
+                Sucursal: {branchOfficeLabel}
               </span>
             )}
           </div>

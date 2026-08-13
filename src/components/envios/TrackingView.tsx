@@ -2,13 +2,21 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
+import Badge from "@/components/ui/badge/Badge";
+import { useAuth } from "@/context/AuthContext";
+import { manifestStatusBadge, manifestStatusLabel } from "@/services/manifestService";
+import {
+  assignmentStatusBadge,
+  assignmentStatusLabel,
+} from "@/services/shipmentAssignmentService";
 import {
   shipmentService,
   Shipment,
-  SHIPMENT_STATUS_LABELS,
-  ShipmentStatus
+  buildShipmentTimeline,
+  SHIPMENT_OBSERVATION_LABELS,
 } from "@/services/shipmentService";
 import { Package, MapPin, CheckCircle2, ChevronRight, Hash, Phone, User, Weight, DollarSign, Printer, FileDown } from "lucide-react";
 import Image from "next/image";
@@ -19,6 +27,7 @@ import ShipmentLetterPdf from "./ShipmentLetterPdf";
 export default function TrackingView() {
   const params = useParams();
   const router = useRouter();
+  const { isAdminUser } = useAuth();
   const envioId = params.id as string;
 
   const [envio, setEnvio] = useState<Shipment | null>(null);
@@ -61,20 +70,18 @@ export default function TrackingView() {
   if (loading) return <div className="p-10 text-center text-gray-500">Cargando detalles...</div>;
   if (!envio) return <div className="p-10 text-center text-error-500">Envío no encontrado.</div>;
 
-  // Real Backend States Timeline
-  const timelineStates: ShipmentStatus[] = ["Pending", "InTransit", "Delivered"];
-  // If state is Observed/Rejected/Returned, we insert it after InTransit dynamically or replace Delivered
-  let activeStates = [...timelineStates];
+  // El envío local (misma sucursal de origen y destino) no viaja en manifiesto:
+  // nace ya en su sucursal destino, así que su línea de tiempo salta ese tramo.
+  const isLocal = Boolean(
+    envio.originBranchOfficeId &&
+      envio.destinationBranchOfficeId &&
+      envio.originBranchOfficeId === envio.destinationBranchOfficeId
+  );
+  const timeline = buildShipmentTimeline(envio.status, isLocal);
 
-  if (envio.status === "Observed") {
-    activeStates = ["Pending", "InTransit", "Observed"];
-  } else if (envio.status === "Rejected") {
-    activeStates = ["Pending", "InTransit", "Rejected"];
-  } else if (envio.status === "Returned") {
-    activeStates = ["Pending", "InTransit", "Returned"];
-  }
-
-  const currentStateIndex = activeStates.indexOf(envio.status) !== -1 ? activeStates.indexOf(envio.status) : 0;
+  // Cada rol vive en su propio árbol de rutas: el admin de sucursal bajo /admin,
+  // el superadmin en la raíz. Linkear al árbol equivocado rebota en el layout.
+  const manifestsBasePath = isAdminUser ? "/admin/manifiestos" : "/manifiestos";
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -84,43 +91,35 @@ export default function TrackingView() {
           <div className="p-5">
             <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-4 space-y-8 pb-4">
 
-              {activeStates.map((st, index) => {
-                const isCompleted = currentStateIndex >= index;
-                const isCurrent = currentStateIndex === index;
-
+              {timeline.map((step) => {
                 let dotColor = "bg-gray-200 dark:bg-gray-700";
                 let textColor = "text-gray-400";
                 let borderColor = "ring-white dark:ring-gray-900";
 
-                if (isCompleted) {
-                  if (st === "Observed" || st === "Rejected" || st === "Returned") {
-                    dotColor = "bg-error-500";
-                    textColor = "text-error-500";
-                  } else {
-                    dotColor = "bg-brand-500";
-                    textColor = "text-brand-500";
-                  }
+                if (step.reached) {
+                  dotColor = step.exception ? "bg-error-500" : "bg-brand-500";
+                  textColor = step.exception ? "text-error-500" : "text-brand-500";
                 }
-                if (isCurrent) {
-                  borderColor = st === "Observed" || st === "Rejected" || st === "Returned"
+                if (step.current) {
+                  borderColor = step.exception
                     ? "ring-error-100 dark:ring-error-900/30"
                     : "ring-brand-100 dark:ring-brand-900/30";
                 }
 
                 return (
-                  <div key={st} className="relative pl-8">
+                  <div key={step.status} className="relative pl-8">
                     <span className={`absolute -left-[11px] flex h-5 w-5 items-center justify-center rounded-full ring-4 ${borderColor} ${dotColor} transition-colors duration-300`}>
-                      {isCompleted && <CheckCircle2 className="size-3 text-white" />}
+                      {step.reached && <CheckCircle2 className="size-3 text-white" />}
                     </span>
-                    <h4 className={`font-semibold text-sm transition-colors duration-300 ${isCurrent ? textColor : isCompleted ? "text-gray-800 dark:text-white" : "text-gray-400"}`}>
-                      {SHIPMENT_STATUS_LABELS[st]}
+                    <h4 className={`font-semibold text-sm transition-colors duration-300 ${step.current ? textColor : step.reached ? "text-gray-800 dark:text-white" : "text-gray-400"}`}>
+                      {step.label}
                     </h4>
                     <p className="text-xs text-gray-500 mt-1">
-                      {isCompleted ? (isCurrent ? "Estado actual" : "Completado") : "Pendiente"}
+                      {step.reached ? (step.current ? "Estado actual" : "Completado") : "Pendiente"}
                     </p>
-                    {isCurrent && envio.observation && (
+                    {step.current && envio.observation && (
                       <p className="text-xs text-error-500 mt-2 bg-error-50/50 p-2 rounded border border-error-100 dark:bg-error-500/10 dark:border-error-500/20">
-                        Obs: {envio.observation}
+                        Obs: {SHIPMENT_OBSERVATION_LABELS[envio.observation] ?? envio.observation}
                       </p>
                     )}
                   </div>
@@ -129,6 +128,61 @@ export default function TrackingView() {
             </div>
           </div>
         </ComponentCard>
+
+        {/* Quién tiene la carga ahora: el lote que la mueve entre sucursales y el
+            conductor que la está repartiendo. */}
+        {(envio.manifestCode || envio.currentAssignment) && (
+          <div className="mt-6 space-y-4">
+            {envio.manifestCode && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Manifiesto</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                    {envio.manifestCode}
+                  </span>
+                  {envio.manifestStatus && (
+                    <Badge size="sm" color={manifestStatusBadge(envio.manifestStatus)}>
+                      {manifestStatusLabel(envio.manifestStatus)}
+                    </Badge>
+                  )}
+                </div>
+                {envio.manifestId && (
+                  <Link
+                    href={`${manifestsBasePath}/${envio.manifestId}`}
+                    className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:text-brand-600"
+                  >
+                    Ver el lote <ChevronRight className="size-4" />
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {envio.currentAssignment && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Reparto</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="font-semibold text-gray-800 dark:text-white">
+                    {envio.currentAssignment.driverFullName}
+                  </p>
+                  <Badge size="sm" color={assignmentStatusBadge(envio.currentAssignment.status)}>
+                    {assignmentStatusLabel(envio.currentAssignment.status)}
+                  </Badge>
+                </div>
+                {envio.currentAssignment.driverPhoneNumber && (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    {envio.currentAssignment.driverPhoneNumber}
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-gray-500">
+                  Asignado el {new Date(envio.currentAssignment.assignedAt).toLocaleString("es-BO")}
+                  {envio.currentAssignment.pickedUpAt &&
+                    ` · Recogido el ${new Date(envio.currentAssignment.pickedUpAt).toLocaleString("es-BO")}`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* RIGHT COLUMN: INFO */}
@@ -298,7 +352,7 @@ export default function TrackingView() {
           senderPhone={envio.senderPhone}
           senderAddress={envio.senderAddress || ""}
           clientFullName={envio.clientFullName}
-          clientPhone={(envio as any).clientPhone || ""}
+          clientPhone={envio.clientPhone || ""}
           clientAddress={envio.clientAddress}
           deliveryType={(envio as any).deliveryType || "Prepaid"}
           isExpress={false}

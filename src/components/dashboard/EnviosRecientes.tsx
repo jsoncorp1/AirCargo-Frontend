@@ -9,11 +9,11 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
-import { 
-  shipmentService, 
-  ShipmentPaginatedItem, 
-  SHIPMENT_STATUS_LABELS, 
-  SHIPMENT_STATUS_BADGE 
+import {
+  shipmentService,
+  ShipmentPaginatedItem,
+  shipmentStatusLabel,
+  shipmentStatusBadge,
 } from "@/services/shipmentService";
 import Link from "next/link";
 import { Eye } from "lucide-react";
@@ -112,8 +112,8 @@ export default function EnviosRecientes() {
                     Bs {envio.shippingPrice.toFixed(2)}
                   </TableCell>
                   <TableCell className="py-3">
-                    <Badge size="sm" color={SHIPMENT_STATUS_BADGE[envio.status]}>
-                      {SHIPMENT_STATUS_LABELS[envio.status]}
+                    <Badge size="sm" color={shipmentStatusBadge(envio.status)}>
+                      {shipmentStatusLabel(envio.status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="py-3">

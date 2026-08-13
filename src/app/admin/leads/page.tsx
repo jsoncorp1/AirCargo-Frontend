@@ -58,7 +58,7 @@ export default function AdminLeadsPage() {
                 <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">{lead.city}</TableCell>
                 <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300 font-mono">{lead.phone}</TableCell>
                 <TableCell className="px-5 py-3 text-sm">
-                  <Badge size="sm" color={lead.status === "Nuevo" ? "warning" : lead.status === "Contactado" ? "brand" : "success"}>
+                  <Badge size="sm" color={lead.status === "Nuevo" ? "warning" : lead.status === "Contactado" ? "primary" : "success"}>
                     {lead.status}
                   </Badge>
                 </TableCell>

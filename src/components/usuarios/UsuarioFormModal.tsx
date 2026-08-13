@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
@@ -7,6 +7,7 @@ import { Role } from "@/services/roleService";
 import { Supplier } from "@/services/supplierService";
 import { BranchOffice } from "@/services/branchOfficeService";
 import { User } from "@/services/userService";
+import { resolveRoleScope, scopeFieldsForRole } from "@/services/userScope";
 
 interface UsuarioFormModalProps {
   user?: User | null;
@@ -69,16 +70,36 @@ export default function UsuarioFormModal({
   }, [user]);
 
   const selectedRole = roles.find((r) => r.id === formData.roleId);
-  const selectedRoleName = selectedRole?.name?.toLowerCase() ?? "";
+  const selectedRoleName = selectedRole?.name ?? "";
 
-  const isProveedorRole =
-    selectedRoleName.includes("empresa") || selectedRoleName.includes("proveedor");
-  const isBranchRole =
-    selectedRoleName.includes("admin") || selectedRoleName.includes("conductor");
+  // El backend valida rol ↔ ámbito de forma estricta: el superadmin es global
+  // (sin proveedor ni sucursal), usuarioempresa lleva proveedor, y
+  // admin/conductor llevan sucursal. Mandar el campo que no corresponde da 400.
+  const roleScope = resolveRoleScope(selectedRoleName);
+  const isProveedorRole = roleScope === "supplier";
+  const isBranchRole = roleScope === "branch";
+  const isGlobalRole = roleScope === "global";
+
+  // Al cambiar de rol hay que limpiar el campo que deja de corresponder: si no,
+  // el form arrastra la sucursal de un admin al pasar a usuarioempresa y el
+  // backend rechaza con `user.branchofficeid.notallowed`.
+  const handleRoleChange = (roleId: string) => {
+    const nextRole = roles.find((r) => r.id === roleId);
+    const scoped = scopeFieldsForRole(nextRole?.name, formData);
+    setFormData({
+      ...formData,
+      roleId,
+      supplierId: scoped.supplierId ?? "",
+      branchOfficeId: scoped.branchOfficeId ?? "",
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    // Segunda red: aunque el form ya limpia al cambiar de rol, el payload se
+    // normaliza otra vez y manda `null` (no "") en el campo que no aplica.
+    const scoped = scopeFieldsForRole(selectedRoleName, formData);
+    onSave({ ...formData, ...scoped });
   };
 
   return (
@@ -209,9 +230,7 @@ export default function UsuarioFormModal({
           <select
             className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
             value={formData.roleId}
-            onChange={(e: any) =>
-              setFormData({ ...formData, roleId: e.target.value, supplierId: "" })
-            }
+            onChange={(e: any) => handleRoleChange(e.target.value)}
             required
             disabled={isSaving}
           >
@@ -254,14 +273,13 @@ export default function UsuarioFormModal({
           </div>
         )}
 
-        {/* Branch office */}
-        {!isProveedorRole && (
+        {/* Branch office (conditional) */}
+        {isBranchRole && (
           <div>
-            <Label required={isBranchRole}>Sucursal</Label>
+            <Label required>Sucursal</Label>
             <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
-              {isBranchRole
-                ? "Los roles admin y conductor requieren una sucursal: define qué envíos pueden ver y atender."
-                : "La sucursal del usuario se usa como origen al atender envíos. Un usuario sin sucursal no puede atender envíos."}
+              Los roles admin y conductor requieren una sucursal: define qué
+              envíos pueden ver y atender, y es el origen de los que registran.
             </p>
             <select
               className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
@@ -269,16 +287,47 @@ export default function UsuarioFormModal({
               onChange={(e: any) =>
                 setFormData({ ...formData, branchOfficeId: e.target.value })
               }
-              required={isBranchRole}
+              required
               disabled={isSaving}
             >
-              <option value="">(Sin Sucursal)</option>
+              <option value="" disabled>
+                Seleccione la sucursal
+              </option>
               {branchOffices.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.code} — {b.city}
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Superadmin: es global, no lleva ámbito. Se explica en vez de mostrar
+            dos selectores vacíos que el backend rechazaría. */}
+        {isGlobalRole && (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/30">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Acceso global
+            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              El superadmin no pertenece a ningún proveedor ni sucursal: ve todo
+              el sistema y elige desde qué sucursal atiende al registrar un envío.
+            </p>
+          </div>
+        )}
+
+        {/* Rol propio sin regla de ámbito: el backend lo rechaza con
+            `user.role.scopeundefined`. Se avisa antes de intentar guardar. */}
+        {formData.roleId && roleScope === "unknown" && (
+          <div className="rounded-xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/20 dark:bg-warning-500/10">
+            <p className="text-sm font-medium text-warning-700 dark:text-orange-400">
+              Rol sin ámbito definido
+            </p>
+            <p className="mt-1 text-xs text-warning-600 dark:text-orange-400/80">
+              El rol &quot;{selectedRoleName}&quot; no tiene definido si opera por
+              proveedor o por sucursal, así que no se le pueden asignar usuarios.
+              Usa superadmin, admin, conductor o usuarioempresa.
+            </p>
           </div>
         )}
 
@@ -292,7 +341,11 @@ export default function UsuarioFormModal({
           >
             Cancelar
           </Button>
-          <Button size="sm" type="submit" disabled={isSaving}>
+          <Button
+            size="sm"
+            type="submit"
+            disabled={isSaving || (!!formData.roleId && roleScope === "unknown")}
+          >
             {isSaving ? "Guardando..." : "Guardar"}
           </Button>
         </div>

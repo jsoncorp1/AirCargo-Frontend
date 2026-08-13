@@ -3,7 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
-import { BoxCubeIcon, PageIcon, UserCircleIcon, ListIcon, HorizontaLDots } from "../icons/index";
+import { BoxCubeIcon, PageIcon, UserCircleIcon, ListIcon, TaskIcon, HorizontaLDots } from "../icons/index";
 
 type NavItem = {
   name: string;
@@ -31,6 +31,16 @@ const navItems: NavItem[] = [
     icon: <ListIcon />,
     name: "Informe de Envíos",
     path: "/admin/envios",
+  },
+  {
+    icon: <ListIcon />,
+    name: "Manifiestos",
+    path: "/admin/manifiestos",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Reparto",
+    path: "/admin/reparto",
   },
   {
     icon: <UserCircleIcon />,

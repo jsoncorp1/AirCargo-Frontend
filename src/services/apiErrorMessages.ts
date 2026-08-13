@@ -6,12 +6,27 @@
 export const FORBIDDEN_FALLBACK_MESSAGE =
   'No tienes permisos para realizar esta acción.';
 
+// 409: dos operaciones tocaron el mismo artículo a la vez y la segunda se
+// rechazó. No se guardó nada — ni la orden, ni el detalle, ni el descuento de
+// stock —, así que reintentar la operación completa es seguro.
+export const CONCURRENCY_CONFLICT_ERROR_KEY = 'concurrency.conflict';
+
+export const CONCURRENCY_CONFLICT_MESSAGE =
+  'Otra operación modificó el stock de un artículo mientras se guardaba esta. ' +
+  'No se guardó ningún cambio; vuelve a intentarlo.';
+
 export const API_ERROR_MESSAGES: Record<string, string> = {
+  // Conflicto de concurrencia sobre el stock (409).
+  [CONCURRENCY_CONFLICT_ERROR_KEY]: CONCURRENCY_CONFLICT_MESSAGE,
+
   // Recurso fuera del alcance del usuario (proveedor/sucursal).
   'article.access.forbidden': 'El artículo no pertenece a tu proveedor.',
   'articlereceipt.access.forbidden': 'La recepción no pertenece a tu proveedor.',
   'orderdelivery.access.forbidden': 'La orden de entrega no pertenece a tu proveedor.',
-  'shipment.access.forbidden': 'El envío no pertenece a tu proveedor o sucursal.',
+  // Para el conductor esto significa además "el envío no está asignado a vos":
+  // desde el reparto por asignaciones, el conductor solo ve lo que le tocó.
+  'shipment.access.forbidden':
+    'Este envío no está a tu alcance: no pertenece a tu proveedor ni a tu sucursal, o no te fue asignado.',
   'user.access.forbidden': 'Solo puedes gestionar conductores de tu sucursal.',
   'shipment.statuschange.forbidden':
     'No puedes cambiar el estado de un envío de otra sucursal.',
@@ -23,18 +38,29 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'user.branchoffice.forbidden':
     'Como admin solo puedes asignar conductores a tu propia sucursal.',
 
-  // Usuario autenticado sin proveedor/sucursal asignada.
-  'article.user.notsupplier': 'Tu usuario no tiene un proveedor asignado.',
-  'articlereceipt.user.notsupplier': 'Tu usuario no tiene un proveedor asignado.',
+  // Usuario autenticado sin proveedor/sucursal asignada. El backend eliminó los
+  // equivalentes de artículos, recepciones y envíos (estado que la BD ya impide);
+  // estos dos siguen existiendo.
   'orderdelivery.user.notsupplier': 'Tu usuario no tiene un proveedor asignado.',
-  'shipment.user.notsupplier': 'Tu usuario no tiene un proveedor asignado.',
-  'orderdelivery.user.nobranch': 'Tu usuario no tiene una sucursal asignada.',
-  'shipment.user.nobranch': 'Tu usuario no tiene una sucursal asignada.',
   'user.actor.nobranch': 'Tu usuario no tiene una sucursal asignada.',
+
+  // Sucursal de origen al crear envíos. El superadmin no tiene sucursal propia:
+  // debe indicar desde cuál está atendiendo.
+  'shipment.originbranch.required':
+    'Debes indicar desde qué sucursal se está registrando el envío.',
+  'shipment.originbranch.notfound': 'La sucursal de origen indicada no existe.',
   'shipment.originbranch.missing':
-    'Tu usuario no tiene una sucursal asignada, por lo que no se puede calcular el origen del envío.',
+    'Tu rol no puede atender mostrador, por lo que no se puede determinar el origen del envío.',
+  'sporadicshipment.originbranch.required':
+    'Debes indicar desde qué sucursal se está registrando el envío.',
+  'sporadicshipment.originbranch.notfound': 'La sucursal de origen indicada no existe.',
+  'sporadicshipment.originbranch.missing':
+    'Tu rol no puede atender mostrador, por lo que no se puede determinar el origen del envío.',
 
   // Coherencia rol ↔ proveedor/sucursal al crear/editar usuarios.
+  'user.scope.notallowed': 'El rol superadmin no puede tener proveedor ni sucursal asignada.',
+  'user.role.scopeundefined':
+    'Este rol no tiene definido su ámbito (proveedor o sucursal); no se puede asignar.',
   'user.supplierid.required': 'El rol usuarioempresa requiere un proveedor asignado.',
   'user.supplierid.notallowed': 'Este rol no puede tener un proveedor asignado.',
   'user.branchofficeid.required': 'Este rol requiere una sucursal asignada.',
@@ -52,11 +78,71 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'orderdelivery.stock.insufficient':
     'No hay stock suficiente para uno de los artículos. El stock sube con las recepciones.',
 
+  // ─── Manifiestos ───────────────────────────────────────────────────────────
+  // El lote de transporte entre dos sucursales. El admin solo opera sobre los
+  // que pasan por la suya.
+  'manifest.notfound': 'El manifiesto no existe.',
+  'manifest.access.forbidden': 'Este manifiesto no sale ni llega a tu sucursal.',
+  'manifest.originbranch.required':
+    'Debes indicar desde qué sucursal sale el manifiesto.',
+  'manifest.originbranch.notfound': 'La sucursal de origen indicada no existe.',
+  'manifest.originbranch.missing':
+    'Tu usuario no tiene una sucursal asignada, por lo que no puede armar manifiestos.',
+  'manifest.destinationbranch.notfound': 'La sucursal de destino indicada no existe.',
+  'manifest.branches.same':
+    'El origen y el destino no pueden ser la misma sucursal. Un envío local no viaja en manifiesto.',
+  'manifest.shipments.required': 'Debes seleccionar al menos un envío.',
+  'manifest.shipments.locked':
+    'El manifiesto ya no está abierto: no se le pueden agregar ni quitar envíos.',
+  'manifest.shipment.notfound': 'Alguno de los envíos no existe o no pertenece a este manifiesto.',
+  'manifest.shipment.alreadymanifested':
+    'Alguno de los envíos ya está en otro manifiesto. No se agregó ninguno.',
+  'manifest.shipment.invalidstatus':
+    'Alguno de los envíos no está esperando en la sucursal de origen. No se agregó ninguno.',
+  'manifest.shipment.routemismatch':
+    'Alguno de los envíos no hace el mismo trayecto que el manifiesto. No se agregó ninguno.',
+  'manifest.shipment.invalidtransition':
+    'Alguno de los envíos del lote no admite este cambio de estado.',
+  'manifest.statuschange.invalidtransition':
+    'La transición de estado del manifiesto no está permitida.',
+  'manifest.dispatch.empty': 'No se puede despachar un manifiesto sin envíos.',
+  'manifest.delete.locked':
+    'Solo se puede eliminar un manifiesto abierto. Si ya salió, anúlalo en vez de borrarlo.',
+  'manifest.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+
+  // ─── Asignaciones a conductores ────────────────────────────────────────────
+  'assignment.notfound': 'La asignación no existe.',
+  'assignment.access.forbidden':
+    'Esta asignación no es tuya ni pertenece a tu sucursal.',
+  'assignment.driver.notfound': 'El conductor indicado no existe.',
+  'assignment.driver.notdriver': 'El usuario indicado no tiene rol conductor.',
+  'assignment.driver.nobranch': 'El conductor no tiene una sucursal asignada.',
+  'assignment.shipments.required': 'Debes seleccionar al menos un envío.',
+  'assignment.shipment.notfound': 'Alguno de los envíos no existe.',
+  'assignment.shipment.invalidstatus':
+    'Alguno de los envíos no está listo para repartirse. No se asignó ninguno.',
+  'assignment.shipment.branchmismatch':
+    'Alguno de los envíos no llegó a la sucursal del conductor. No se asignó ninguno.',
+  'assignment.shipment.alreadyassigned':
+    'Alguno de los envíos ya tiene un reparto en curso. No se asignó ninguno.',
+  'assignment.shipment.invalidtransition': 'El envío no admite este cambio de estado.',
+  'assignment.statuschange.invalidtransition':
+    'La transición de estado de la asignación no está permitida.',
+  'assignment.observation.required':
+    'Para registrar una entrega fallida debes indicar el motivo.',
+  'assignment.observation.invalidstatus':
+    'Solo se puede observar un envío que ya está en la calle. Marca primero el recojo.',
+  'assignment.photos.required':
+    'Para registrar la entrega debes adjuntar al menos una foto.',
+  'assignment.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+
   // Token huérfano: el usuario autenticado ya no existe en BD.
   'article.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'articlereceipt.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'orderdelivery.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'shipment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+  'manifest.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+  'assignment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'user.actor.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
 };
 
@@ -67,5 +153,54 @@ export const ORPHAN_TOKEN_ERROR_KEYS = new Set([
   'articlereceipt.user.notfound',
   'orderdelivery.user.notfound',
   'shipment.user.notfound',
+  'manifest.user.notfound',
+  'assignment.user.notfound',
   'user.actor.notfound',
 ]);
+
+// Forma del error que lanza apiClient. No es una `Error`, así que un
+// `err instanceof Error` nunca acierta: hay que leerlo con estos helpers.
+export interface ApiError {
+  status: number;
+  message: string;
+  errorKey?: string;
+  detail?: string;
+  errors?: Record<string, string[]>;
+}
+
+export function isApiError(err: unknown): err is ApiError {
+  return (
+    !!err &&
+    typeof err === 'object' &&
+    typeof (err as ApiError).status === 'number' &&
+    'message' in (err as object)
+  );
+}
+
+/**
+ * `true` cuando el backend rechazó la operación por un choque de concurrencia
+ * sobre el stock. No hay estado parcial que limpiar: se puede reintentar la
+ * operación completa sin riesgo de duplicar.
+ */
+export function isConcurrencyConflict(err: unknown): boolean {
+  if (!isApiError(err)) return false;
+  return err.status === 409 || err.errorKey === CONCURRENCY_CONFLICT_ERROR_KEY;
+}
+
+/**
+ * Mensaje legible de cualquier error que venga de la API. Sirve tanto para el
+ * error de apiClient (objeto plano) como para una `Error` normal.
+ */
+export function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (isConcurrencyConflict(err)) return CONCURRENCY_CONFLICT_MESSAGE;
+
+  if (err && typeof err === 'object' && 'message' in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg.trim().length > 0) {
+      // apiClient ya traduce por clave, pero los componentes que reciben la
+      // clave cruda (o un mensaje del backend) siguen pudiendo mapearla acá.
+      return API_ERROR_MESSAGES[msg] ?? msg;
+    }
+  }
+  return fallback;
+}
