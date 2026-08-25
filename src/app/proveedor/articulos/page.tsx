@@ -13,13 +13,13 @@ export default function ProveedorArticulosPage() {
   return (
     <div>
       <PageBreadcrumb pageTitle="Artículos" />
-      <div className="space-y-6">
-        <ComponentCard title="Mis Artículos">
-          <Suspense fallback={null}>
-            <SupplierArticulosTable />
-          </Suspense>
-        </ComponentCard>
-      </div>
+      {/* Sin `title`: el encabezado de la página ya dice "Artículos" y repetirlo
+          dentro de la tarjeta era decir dos veces lo mismo. */}
+      <ComponentCard>
+        <Suspense fallback={null}>
+          <SupplierArticulosTable />
+        </Suspense>
+      </ComponentCard>
     </div>
   );
 }

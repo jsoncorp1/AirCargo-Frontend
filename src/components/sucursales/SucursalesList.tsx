@@ -139,16 +139,16 @@ export default function SucursalesList({
                   <TableCell className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
-                        disabled
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
-                        title="Próximamente"
+                        onClick={() => onEdit(office)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
+                        title="Editar"
                       >
                         <PencilIcon className="h-4 w-4 shrink-0" />
                       </button>
                       <button
-                        disabled
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
-                        title="Próximamente"
+                        onClick={() => onDelete(office)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-error-50 hover:text-error-600 dark:text-gray-400 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                        title="Eliminar"
                       >
                         <TrashBinIcon className="h-4 w-4 shrink-0" />
                       </button>

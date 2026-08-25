@@ -6,19 +6,23 @@ export function ServicesSection() {
   return (
     <section className="py-16 bg-white border-t border-gray-200">
       <div className="container mx-auto px-4 md:px-8 max-w-6xl">
-        <div className="text-center mb-16">
+        <div className="text-center mb-10 md:mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">Servicios Logísticos</h2>
+          <p className="mt-3 text-gray-500 max-w-2xl mx-auto text-base md:text-lg">
+            Dos formas de mover tus paquetes: con cobro en la puerta de tu cliente o con envíos puntuales cuando los necesites.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Servicio Contraentrega */}
           <div className="bg-[#f8fafc] rounded-lg overflow-hidden border border-gray-200 flex flex-col group hover:shadow-lg transition-shadow">
             {/* Contenedor de Imagen con object-contain para que no se corte */}
-            <div className="relative h-64 w-full bg-gray-100 p-4">
+            <div className="relative h-56 md:h-64 w-full bg-white p-4">
               <Image
                 src="/images/2.jpg"
                 alt="Servicio Contraentrega"
                 fill
+                sizes="(min-width: 768px) 50vw, 100vw"
                 className="object-contain group-hover:scale-105 transition-transform duration-500"
               />
             </div>
@@ -40,11 +44,12 @@ export function ServicesSection() {
           {/* Servicio Esporádico */}
           <div className="bg-[#f8fafc] rounded-lg overflow-hidden border border-gray-200 flex flex-col group hover:shadow-lg transition-shadow">
             {/* Contenedor de Imagen con object-contain para que no se corte */}
-            <div className="relative h-64 w-full bg-gray-100 p-4">
+            <div className="relative h-56 md:h-64 w-full bg-white p-4">
               <Image
                 src="/images/envio_esporadico_hero_real.png"
                 alt="Envío Esporádico"
                 fill
+                sizes="(min-width: 768px) 50vw, 100vw"
                 className="object-contain group-hover:scale-105 transition-transform duration-500"
               />
             </div>

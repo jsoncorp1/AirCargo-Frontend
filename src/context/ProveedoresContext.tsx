@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useMemo, ReactNode } from "react";
+import { todayApiDay } from "@/utils/datetime";
 
 export interface Empresa {
   id: string;
@@ -38,7 +39,7 @@ export interface Articulo {
   fechaRegistro: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayApiDay();
 const newId = (prefix: string) =>
   `${prefix}-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)).slice(0, 8)}`;
 

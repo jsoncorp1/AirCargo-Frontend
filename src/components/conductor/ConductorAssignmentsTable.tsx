@@ -11,10 +11,12 @@ import {
   assignmentStatusLabel,
   assignmentStatusBadge,
   isAssignmentOpen,
+  MAX_ASSIGNMENT_PHOTOS,
 } from "@/services/shipmentAssignmentService";
 import { SHIPMENT_OBSERVATION_LABELS } from "@/services/shipmentService";
 import AssignmentActionModal from "./AssignmentActionModal";
 import AssignmentDetailModal from "./AssignmentDetailModal";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 interface ConductorAssignmentsTableProps {
   assignments: ShipmentAssignment[];
@@ -130,21 +132,24 @@ export default function ConductorAssignmentsTable({
                   <p className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Asignado:</span>
                     <span className="font-medium text-gray-800 dark:text-gray-200">
-                      {new Date(assignment.assignedAt).toLocaleDateString("es-BO")}{" "}
-                      {new Date(assignment.assignedAt).toLocaleTimeString("es-BO", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatDate(assignment.assignedAt)}{" "}
+                      {formatTime(assignment.assignedAt)}
                     </span>
                   </p>
                   {assignment.pickedUpAt && (
                     <p className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">Recogido:</span>
                       <span className="font-medium text-gray-800 dark:text-gray-200">
-                        {new Date(assignment.pickedUpAt).toLocaleTimeString("es-BO", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatTime(assignment.pickedUpAt)}
+                      </span>
+                    </p>
+                  )}
+
+                  {!!assignment.photoCount && (
+                    <p className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">Fotos:</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
+                        {assignment.photoCount} de {MAX_ASSIGNMENT_PHOTOS}
                       </span>
                     </p>
                   )}

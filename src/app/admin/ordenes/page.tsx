@@ -3,110 +3,120 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import ComponentCard from "@/components/common/ComponentCard";
-import { orderDeliveryService, OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
+import {
+  orderDeliveryService,
+  OrderDeliveryPaginatedItem,
+  OrderDeliveryListFilters,
+  OrderDeliveryCounts,
+  AttentionStatus,
+  ATTENTION_STATUS_TABS,
+  ATTENTION_STATUS_LABELS,
+} from "@/services/orderDeliveryService";
 import AdminOrderDeliveriesTable from "@/components/admin/AdminOrderDeliveriesTable";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
+import ShipmentDateRangeFilter, {
+  DateRange,
+  todayRange,
+} from "@/components/envios/ShipmentDateRangeFilter";
 
 const DEFAULT_PER_PAGE = 10;
-// El backend filtra las órdenes sin atender con ?unattended=true, pero no tiene
-// un filtro para las ya atendidas: ese caso se resuelve en cliente sobre un lote
-// más grande. El listado ya viene acotado al departamento del admin.
-const STATUS_BATCH_SIZE = 200;
-
-// "pending" = bandeja de órdenes por atender (server-side, ?unattended=true);
-// "" = todas (también server-side); "attended" se filtra en cliente.
-type StatusFilter = "" | "pending" | "attended";
 
 export default function AdminOrdenesPage() {
-  const [pageOrders, setPageOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
-  const [pageTotalPages, setPageTotalPages] = useState(1);
-  const [pageTotalCount, setPageTotalCount] = useState(0);
-  const [pageLoading, setPageLoading] = useState(true);
-  const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
-  const [batchLoading, setBatchLoading] = useState(true);
+  // Las tres pestañas las resuelve el backend con `attentionStatus`.
+  // El listado ya viene acotado al departamento del admin.
+  const [orders, setOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  // Totales reales del servidor. No se derivan de contar filas: ver `getCounts`.
+  const [counts, setCounts] = useState<OrderDeliveryCounts | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [statusFilter, setStatusFilter] = useState<AttentionStatus>("Unattended");
+  // Por defecto se muestra el día de hoy; el usuario puede ampliarlo.
+  const [dateRange, setDateRange] = useState<DateRange>(() => todayRange());
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
-  // Solo "atendidas" se pagina en cliente; "" y "pending" los resuelve el backend.
-  const isFiltering = statusFilter === "attended";
+  // El rango va acá para que la lista y los contadores de las pestañas hablen
+  // siempre del mismo conjunto.
+  const baseFilters: OrderDeliveryListFilters = useMemo(
+    () => ({
+      ...(dateRange.from ? { dateFrom: dateRange.from } : {}),
+      ...(dateRange.to ? { dateTo: dateRange.to } : {}),
+    }),
+    [dateRange.from, dateRange.to]
+  );
 
   const fetchPage = useCallback(async (page: number) => {
-    setPageLoading(true);
+    setLoading(true);
     try {
       const res = await orderDeliveryService.getDeliveries(page, perPage, {
-        unattended: statusFilter === "pending",
+        ...baseFilters,
+        attentionStatus: statusFilter,
       });
-      setPageOrders(res.data);
-      setPageTotalPages(res.totalPages);
-      setPageTotalCount(res.count);
+      setOrders(res.data);
+      setTotalPages(res.totalPages);
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
-      setPageLoading(false);
+      setLoading(false);
     }
-  }, [perPage, statusFilter]);
+  }, [perPage, statusFilter, baseFilters]);
 
-  const fetchBatch = useCallback(async () => {
-    setBatchLoading(true);
+  const fetchCounts = useCallback(async () => {
     try {
-      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
-      setAllOrders(res.data);
+      setCounts(await orderDeliveryService.getCounts(baseFilters));
     } catch (err) {
-      console.error("Error fetching orders", err);
-    } finally {
-      setBatchLoading(false);
+      console.error("Error fetching order counts", err);
     }
-  }, []);
+  }, [baseFilters]);
 
   // Tras atender una orden hay que refrescar la página y los contadores.
   const fetchOrders = useCallback(() => {
     setCurrentPage(1);
     fetchPage(1);
-    fetchBatch();
-  }, [fetchPage, fetchBatch]);
+    fetchCounts();
+  }, [fetchPage, fetchCounts]);
 
   useEffect(() => {
     fetchPage(currentPage);
   }, [fetchPage, currentPage]);
 
   useEffect(() => {
-    fetchBatch();
-  }, [fetchBatch]);
+    fetchCounts();
+  }, [fetchCounts]);
 
   // Volver a la página 1 al cambiar el tamaño de página.
   useEffect(() => {
     setCurrentPage(1);
   }, [perPage]);
 
-  const filteredOrders = useMemo(
-    () => (statusFilter === "attended" ? allOrders.filter((o) => o.isAttended) : allOrders),
-    [allOrders, statusFilter]
-  );
+  const paginatedOrders = orders;
 
-  const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
-  const paginatedFiltered = filteredOrders.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  const paginatedOrders = isFiltering ? paginatedFiltered : pageOrders;
-  const totalPages = isFiltering ? filteredTotalPages : pageTotalPages;
-  const loading = isFiltering ? batchLoading : pageLoading;
-
-  const totalOrdersCount = isFiltering ? filteredOrders.length : pageTotalCount;
-  const totalSales = paginatedOrders.reduce((sum, o) => sum + o.totalPrice, 0);
-  const attendedOrders = paginatedOrders.filter((o) => o.isAttended).length;
-
+  // Los contadores salen del `count` del servidor, no de contar el lote: el
+  // backend recorta `perPage` y contar filas daba de menos.
   const statusTabs: TabItem[] = useMemo(
-    () => [
-      { value: "pending", label: "Por atender", count: allOrders.filter((o) => !o.isAttended).length },
-      { value: "attended", label: "Atendidas", count: allOrders.filter((o) => o.isAttended).length },
-      { value: "", label: "Todas", count: allOrders.length },
-    ],
-    [allOrders]
+    () =>
+      ATTENTION_STATUS_TABS.map((value) => ({
+        value,
+        label: ATTENTION_STATUS_LABELS[value],
+        count:
+          value === "Unattended"
+            ? counts?.pending
+            : value === "Attended"
+            ? counts?.attended
+            : counts?.total,
+      })),
+    [counts]
   );
 
   const handleStatusChange = (value: string) => {
-    setStatusFilter(value as StatusFilter);
+    setStatusFilter(value as AttentionStatus);
+    setCurrentPage(1);
+  };
+
+  const handleDateRangeChange = (range: DateRange) => {
+    setDateRange(range);
     setCurrentPage(1);
   };
 
@@ -114,65 +124,21 @@ export default function AdminOrdenesPage() {
     <div>
       <PageBreadcrumb pageTitle="Órdenes de Entrega" />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-500/10">
-            <svg className="h-6 w-6 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Total de Órdenes
-            </p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-white/90">
-              {loading ? "—" : totalOrdersCount}
-            </p>
-          </div>
-        </div>
+      {/* La bajada sube al encabezado de la página: dentro de la tarjeta obligaba
+          a repetir el título "Órdenes de Entrega" solo para poder mostrarla. */}
+      <p className="-mt-3 mb-6 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
+        Solo las órdenes cuyo departamento de origen coincide con el de tu sucursal.
+        Desde aquí se atienden convirtiéndolas en envío.
+      </p>
 
-        <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-success-50 dark:bg-success-500/10">
-            <svg className="h-6 w-6 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Total Ventas (Página actual)
-            </p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-white/90">
-              {loading ? "—" : `Bs ${totalSales.toFixed(2)}`}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-info-50 dark:bg-info-500/10">
-            <svg className="h-6 w-6 text-info-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Órdenes Atendidas (Página)
-            </p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-white/90">
-              {loading ? "—" : attendedOrders}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <ComponentCard
-        title="Órdenes de Entrega"
-        desc="Solo las órdenes cuyo departamento de origen coincide con el de tu sucursal. Desde aquí se atienden convirtiéndolas en envío."
-      >
-        <div className="mb-5">
+      <ComponentCard>
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <Tabs items={statusTabs} value={statusFilter} onChange={handleStatusChange} />
+          <ShipmentDateRangeFilter value={dateRange} onChange={handleDateRangeChange} />
         </div>
         <AdminOrderDeliveriesTable
           orders={paginatedOrders}
+          attentionStatus={statusFilter}
           loading={loading}
           totalPages={totalPages}
           currentPage={currentPage}

@@ -8,57 +8,71 @@ export function HeroSection() {
 
   const handleTrack = (e: React.FormEvent) => {
     e.preventDefault();
-    if (trackingNumber) {
+    if (trackingNumber.trim()) {
       alert(`Función de rastreo en desarrollo para: ${trackingNumber}`);
     }
   };
 
   return (
-    <section className="relative w-full min-h-[700px] h-[55vh] lg:h-[70vh] max-h-[900px] flex items-center justify-center overflow-visible">
-      {/* Background Image */}
-      <div className="absolute inset-0 z-0">
+    <section className="relative w-full overflow-hidden">
+      {/* La altura sigue al alto de ventana menos el header fijo (105px) y queda
+          acotada entre 520 y 720. Así el recorte vertical es suave y la barra de
+          navegación nunca corta el titular ni la cabeza del repartidor. */}
+      <div className="relative h-[calc(100svh_-_105px)] min-h-[520px] max-h-[720px] w-full">
         <Image
           src="/images/aircargo_hero_premium5.png"
-          alt="AirCargo Trabajador Logística"
+          alt="Repartidor de AirCargo Express con paquetes junto a la flota"
           fill
-          className="object-cover object-center"
+          sizes="100vw"
           priority
+          // En móvil encuadra al repartidor; en desktop deja aire arriba para
+          // que se lea el titular de la propia imagen.
+          className="object-cover object-[68%_30%] md:object-[center_20%]"
         />
-        {/* Un gradiente oscuro suave para que el texto resalte siempre */}
-        <div className="absolute inset-0 bg-black/40" />
-      </div>
 
-      {/* Rastreador Centrado */}
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 text-center transform -translate-y-12">
-        <h1 className="text-3xl md:text-5xl font-bold text-white mb-6 drop-shadow-md tracking-tight">
-          Rastree su Envío
-        </h1>
+        {/* Degradado sólo hacia abajo: arriba la foto queda limpia y abajo
+            gana contraste para el buscador. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#040F21]/85 via-[#040F21]/25 to-transparent" />
 
-        <div className="bg-white rounded-lg shadow-2xl p-2 md:p-3 max-w-3xl mx-auto flex flex-col md:flex-row gap-2">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Indica tu(s) número(s) de seguimiento"
-              value={trackingNumber}
-              onChange={(e) => setTrackingNumber(e.target.value)}
-              className="w-full px-4 py-4 md:py-5 text-gray-900 placeholder-gray-500 text-lg md:text-xl border border-transparent focus:border-transparent focus:ring-0 rounded-lg"
-            />
-            {trackingNumber && (
-              <button
-                type="button"
-                onClick={() => setTrackingNumber("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          <button
-            onClick={handleTrack}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 px-8 rounded text-lg transition-colors whitespace-nowrap"
+        {/* Buscador anclado a la franja inferior, fuera del rostro del repartidor
+            y por encima de las tarjetas flotantes. */}
+        <div className="absolute inset-x-0 bottom-0 z-10 pb-28 md:pb-36">
+          <form
+            onSubmit={handleTrack}
+            className="mx-auto w-full max-w-3xl px-4 text-center"
           >
-            Seguir envío
-          </button>
+            <h1 className="mb-4 text-3xl font-bold tracking-tight text-white drop-shadow-lg md:mb-5 md:text-5xl">
+              Rastree su envío
+            </h1>
+
+            <div className="flex flex-col gap-2 rounded-xl bg-white/95 p-2 shadow-2xl backdrop-blur-sm md:flex-row md:p-2.5">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Indica tu(s) número(s) de seguimiento"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  className="w-full rounded-lg border border-transparent px-4 py-3.5 text-base text-gray-900 placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-0 md:py-4 md:text-lg"
+                />
+                {trackingNumber && (
+                  <button
+                    type="button"
+                    onClick={() => setTrackingNumber("")}
+                    aria-label="Limpiar"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 transition-colors hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="whitespace-nowrap rounded-lg bg-brand-600 px-8 py-3.5 text-base font-bold text-white transition-colors hover:bg-brand-700 md:py-4 md:text-lg"
+              >
+                Seguir envío
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </section>

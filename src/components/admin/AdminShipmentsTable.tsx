@@ -21,6 +21,7 @@ import {
 } from "@/services/shipmentService";
 import ShipmentForm from "@/components/envios/ShipmentForm";
 import ShipmentStatusModal from "@/components/envios/ShipmentStatusModal";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 interface AdminShipmentsTableProps {
   shipments: ShipmentPaginatedItem[];
@@ -200,10 +201,10 @@ export default function AdminShipmentsTable({
                     </TableCell>
                     <TableCell className="px-5 py-4 text-theme-sm">
                       <p className="text-gray-700 dark:text-gray-300">
-                        {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
+                        {formatDate(shipment.createdAt)}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}
+                        {formatTime(shipment.createdAt)}
                       </p>
                     </TableCell>
 

@@ -11,6 +11,10 @@ import { TrashBinIcon } from "@/icons";
 import {
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
+  OrderDeliveryCounts,
+  AttentionStatus,
+  ATTENTION_STATUS_TABS,
+  ATTENTION_STATUS_LABELS,
 } from "@/services/orderDeliveryService";
 import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
 import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
@@ -26,7 +30,6 @@ const DEFAULT_PER_PAGE = 10;
 const STATUS_BATCH_SIZE = 500;
 
 type FormMode = "create" | "edit" | "view";
-type StatusFilter = "" | "pending" | "attended";
 
 export default function OrderDeliveriesTable() {
   const { showToast } = useToast();
@@ -41,9 +44,11 @@ export default function OrderDeliveriesTable() {
 
   const [allOrders, setAllOrders] = useState<OrderDeliveryPaginatedItem[]>([]);
   const [batchLoading, setBatchLoading] = useState(true);
+  // Totales reales del servidor. No se derivan del lote: ver `getCounts`.
+  const [counts, setCounts] = useState<OrderDeliveryCounts | null>(null);
 
   // ─── Filters & Pagination ────────────────────────────────────────────────
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [statusFilter, setStatusFilter] = useState<AttentionStatus>("Unattended");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<string>("");
 
@@ -58,7 +63,9 @@ export default function OrderDeliveriesTable() {
     setPageLoading(true);
     try {
       const res = await orderDeliveryService.getDeliveries(currentPage, perPage, {
-        unattended: statusFilter === "pending",
+        attentionStatus: statusFilter,
+        // El filtro de fecha es de un día puntual: se manda como rango cerrado.
+        ...(dateFilter ? { dateFrom: dateFilter, dateTo: dateFilter } : {}),
       });
       setPageOrders(res.data);
       setPageTotalPages(res.totalPages);
@@ -67,24 +74,39 @@ export default function OrderDeliveriesTable() {
     } finally {
       setPageLoading(false);
     }
-  }, [currentPage, perPage, statusFilter]);
+  }, [currentPage, perPage, statusFilter, dateFilter]);
 
+  // El lote solo hace falta para la búsqueda por texto, que no tiene filtro
+  // server-side. Estado y fecha ya los aplica el backend, así que se le mandan
+  // también acá para que el texto se busque sobre el conjunto correcto.
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
     try {
-      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE);
+      const res = await orderDeliveryService.getDeliveries(1, STATUS_BATCH_SIZE, {
+        attentionStatus: statusFilter,
+        ...(dateFilter ? { dateFrom: dateFilter, dateTo: dateFilter } : {}),
+      });
       setAllOrders(res.data);
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
       setBatchLoading(false);
     }
+  }, [statusFilter, dateFilter]);
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      setCounts(await orderDeliveryService.getCounts());
+    } catch (err) {
+      console.error("Error fetching order counts", err);
+    }
   }, []);
 
   const fetchAll = useCallback(() => {
     fetchPage();
     fetchBatch();
-  }, [fetchPage, fetchBatch]);
+    fetchCounts();
+  }, [fetchPage, fetchBatch, fetchCounts]);
 
   useEffect(() => {
     fetchPage();
@@ -94,47 +116,36 @@ export default function OrderDeliveriesTable() {
     fetchBatch();
   }, [fetchBatch]);
 
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
+
   // Volver a la página 1 al cambiar filtros o paginación
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, searchTerm, dateFilter, perPage]);
 
   // ─── Client-side Filtering ───────────────────────────────────────────────
-  
-  // Is filtering active if searching by text, date, or looking at "attended" explicitly
-  const isFiltering = Boolean(searchTerm.trim()) || Boolean(dateFilter) || statusFilter === "attended" || statusFilter === "";
 
+  // Solo la búsqueda por texto: estado y fecha los resuelve el backend, y el
+  // lote ya viene filtrado por los dos.
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return allOrders.filter((o) => {
-      // 1. Status Filter
-      if (statusFilter === "pending" && o.isAttended) return false;
-      if (statusFilter === "attended" && !o.isAttended) return false;
-
-      // 2. Search Term Filter
-      const matchesSearch =
-        !term ||
+    if (!term) return allOrders;
+    return allOrders.filter(
+      (o) =>
         o.clientFullName.toLowerCase().includes(term) ||
         (o.supplierName && o.supplierName.toLowerCase().includes(term)) ||
-        o.destinationDepartment.toLowerCase().includes(term);
-
-      // 3. Date Filter
-      let matchesDate = true;
-      if (dateFilter) {
-        const orderDate = new Date(o.createdAt).toISOString().split('T')[0];
-        matchesDate = orderDate === dateFilter;
-      }
-
-      return matchesSearch && matchesDate;
-    });
-  }, [allOrders, statusFilter, searchTerm, dateFilter]);
+        o.destinationDepartment.toLowerCase().includes(term)
+    );
+  }, [allOrders, searchTerm]);
 
   const filteredTotalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
   const paginatedFiltered = filteredOrders.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  // Si no hay búsqueda de texto ni fecha, y estamos en "pending", usamos pageOrders (server paginated).
-  // Sino, usamos filteredOrders (client paginated).
-  const isServerPaging = statusFilter === "pending" && !searchTerm && !dateFilter;
+  // El backend no tiene búsqueda por texto: ese es el único caso que sigue
+  // paginándose en cliente sobre el lote.
+  const isServerPaging = !searchTerm;
   const paginated = isServerPaging ? pageOrders : paginatedFiltered;
   const totalPages = isServerPaging ? pageTotalPages : filteredTotalPages;
   const loading = isServerPaging ? pageLoading : batchLoading;
@@ -147,17 +158,25 @@ export default function OrderDeliveriesTable() {
 
   // ─── Summary Computations ───────────────────────────────────────────────
   
-  const ordenesPendientes = allOrders.filter(o => !o.isAttended).length;
-  const ordenesAtendidas = allOrders.filter(o => o.isAttended).length;
+  // Totales del `count` del servidor. Contar `allOrders` daba de menos: el
+  // backend recorta `perPage`, así que el lote no cubre la tabla entera.
+  const ordenesPendientes = counts?.pending ?? 0;
+  const ordenesAtendidas = counts?.attended ?? 0;
   const volumenTotal = filteredOrders.reduce((sum, o) => sum + o.totalPrice, 0);
 
   const statusTabs: TabItem[] = useMemo(
-    () => [
-      { value: "pending", label: "Por atender", count: ordenesPendientes },
-      { value: "attended", label: "Atendidas", count: ordenesAtendidas },
-      { value: "", label: "Todas", count: allOrders.length },
-    ],
-    [ordenesPendientes, ordenesAtendidas, allOrders.length]
+    () =>
+      ATTENTION_STATUS_TABS.map((value) => ({
+        value,
+        label: ATTENTION_STATUS_LABELS[value],
+        count:
+          value === "Unattended"
+            ? counts?.pending
+            : value === "Attended"
+            ? counts?.attended
+            : counts?.total,
+      })),
+    [counts]
   );
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -190,7 +209,11 @@ export default function OrderDeliveriesTable() {
       }
     });
 
-  const selectedOrderBasic = allOrders.find(o => o.id === selectedId);
+  // Se busca primero en lo que está en pantalla: solo se puede seleccionar una
+  // fila visible, y con paginación server-side esa fila puede no estar en el
+  // lote (que solo cubre la primera página grande).
+  const selectedOrderBasic =
+    paginated.find(o => o.id === selectedId) ?? allOrders.find(o => o.id === selectedId);
 
   return (
     <div className="space-y-6">
@@ -198,13 +221,13 @@ export default function OrderDeliveriesTable() {
         ordenesPendientes={ordenesPendientes}
         ordenesAtendidas={ordenesAtendidas}
         volumenTotal={volumenTotal}
-        loading={batchLoading}
+        loading={counts === null || batchLoading}
       />
 
       <OrdenesToolbar
         statusTabs={statusTabs}
         statusFilter={statusFilter}
-        onStatusChange={(val) => setStatusFilter(val as StatusFilter)}
+        onStatusChange={(val) => setStatusFilter(val as AttentionStatus)}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         dateFilter={dateFilter}
@@ -215,6 +238,7 @@ export default function OrderDeliveriesTable() {
 
       <OrdenesList
         orders={paginated}
+        attentionStatus={statusFilter}
         loading={loading}
         currentPage={currentPage}
         totalPages={totalPages}

@@ -22,6 +22,7 @@ import ArticleReceiptForm from "./ArticleReceiptForm";
 import RecepcionesSummary from "./RecepcionesSummary";
 import RecepcionesToolbar from "./RecepcionesToolbar";
 import RecepcionesList from "./RecepcionesList";
+import { toApiDay } from "@/utils/datetime";
 
 const DEFAULT_PER_PAGE = 10;
 const SEARCH_BATCH_SIZE = 500; // Un lote grande para filtrar en cliente
@@ -143,8 +144,8 @@ export default function ArticleReceiptsTable() {
       // Date Filter
       let matchesDate = true;
       if (dateFilter) {
-        // La fecha viene en YYYY-MM-DD
-        const receiptDate = new Date(r.createdAt).toISOString().split('T')[0];
+        // El filtro es un día del calendario boliviano, igual que en la API.
+        const receiptDate = toApiDay(r.createdAt);
         matchesDate = receiptDate === dateFilter;
       }
 

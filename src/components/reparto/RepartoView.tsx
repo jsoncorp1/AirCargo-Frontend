@@ -30,6 +30,7 @@ import {
   getAssignmentErrorMessage,
 } from "@/services/shipmentAssignmentService";
 import AssignShipmentsModal from "./AssignShipmentsModal";
+import { formatDateTime } from "@/utils/datetime";
 
 const DEFAULT_PER_PAGE = 10;
 
@@ -392,7 +393,7 @@ export default function RepartoView() {
                             </Badge>
                           </TableCell>
                           <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
-                            {new Date(assignment.assignedAt).toLocaleString("es-BO")}
+                            {formatDateTime(assignment.assignedAt)}
                           </TableCell>
                           <TableCell className="px-5 py-3 text-right">
                             {/* Solo antes del recojo: una vez que el conductor

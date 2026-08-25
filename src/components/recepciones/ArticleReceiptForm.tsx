@@ -11,6 +11,7 @@ import {
   CreateArticleReceiptRequest,
   UpdateArticleReceiptRequest,
 } from "@/services/articleReceiptService";
+import { formatDateTimeLong } from "@/utils/datetime";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,10 +168,7 @@ export default function ArticleReceiptForm({
           <div>
             <Label>Fecha de Recepción</Label>
             <Input
-              value={new Date(initialData.createdAt).toLocaleString("es-BO", {
-                dateStyle: "long",
-                timeStyle: "short",
-              })}
+              value={formatDateTimeLong(initialData.createdAt)}
               disabled
             />
           </div>

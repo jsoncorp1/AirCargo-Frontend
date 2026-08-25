@@ -20,6 +20,7 @@ import { Eye } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import ShipmentForm from "@/components/envios/ShipmentForm";
+import { formatDate } from "@/utils/datetime";
 
 export default function EnviosRecientes() {
   const [envios, setEnvios] = useState<ShipmentPaginatedItem[]>([]);
@@ -102,7 +103,7 @@ export default function EnviosRecientes() {
                       {envio.clientFullName}
                     </p>
                     <span className="text-gray-500 text-theme-xs dark:text-gray-400">
-                      {new Date(envio.createdAt).toLocaleDateString()}
+                      {formatDate(envio.createdAt)}
                     </span>
                   </TableCell>
                   <TableCell className="py-3 text-gray-600 font-medium text-theme-sm dark:text-gray-300">

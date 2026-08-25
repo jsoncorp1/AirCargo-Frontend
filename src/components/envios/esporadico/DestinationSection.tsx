@@ -51,6 +51,20 @@ export default function DestinationSection({
   departamentos,
   tiposEntrega,
 }: DestinationSectionProps) {
+  // El backend valida que la sucursal pertenezca al departamento declarado
+  // (`sporadicshipment.destinationbranch.mismatch`), así que el selector solo
+  // puede ofrecer las de ese departamento. Antes listaba toda la red y se
+  // podían armar combinaciones que el backend ahora rechaza.
+  const branchesInDepartment = branchOffices.filter(
+    (b) => b.bolivianDepartment === destinationDepartment
+  );
+
+  const handleDepartmentChange = (value: string) => {
+    setDestinationDepartment(value);
+    // La sucursal elegida deja de ser válida al cambiar de departamento.
+    setDestinationBranchOfficeId("");
+  };
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
       <div className="mb-5 flex items-center gap-3">
@@ -88,7 +102,7 @@ export default function DestinationSection({
           <select
             className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
             value={destinationDepartment}
-            onChange={(e) => setDestinationDepartment(e.target.value)}
+            onChange={(e) => handleDepartmentChange(e.target.value)}
             required
           >
             {departamentos.map((dep) => (
@@ -106,14 +120,20 @@ export default function DestinationSection({
             value={destinationBranchOfficeId}
             onChange={(e) => setDestinationBranchOfficeId(e.target.value)}
             required
+            disabled={branchesInDepartment.length === 0}
           >
             <option value="" disabled>Seleccione la sucursal</option>
-            {branchOffices.map((b) => (
+            {branchesInDepartment.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.code} — {b.city}
               </option>
             ))}
           </select>
+          {branchesInDepartment.length === 0 && (
+            <p className="mt-1.5 text-xs text-error-500">
+              No hay sucursales en este departamento.
+            </p>
+          )}
         </div>
 
         <div>

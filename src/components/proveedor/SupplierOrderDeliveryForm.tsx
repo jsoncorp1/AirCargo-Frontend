@@ -16,12 +16,15 @@ import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 import { articleService, Article } from "@/services/articleService";
+import { BolivianDepartment } from "@/services/supplierService";
+import { useDestinationBranchOffices } from "@/hooks/useDestinationBranchOffices";
 import {
   orderDeliveryService,
   CreateOrderDeliveryRequest,
 } from "@/services/orderDeliveryService";
 import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
 import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
+import { formatDateTimeLong } from "@/utils/datetime";
 
 // unitPrice is kept as a raw string while editing so the user can type
 // decimals (e.g. "42.") without React snapping it back to 0 mid-keystroke —
@@ -54,15 +57,17 @@ const TIPOS_ENTREGA = [
 ];
 
 interface SupplierOrderDeliveryFormProps {
-  mode: "create" | "edit" | "view";
+  mode: "create" | "edit";
   orderId?: string | null;
   onClose: () => void;
   onSaved: () => void;
+  // "modal" recorta el alto y hace scroll interno; "page" deja que scrollee la
+  // página, que es lo que se quiere cuando el formulario tiene ruta propia.
+  layout?: "modal" | "page";
 }
 
-export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSaved }: SupplierOrderDeliveryFormProps) {
+export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSaved, layout = "modal" }: SupplierOrderDeliveryFormProps) {
   const { showToast } = useToast();
-  const readOnly = mode === "view";
 
   const [loading, setLoading] = useState(mode !== "create");
   // Cerrojo: bloquea guardar/cancelar mientras la petición está en curso (y
@@ -71,10 +76,22 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
 
   const [articles, setArticles] = useState<Article[]>([]);
 
+  const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
+  // La sucursal que traía la orden al abrirla. Se guarda aparte para poder
+  // mostrarla aunque haya sido dada de baja y ya no venga en el listado.
+  const [loadedBranch, setLoadedBranch] = useState<{
+    id: string;
+    code: string | null;
+    city: string | null;
+  } | null>(null);
+
   const [department, setDepartment] = useState<number>(0);
   const [clientFullName, setClientFullName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  // Quién registró la orden y cuándo. Se muestra al pie del detalle.
+  const [createdByEmail, setCreatedByEmail] = useState("");
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [deliveryType, setDeliveryType] = useState<number>(0);
   const [isExpress, setIsExpress] = useState(false);
   const [lines, setLines] = useState<LineFormState[]>([]);
@@ -102,7 +119,21 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
     if (!orderId) return;
     try {
       const order = await orderDeliveryService.getDeliveryById(orderId);
+      setCreatedByEmail(order.createdBy);
+      setCreatedAt(order.createdAt);
       setDepartment(DEPARTAMENTOS.findIndex((d) => d.value === order.destinationDepartment));
+      // Se precarga y se vuelve a mandar en el PUT: omitirla borra la sucursal
+      // que declaró quien creó la orden.
+      setDestinationBranchOfficeId(order.destinationBranchOfficeId ?? "");
+      setLoadedBranch(
+        order.destinationBranchOfficeId
+          ? {
+              id: order.destinationBranchOfficeId,
+              code: order.destinationBranchOfficeCode,
+              city: order.destinationBranchOfficeCity,
+            }
+          : null
+      );
       setClientFullName(order.clientFullName);
       setClientPhone(order.clientPhone);
       setClientAddress(order.clientAddress);
@@ -137,6 +168,30 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
       }
     });
   }, [fetchDependencies, loadOrder, mode]);
+
+  // Segundo nivel de la cascada. El reset va en el handler y no en un efecto:
+  // un efecto sobre `department` también dispararía al cargar una orden para
+  // editar, borrando la sucursal que acabamos de precargar.
+  const selectedDepartment = DEPARTAMENTOS[department]?.value as
+    | BolivianDepartment
+    | undefined;
+  const {
+    branches: branchesInDepartment,
+    loading: loadingBranches,
+    unavailable: branchesUnavailable,
+  } = useDestinationBranchOffices(selectedDepartment);
+
+  const handleDepartmentChange = (value: number) => {
+    setDepartment(value);
+    setDestinationBranchOfficeId("");
+  };
+
+  // Si la sucursal guardada ya no está en el listado (la dieron de baja después
+  // de crear la orden), se muestra igual para que se vea qué decía la orden.
+  const missingLoadedBranch =
+    loadedBranch && !branchesInDepartment.some((b) => b.id === loadedBranch.id)
+      ? loadedBranch
+      : null;
 
   // Solo se pueden agregar artículos con stock disponible; los que ya están
   // en una línea existente (ej. al editar) se siguen mostrando aunque su
@@ -194,9 +249,14 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
           unitPrice: Number(l.unitPrice) || 0,
         }));
 
+        // null y no "" cuando no se eligió sucursal: el campo es opcional y el
+        // backend espera ausencia, no un id vacío.
+        const branchOfficeId = destinationBranchOfficeId || null;
+
         if (mode === "create") {
           const payload: CreateOrderDeliveryRequest = {
             destinationDepartment: department,
+            destinationBranchOfficeId: branchOfficeId,
             clientFullName,
             clientPhone,
             clientAddress,
@@ -214,6 +274,7 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
           await withConcurrencyRetry(() =>
             orderDeliveryService.updateDelivery(orderId, {
               destinationDepartment: department,
+              destinationBranchOfficeId: branchOfficeId,
               clientFullName,
               clientPhone,
               clientAddress,
@@ -242,18 +303,28 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
     return <div className="p-10 text-center text-gray-500">Cargando datos de la orden...</div>;
   }
 
+  const asPage = layout === "page";
+
   return (
-    <div className="flex flex-col max-h-[85vh]">
+    <div
+      className={`flex flex-col ${
+        asPage
+          ? "rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+          : "max-h-[85vh]"
+      }`}
+    >
       <div className="border-b border-gray-100 px-6 py-5 dark:border-gray-800 shrink-0">
         <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          {mode === "create" ? "Nueva Orden de Entrega" : mode === "edit" ? "Editar Orden" : "Detalle de Orden"}
+          {mode === "create" ? "Nueva Orden de Entrega" : "Editar Orden"}
         </h4>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {mode === "create" ? "Crea una nueva orden de entrega y agrega los artículos correspondientes." : "Información de la orden de entrega."}
+          {mode === "create"
+            ? "Crea una nueva orden de entrega y agrega los artículos correspondientes."
+            : "Modificá los datos de la orden. Los cambios ajustan el stock de los artículos."}
         </p>
       </div>
 
-      <div className="overflow-y-auto px-6 py-5 custom-scrollbar">
+      <div className={`px-6 py-5 ${asPage ? "" : "overflow-y-auto custom-scrollbar"}`}>
         <form id="supplier-order-form" onSubmit={handleSubmit} className="space-y-6">
 
           {/* Section: Origen / Emisor (informativo, lo calcula el backend) */}
@@ -288,12 +359,14 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
           <div>
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Datos del Cliente y Destino</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div className="sm:col-span-2">
+              {/* Nombre y teléfono comparten fila para que Departamento y
+                  Sucursal queden uno al lado del otro: la cascada se lee mal
+                  si el segundo paso cae en la fila siguiente. */}
+              <div>
                 <Label required>Nombre del Cliente</Label>
                 <Input
                   value={clientFullName}
                   onChange={(e) => setClientFullName(e.target.value)}
-                  disabled={readOnly}
                   required
                   placeholder="Ej. Juan Pérez"
                 />
@@ -304,7 +377,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                 <Input
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
-                  disabled={readOnly}
                   required
                   placeholder="Ej. +591 7XXXXXXX"
                 />
@@ -315,8 +387,7 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                   value={department}
-                  onChange={(e) => setDepartment(Number(e.target.value))}
-                  disabled={readOnly}
+                  onChange={(e) => handleDepartmentChange(Number(e.target.value))}
                   required
                 >
                   {DEPARTAMENTOS.map((dep, idx) => (
@@ -325,12 +396,58 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                 </select>
               </div>
 
+              {/* Segundo paso de la cascada. Es opcional: si el departamento no
+                  tiene sucursales, la orden se crea igual y el admin elige al
+                  despachar. */}
+              <div>
+                <Label>Sucursal de Destino</Label>
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
+                  value={destinationBranchOfficeId}
+                  onChange={(e) => setDestinationBranchOfficeId(e.target.value)}
+                  disabled={
+
+                    loadingBranches ||
+                    (branchesInDepartment.length === 0 && !missingLoadedBranch)
+                  }
+                >
+                  <option value="">
+                    {loadingBranches
+                      ? "Cargando sucursales…"
+                      : branchesInDepartment.length === 0
+                      ? "Sin sucursales en este departamento"
+                      : "Seleccioná una sucursal"}
+                  </option>
+                  {missingLoadedBranch && (
+                    <option value={missingLoadedBranch.id}>
+                      {missingLoadedBranch.city ?? "Sucursal"}
+                      {missingLoadedBranch.code ? ` — ${missingLoadedBranch.code}` : ""}
+                      {" (dada de baja)"}
+                    </option>
+                  )}
+                  {branchesInDepartment.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.city}
+                      {branch.code ? ` — ${branch.code}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  {branchesUnavailable
+                    ? "No se pudieron cargar las sucursales."
+                    : missingLoadedBranch
+                    ? "La sucursal declarada ya no está activa: elegí otra para poder guardar."
+                    : branchesInDepartment.length === 0
+                    ? "La entrega se coordina desde la sucursal más cercana."
+                    : "Sucursal donde se recibe el paquete en destino."}
+                </p>
+              </div>
+
               <div className="sm:col-span-2">
                 <Label required>Dirección Exacta</Label>
                 <Input
                   value={clientAddress}
                   onChange={(e) => setClientAddress(e.target.value)}
-                  disabled={readOnly}
                   required
                   placeholder="Ej. Av. Principal #123, Zona Sur"
                 />
@@ -349,7 +466,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                   value={deliveryType}
                   onChange={(e) => setDeliveryType(Number(e.target.value))}
-                  disabled={readOnly}
                   required
                 >
                   {TIPOS_ENTREGA.map((tipo, idx) => (
@@ -364,7 +480,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                   label="Envío Expreso"
                   checked={isExpress}
                   onChange={setIsExpress}
-                  disabled={readOnly}
                 />
               </div>
             </div>
@@ -375,19 +490,17 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
           <div>
             <div className="flex items-center justify-between mb-4">
               <h5 className="text-sm font-semibold text-brand-500 uppercase tracking-wider">Artículos a Enviar</h5>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={handleAddLine}
-                  disabled={availableArticles.length === 0}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <PlusIcon className="size-4" /> Agregar Artículo
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleAddLine}
+                disabled={availableArticles.length === 0}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusIcon className="size-4" /> Agregar Artículo
+              </button>
             </div>
 
-            {!readOnly && availableArticles.length === 0 && (
+            {availableArticles.length === 0 && (
               <p className="mb-3 text-xs text-warning-600 dark:text-warning-400">
                 No hay artículos con stock disponible.
               </p>
@@ -396,7 +509,7 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
             {lines.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center dark:border-gray-700">
                 <p className="text-sm text-gray-500 dark:text-gray-400">No hay artículos en la orden.</p>
-                {!readOnly && availableArticles.length > 0 && (
+                {availableArticles.length > 0 && (
                   <button type="button" onClick={handleAddLine} className="mt-2 text-xs font-medium text-brand-600 hover:underline">
                     Agregar el primer artículo
                   </button>
@@ -420,7 +533,7 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                         <TableCell isHeader className="w-28 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                           Total
                         </TableCell>
-                        {!readOnly && <TableCell isHeader className="w-11 px-3 py-2">{null}</TableCell>}
+                        <TableCell isHeader className="w-11 px-3 py-2">{null}</TableCell>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -431,7 +544,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                               className="h-9 w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                               value={line.articleId}
                               onChange={(e) => handleLineChange(idx, "articleId", e.target.value)}
-                              disabled={readOnly}
                               required
                             >
                               <option value="" disabled>Seleccione artículo</option>
@@ -449,7 +561,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                               min="1"
                               value={line.quantity}
                               onChange={(e) => handleLineChange(idx, "quantity", parseInt(e.target.value) || 1)}
-                              disabled={readOnly}
                               required
                               placeholder="Cant."
                               className="!h-9"
@@ -462,7 +573,6 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                               inputMode="decimal"
                               value={line.unitPrice}
                               onChange={(e) => handlePriceChange(idx, e.target.value)}
-                              disabled={readOnly}
                               required
                               placeholder="Precio"
                               className="!h-9"
@@ -473,17 +583,15 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                             Bs {lineTotal(line).toFixed(2)}
                           </TableCell>
 
-                          {!readOnly && (
-                            <TableCell className="px-3 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveLine(idx)}
-                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-error-50 hover:text-error-600 transition-colors dark:hover:bg-error-500/10 dark:hover:text-error-400"
-                              >
-                                <TrashBinIcon className="size-4" />
-                              </button>
-                            </TableCell>
-                          )}
+                          <TableCell className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLine(idx)}
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-error-50 hover:text-error-600 transition-colors dark:hover:bg-error-500/10 dark:hover:text-error-400"
+                            >
+                              <TrashBinIcon className="size-4" />
+                            </button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -504,22 +612,47 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                 </div>
               </div>
             )}
+
+            {/* Trazabilidad: quién registró la orden y cuándo. Va al pie porque
+                es dato de auditoría, no un campo que se edite. */}
+            {mode !== "create" && createdByEmail && (
+              <div className="mt-6 border-t border-gray-100 pt-4 dark:border-gray-800">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Orden creada por{" "}
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {createdByEmail}
+                  </span>
+                  {createdAt && (
+                    <>
+                      {" "}el{" "}
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">
+                        {formatDateTimeLong(createdAt)}
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </form>
       </div>
 
-      <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0">
+      {/* En página el pie queda pegado abajo: el formulario es largo y no
+          conviene obligar a scrollear hasta el fondo para guardar. */}
+      <div
+        className={`flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800 shrink-0 ${
+          asPage ? "sticky bottom-0 rounded-b-2xl bg-inherit" : ""
+        }`}
+      >
         <Button variant="outline" onClick={onClose} disabled={submitting}>
-          {readOnly ? "Cerrar" : "Cancelar"}
+          Cancelar
         </Button>
-        {!readOnly && (
-          <Button onClick={() => {
-            const form = document.getElementById("supplier-order-form") as HTMLFormElement | null;
-            if (form) form.requestSubmit();
-          }} disabled={submitting}>
-            {submitting ? "Guardando..." : mode === "create" ? "Crear Orden" : "Guardar Cambios"}
-          </Button>
-        )}
+        <Button onClick={() => {
+          const form = document.getElementById("supplier-order-form") as HTMLFormElement | null;
+          if (form) form.requestSubmit();
+        }} disabled={submitting}>
+          {submitting ? "Guardando..." : mode === "create" ? "Crear Orden" : "Guardar Cambios"}
+        </Button>
       </div>
     </div>
   );

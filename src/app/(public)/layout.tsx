@@ -23,8 +23,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   return (
     <div className={`min-h-screen bg-gray-50 text-gray-900 ${roboto.className} selection:bg-[#040F21] selection:text-white flex flex-col`}>
       <Navbar />
-      {/* pt-[104px] accounts for 56px Top Bar + 48px Sub Nav Bar. pb-20 accounts for bottom action bar when visible */}
-      <main className={`flex-1 pt-[104px] ${showBottomBar ? 'pb-20' : ''}`}>
+      {/* pt-[105px] = 56px Top Bar + 48px Sub Nav Bar + 1px del borde inferior. pb-20 reserva la barra de acciones inferior cuando se muestra. */}
+      <main className={`flex-1 pt-[105px] ${showBottomBar ? 'pb-20' : ''}`}>
         {children}
       </main>
       <Footer showBottomPadding={showBottomBar} />

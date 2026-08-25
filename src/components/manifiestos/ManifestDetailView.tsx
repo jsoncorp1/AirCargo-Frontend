@@ -12,7 +12,7 @@ import { useModal } from "@/hooks/useModal";
 import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useAuth } from "@/context/AuthContext";
-import { PlusIcon, TrashBinIcon } from "@/icons";
+import { PlusIcon, TrashBinIcon, EyeIcon } from "@/icons";
 import {
   manifestService,
   ManifestDetail,
@@ -23,8 +23,10 @@ import {
   getManifestErrorMessage,
 } from "@/services/manifestService";
 import { shipmentStatusLabel, shipmentStatusBadge } from "@/services/shipmentService";
+import ShipmentForm from "@/components/envios/ShipmentForm";
 import AddShipmentsModal from "./AddShipmentsModal";
 import ManifestStatusModal from "./ManifestStatusModal";
+import { formatDateTime } from "@/utils/datetime";
 
 interface ManifestDetailViewProps {
   manifestId: string;
@@ -46,6 +48,14 @@ export default function ManifestDetailView({ manifestId, basePath }: ManifestDet
   const { isSuperAdminUser, branchOfficeId } = useAuth();
   const addModal = useModal();
   const statusModal = useModal();
+  const viewModal = useModal();
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+
+  const openView = useCallback((id: string) => {
+    setSelectedShipmentId(id);
+    viewModal.openModal();
+  }, [viewModal]);
+
   const { pending: removing, run: runRemove } = useSubmitLock();
   const { pending: deleting, run: runDelete } = useSubmitLock();
 
@@ -149,12 +159,12 @@ export default function ManifestDetailView({ manifestId, basePath }: ManifestDet
               {manifest.originBranchOfficeCode} &rarr; {manifest.destinationBranchOfficeCode}
             </p>
             <div className="mt-2 space-y-0.5 text-xs text-gray-500">
-              <p>Creado el {new Date(manifest.createdAt).toLocaleString("es-BO")}</p>
+              <p>Creado el {formatDateTime(manifest.createdAt)}</p>
               {manifest.departureAt && (
-                <p>Despachado el {new Date(manifest.departureAt).toLocaleString("es-BO")}</p>
+                <p>Despachado el {formatDateTime(manifest.departureAt)}</p>
               )}
               {manifest.receivedAt && (
-                <p>Recibido el {new Date(manifest.receivedAt).toLocaleString("es-BO")}</p>
+                <p>Recibido el {formatDateTime(manifest.receivedAt)}</p>
               )}
               {manifest.transportReference && <p>Transporte: {manifest.transportReference}</p>}
             </div>
@@ -252,17 +262,27 @@ export default function ManifestDetailView({ manifestId, basePath }: ManifestDet
                         </Badge>
                       </TableCell>
                       <TableCell className="px-5 py-3 text-right">
-                        {editable && (
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            disabled={removing}
-                            onClick={() => handleRemoveShipment(shipment.id, shipment.code)}
-                            title="Quitar del manifiesto"
-                            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 dark:hover:bg-error-500/10"
+                            onClick={() => openView(shipment.id)}
+                            title="Ver detalle"
+                            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300"
                           >
-                            <TrashBinIcon className="size-4" />
+                            <EyeIcon className="size-4" />
                           </button>
-                        )}
+                          {editable && (
+                            <button
+                              type="button"
+                              disabled={removing}
+                              onClick={() => handleRemoveShipment(shipment.id, shipment.code)}
+                              title="Quitar del manifiesto"
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 dark:hover:bg-error-500/10"
+                            >
+                              <TrashBinIcon className="size-4" />
+                            </button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -289,6 +309,22 @@ export default function ManifestDetailView({ manifestId, basePath }: ManifestDet
             manifest={manifest}
             onClose={statusModal.closeModal}
             onSaved={fetchManifest}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={viewModal.isOpen}
+        onClose={viewModal.closeModal}
+        className="max-w-[700px] m-4 z-50"
+      >
+        {viewModal.isOpen && (
+          <ShipmentForm
+            key={selectedShipmentId ?? "view"}
+            mode="view"
+            shipmentId={selectedShipmentId}
+            onClose={viewModal.closeModal}
+            onSaved={() => {}}
           />
         )}
       </Modal>

@@ -15,6 +15,10 @@ export const CONCURRENCY_CONFLICT_MESSAGE =
   'Otra operación modificó el stock de un artículo mientras se guardaba esta. ' +
   'No se guardó ningún cambio; vuelve a intentarlo.';
 
+// 429: el formulario público de contacto está limitado por IP (10 requests cada
+// 10 minutos, contando también los rechazados por validación).
+export const RATE_LIMIT_ERROR_KEY = 'lead.ratelimit.exceeded';
+
 export const API_ERROR_MESSAGES: Record<string, string> = {
   // Conflicto de concurrencia sobre el stock (409).
   [CONCURRENCY_CONFLICT_ERROR_KEY]: CONCURRENCY_CONFLICT_MESSAGE,
@@ -23,6 +27,13 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'article.access.forbidden': 'El artículo no pertenece a tu proveedor.',
   'articlereceipt.access.forbidden': 'La recepción no pertenece a tu proveedor.',
   'orderdelivery.access.forbidden': 'La orden de entrega no pertenece a tu proveedor.',
+  // Editar y eliminar quedan reservados a quien creó la orden, aunque otro
+  // usuario del mismo proveedor la vea en su listado. Cubre la carrera: dos
+  // pestañas abiertas, o el listado sin refrescar desde antes de la regla.
+  'orderdelivery.edit.notowner':
+    'Solo quien creó esta orden puede modificarla.',
+  'orderdelivery.delete.notowner':
+    'Solo quien creó esta orden puede eliminarla.',
   // Para el conductor esto significa además "el envío no está asignado a vos":
   // desde el reparto por asignaciones, el conductor solo ve lo que le tocó.
   'shipment.access.forbidden':
@@ -57,6 +68,20 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'sporadicshipment.originbranch.missing':
     'Tu rol no puede atender mostrador, por lo que no se puede determinar el origen del envío.',
 
+  // Sucursal de DESTINO. Va en la orden como indicación de quien la creó, y el
+  // backend valida que sea coherente con el departamento declarado en vez de
+  // corregir uno de los dos en silencio.
+  'branchoffice.department.invalid':
+    'El departamento indicado para filtrar sucursales no es válido.',
+  'orderdelivery.destinationbranch.notfound':
+    'La sucursal de destino indicada no existe o fue dada de baja.',
+  'orderdelivery.destinationbranch.mismatch':
+    'La sucursal de destino no pertenece al departamento de destino de la orden.',
+  'sporadicshipment.destinationbranch.notfound':
+    'La sucursal de destino indicada no existe o fue dada de baja.',
+  'sporadicshipment.destinationbranch.mismatch':
+    'La sucursal de destino no pertenece al departamento de destino del envío.',
+
   // Coherencia rol ↔ proveedor/sucursal al crear/editar usuarios.
   'user.scope.notallowed': 'El rol superadmin no puede tener proveedor ni sucursal asignada.',
   'user.role.scopeundefined':
@@ -75,6 +100,8 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'shipment.alreadyattended': 'Este envío ya fue atendido.',
   'shipment.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
   'orderdelivery.alreadyattended': 'Esta orden de entrega ya fue atendida.',
+  'orderdelivery.daterange.invalid':
+    'La fecha "desde" no puede ser mayor que la fecha "hasta".',
   'orderdelivery.stock.insufficient':
     'No hay stock suficiente para uno de los artículos. El stock sube con las recepciones.',
 
@@ -134,7 +161,50 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     'Solo se puede observar un envío que ya está en la calle. Marca primero el recojo.',
   'assignment.photos.required':
     'Para registrar la entrega debes adjuntar al menos una foto.',
+  // Las fotos las sube el backend al servicio de imágenes. En estos errores el
+  // `detail` trae el dato concreto (qué archivo, cuántas fotos van); estos
+  // mensajes son el respaldo genérico. Ver `getPhotoErrorMessage`.
+  'assignment.photos.toomany': 'Un reparto admite hasta 3 fotos.',
+  'assignment.photos.invalidtype': 'Solo se aceptan fotos JPG, PNG o WEBP.',
+  'assignment.photos.empty': 'Una de las fotos llegó vacía. Vuelve a sacarla.',
+  'assignment.photos.toolarge':
+    'Alguna foto pesa más de 10 MB. Comprímela antes de subirla.',
+  'assignment.photos.closed':
+    'Este reparto ya está cerrado: no admite más fotos.',
+  'image.upload.failed':
+    'No se pudo subir la foto al servidor de imágenes. Vuelve a intentarlo.',
   'assignment.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+
+  // ─── Clientes potenciales (leads) ──────────────────────────────────────────
+  // El formulario de contacto es público, así que los mensajes de validación
+  // los puede llegar a leer un visitante: van sin jerga interna.
+  'lead.notfound': 'El cliente potencial no existe.',
+  'lead.access.forbidden': 'Este cliente potencial es de otro departamento.',
+  'lead.companyname.required': 'Falta el nombre de la compañía.',
+  'lead.companyaddress.required': 'Falta la dirección de la compañía.',
+  'lead.city.required': 'Falta la ciudad.',
+  'lead.city.invalid': 'La ciudad indicada no es válida.',
+  'lead.contactfullname.required': 'Falta el nombre de la persona de contacto.',
+  'lead.contactemail.required': 'Falta el correo electrónico.',
+  'lead.contactemail.invalid': 'El correo electrónico no tiene un formato válido.',
+  'lead.contactphone.required': 'Falta el teléfono.',
+  'lead.comments.toolong': 'Los comentarios superan los 200 caracteres.',
+  'lead.statuschange.invalidtransition':
+    'Ese cambio de estado no está permitido. Un cliente potencial cerrado no se reabre.',
+  'lead.status.required': 'Debes indicar el nuevo estado.',
+  'lead.status.invalid': 'El estado indicado no es válido.',
+  'lead.internalnote.toolong': 'La nota interna supera los 500 caracteres.',
+  'lead.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+  // 429, no 400: el backend devuelve Too Many Requests con `Retry-After`.
+  [RATE_LIMIT_ERROR_KEY]:
+    'Recibimos demasiadas solicitudes desde tu conexión. Espera unos minutos y vuelve a intentarlo.',
+  // Estas solo aparecen si el `maxLength` del input falla o alguien postea a mano.
+  'lead.companyname.toolong': 'El nombre de la compañía supera los 150 caracteres.',
+  'lead.companyaddress.toolong': 'La dirección supera los 200 caracteres.',
+  'lead.country.toolong': 'El país supera los 60 caracteres.',
+  'lead.contactfullname.toolong': 'El nombre de contacto supera los 150 caracteres.',
+  'lead.contactemail.toolong': 'El correo supera los 150 caracteres.',
+  'lead.contactphone.toolong': 'El teléfono supera los 30 caracteres.',
 
   // Token huérfano: el usuario autenticado ya no existe en BD.
   'article.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
@@ -143,6 +213,8 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'shipment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'manifest.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'assignment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+  // Llega como 400 y no como 404, pero significa lo mismo: token huérfano.
+  'lead.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'user.actor.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
 };
 
@@ -155,6 +227,7 @@ export const ORPHAN_TOKEN_ERROR_KEYS = new Set([
   'shipment.user.notfound',
   'manifest.user.notfound',
   'assignment.user.notfound',
+  'lead.user.notfound',
   'user.actor.notfound',
 ]);
 
@@ -166,6 +239,8 @@ export interface ApiError {
   errorKey?: string;
   detail?: string;
   errors?: Record<string, string[]>;
+  // Solo en un 429: segundos que pide esperar la cabecera `Retry-After`.
+  retryAfterSeconds?: number;
 }
 
 export function isApiError(err: unknown): err is ApiError {
@@ -188,11 +263,35 @@ export function isConcurrencyConflict(err: unknown): boolean {
 }
 
 /**
+ * `true` cuando el backend cortó por rate limit (429). Solo lo puede disparar el
+ * formulario público de contacto.
+ */
+export function isRateLimited(err: unknown): boolean {
+  if (!isApiError(err)) return false;
+  return err.status === 429 || err.errorKey === RATE_LIMIT_ERROR_KEY;
+}
+
+/**
+ * Mensaje del 429 con el tiempo de espera concreto cuando el backend lo manda.
+ * Sin `Retry-After` cae en el genérico de "espera unos minutos".
+ */
+export function getRateLimitMessage(err: unknown): string {
+  const generic = API_ERROR_MESSAGES[RATE_LIMIT_ERROR_KEY];
+  if (!isApiError(err) || !err.retryAfterSeconds) return generic;
+  const minutes = Math.ceil(err.retryAfterSeconds / 60);
+  return (
+    'Recibimos demasiadas solicitudes desde tu conexión. ' +
+    `Vuelve a intentarlo en ${minutes} minuto${minutes === 1 ? '' : 's'}.`
+  );
+}
+
+/**
  * Mensaje legible de cualquier error que venga de la API. Sirve tanto para el
  * error de apiClient (objeto plano) como para una `Error` normal.
  */
 export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (isConcurrencyConflict(err)) return CONCURRENCY_CONFLICT_MESSAGE;
+  if (isRateLimited(err)) return getRateLimitMessage(err);
 
   if (err && typeof err === 'object' && 'message' in err) {
     const msg = (err as { message?: unknown }).message;

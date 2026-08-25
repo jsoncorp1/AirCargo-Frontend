@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { getApiErrorMessage } from './apiErrorMessages';
+import { getApiErrorMessage, isApiError } from './apiErrorMessages';
 import type { BadgeColor, ShipmentObservation, ShipmentStatus } from './shipmentService';
 
 // Una asignación es un INTENTO de reparto: el admin de la sucursal destino le
@@ -88,6 +88,34 @@ export function getAssignmentErrorMessage(err: unknown, fallback: string): strin
   return getApiErrorMessage(err, fallback);
 }
 
+/**
+ * Mensaje de un error de subida de fotos. Se prefiere el `detail` del backend
+ * porque trae el dato concreto —qué archivo rebotó, cuántas fotos ya hay— que
+ * el mensaje genérico por clave no puede tener.
+ */
+export function getPhotoErrorMessage(err: unknown, fallback: string): string {
+  if (isApiError(err) && err.detail?.trim() && isPhotoErrorKey(err.errorKey)) {
+    return err.detail;
+  }
+  return getAssignmentErrorMessage(err, fallback);
+}
+
+const isPhotoErrorKey = (key?: string): boolean =>
+  !!key && (key.startsWith('assignment.photos.') || key === 'image.upload.failed');
+
+/**
+ * `true` cuando el rechazo depende de cuántas fotos hay guardadas o de si el
+ * reparto sigue abierto: lo que la pantalla tiene en memoria quedó viejo y hay
+ * que volver a leer el reparto antes de reintentar.
+ */
+export function isStalePhotoState(err: unknown): boolean {
+  if (!isApiError(err)) return false;
+  return (
+    err.errorKey === 'assignment.photos.toomany' ||
+    err.errorKey === 'assignment.photos.closed'
+  );
+}
+
 // ─── DTOs ────────────────────────────────────────────────────────────────────
 
 export interface ShipmentAssignment {
@@ -104,6 +132,9 @@ export interface ShipmentAssignment {
   observation?: ShipmentObservation | null;
   deliveryComment?: string | null;
   photoUrls?: string[] | null;
+  // Solo en el listado: cuántas fotos tiene guardadas, para el contador de la
+  // tarjeta sin traerse las URLs de cada reparto.
+  photoCount?: number | null;
   // Opcionales: el listado los trae para poder pintar la tarjeta sin un GET por
   // fila, pero la lista de campos del listado no está fijada en el contrato, así
   // que la UI degrada al código de guía si no vienen.
@@ -171,13 +202,61 @@ export interface CreateAssignmentsResponse {
   assignments: CreatedAssignment[];
 }
 
-// Las fotos las sube el front a Cloudinary/S3 y acá van solo las URLs: el
-// backend no tiene endpoint de upload (ver `uploadService`).
+// Sin `photoUrls`: las fotos ya viajaron por `uploadPhotos` y el backend cuenta
+// las que tiene guardadas. El campo sigue existiendo en la API por
+// compatibilidad, pero está para desaparecer y aceptaría una URL arbitraria de
+// cualquier cliente, así que desde acá no se manda más.
 export interface ChangeAssignmentStatusRequest {
   status: ShipmentAssignmentStatus;
   observation?: ShipmentObservation;
   deliveryComment?: string;
-  photoUrls?: string[];
+}
+
+// ─── Fotos de prueba de entrega ──────────────────────────────────────────────
+//
+// Los archivos van al backend y él los sube al servicio de imágenes. La app no
+// toca Cloudinary ni necesita credenciales suyas.
+//
+// Son dos llamadas separadas (subir fotos, después cambiar el estado) a
+// propósito: subir por red móvil es lo que más falla, y si la subida viviera
+// dentro del cambio de estado, un reintento arrastraría también la transición
+// del envío.
+
+/** Tope por reparto, acumulado entre llamadas. El mínimo para entregar es 1. */
+export const MAX_ASSIGNMENT_PHOTOS = 3;
+
+/** 10 MB por archivo, igual que el backend. */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+export const ACCEPTED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/** Para el `accept` del input: mismos tipos que acepta el backend. */
+export const ACCEPTED_PHOTO_TYPES = ACCEPTED_PHOTO_MIME_TYPES.join(',');
+
+export interface UploadAssignmentPhotosResponse {
+  assignmentId: string;
+  /** TODAS las fotos del reparto, no solo las recién subidas. */
+  photoUrls: string[];
+  /** Cuántas más admite. Sirve para el contador "2 de 3". */
+  remainingSlots: number;
+}
+
+/**
+ * Las mismas validaciones que hace el backend, para no gastar un viaje —y una
+ * subida por red móvil— en un archivo que va a rebotar. Devuelve el motivo o
+ * `null` si el archivo sirve.
+ */
+export function getPhotoFileError(file: File): string | null {
+  if (!ACCEPTED_PHOTO_MIME_TYPES.includes(file.type)) {
+    return `"${file.name}" no es JPG, PNG ni WEBP.`;
+  }
+  if (file.size === 0) {
+    return `"${file.name}" está vacío. Vuelve a sacar la foto.`;
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    return `"${file.name}" pesa más de ${MAX_PHOTO_BYTES / 1024 / 1024} MB.`;
+  }
+  return null;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -213,6 +292,27 @@ export const shipmentAssignmentService = {
       method: 'POST',
       data,
     });
+  },
+
+  /**
+   * Sube de 1 a 3 fotos de prueba de entrega. Solo el conductor dueño del
+   * reparto y solo mientras siga abierto (`Assigned` o `PickedUp`).
+   *
+   * El tope de 3 es acumulado: si ya hay 2 guardadas, esta llamada admite 1.
+   * La respuesta trae la lista completa, así que el estado local se reemplaza
+   * con ella en vez de ir acumulando a mano.
+   */
+  uploadPhotos: async (
+    id: string,
+    files: File[]
+  ): Promise<UploadAssignmentPhotosResponse> => {
+    const form = new FormData();
+    // Mismo nombre de campo repetido, uno por archivo: así lo espera el backend.
+    for (const file of files) form.append('photos', file);
+    return apiClient<UploadAssignmentPhotosResponse>(
+      `/shipment-assignments/${id}/photos`,
+      { method: 'POST', data: form }
+    );
   },
 
   // Roles: superadmin, admin, conductor. Es la pantalla principal de la app del

@@ -3,33 +3,82 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { CheckCircleIcon } from "@/icons";
+import {
+  leadService,
+  LEAD_MAX_LENGTHS,
+  getLeadErrorMessage,
+} from "@/services/leadService";
+import {
+  BolivianDepartment,
+  BOLIVIAN_DEPARTMENT_LABELS,
+} from "@/services/supplierService";
+
+const EMPTY_FORM = {
+  compania: "",
+  direccion: "",
+  ciudad: "" as BolivianDepartment | "",
+  nombreCompleto: "",
+  correo: "",
+  telefono: "",
+  preguntas: "",
+};
+
+// El país está fijo: el backend lo acepta opcional y usa "Bolivia" por defecto,
+// pero mandarlo explícito deja el registro completo sin depender del default.
+const PAIS = "Bolivia";
 
 export function ContactForm() {
-  const [formState, setFormState] = useState({
-    compania: "",
-    direccion: "",
-    ciudad: "",
-    pais: "Bolivia",
-    nombreCompleto: "",
-    correo: "",
-    telefono: "",
-    preguntas: "",
-  });
+  const [formState, setFormState] = useState(EMPTY_FORM);
+  // Honeypot: va fuera de pantalla y tiene que llegar vacío. Si un bot lo
+  // completa, el backend responde 201 y descarta el lead en silencio.
+  const [website, setWebsite] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const resetForm = () => {
+    setFormState(EMPTY_FORM);
+    setWebsite("");
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setError(null);
+    try {
+      await leadService.createLead({
+        companyName: formState.compania.trim(),
+        companyAddress: formState.direccion.trim(),
+        city: formState.ciudad as BolivianDepartment,
+        country: PAIS,
+        contactFullName: formState.nombreCompleto.trim(),
+        contactEmail: formState.correo.trim(),
+        contactPhone: formState.telefono.trim(),
+        ...(formState.preguntas.trim() ? { comments: formState.preguntas.trim() } : {}),
+        website,
+      });
       setIsSuccess(true);
-    }, 1200);
+    } catch (err: unknown) {
+      // Cubre el 429 del rate limit con su tiempo de espera concreto.
+      setError(
+        getLeadErrorMessage(
+          err,
+          "No pudimos enviar tu solicitud. Revisa tu conexión e inténtalo de nuevo."
+        )
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isSuccess) {
@@ -46,7 +95,10 @@ export function ContactForm() {
           Un asesor especializado de <strong>AIRCARGO EXPRESS</strong> se comunicará contigo muy pronto.
         </p>
         <button
-          onClick={() => { setIsSuccess(false); setFormState({ compania: "", direccion: "", ciudad: "", pais: "Bolivia", nombreCompleto: "", correo: "", telefono: "", preguntas: "" }); }}
+          onClick={() => {
+            setIsSuccess(false);
+            resetForm();
+          }}
           className="text-brand-600 font-semibold hover:bg-brand-50 px-6 py-2 rounded-full transition-colors"
         >
           Enviar otra solicitud
@@ -55,48 +107,101 @@ export function ContactForm() {
     );
   }
 
-  const inputClass = "w-full mt-2 px-4 py-3 rounded border border-gray-300 bg-white text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all";
+  const inputClass =
+    "w-full mt-2 px-4 py-3 rounded border border-gray-300 bg-white text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all";
   const labelClass = "block text-sm font-semibold text-gray-700 mb-1";
   const reqClass = "text-brand-600 ml-1";
+
+  const isIncomplete =
+    !formState.compania ||
+    !formState.direccion ||
+    !formState.ciudad ||
+    !formState.nombreCompleto ||
+    !formState.correo ||
+    !formState.telefono;
 
   return (
     <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-6 md:p-10">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Formulario de Contacto</h2>
-        <p className="text-gray-500 text-sm">Todos los campos marcados con asterisco (<span className={reqClass}>*</span>) son obligatorios</p>
+        <p className="text-gray-500 text-sm">
+          Todos los campos marcados con asterisco (<span className={reqClass}>*</span>) son obligatorios
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Honeypot. Fuera de pantalla y no `type="hidden"`: algunos bots
+            saltean los hidden pero completan cualquier input de texto. */}
+        <div style={{ position: "absolute", left: "-9999px" }} aria-hidden="true">
+          <label htmlFor="website">Website</label>
+          <input
+            id="website"
+            type="text"
+            name="website"
+            tabIndex={-1}
+            autoComplete="off"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          
+
           {/* COLUMNA IZQUIERDA */}
           <div className="space-y-5">
             <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider border-b pb-2 mb-4">Datos de la empresa</h4>
 
             <div>
-              <label className={labelClass}>Nombre de la Compañía <span className={reqClass}>*</span></label>
-              <input className={inputClass} type="text" name="compania" value={formState.compania} onChange={handleChange} required />
+              <label className={labelClass} htmlFor="compania">Nombre de la Compañía <span className={reqClass}>*</span></label>
+              <input
+                id="compania"
+                className={inputClass}
+                type="text"
+                name="compania"
+                value={formState.compania}
+                onChange={handleChange}
+                maxLength={LEAD_MAX_LENGTHS.companyName}
+                required
+              />
             </div>
 
             <div>
-              <label className={labelClass}>Dirección de la compañía <span className={reqClass}>*</span></label>
-              <input className={inputClass} type="text" name="direccion" value={formState.direccion} onChange={handleChange} required />
+              <label className={labelClass} htmlFor="direccion">Dirección de la compañía <span className={reqClass}>*</span></label>
+              <input
+                id="direccion"
+                className={inputClass}
+                type="text"
+                name="direccion"
+                value={formState.direccion}
+                onChange={handleChange}
+                maxLength={LEAD_MAX_LENGTHS.companyAddress}
+                required
+              />
             </div>
 
             <div>
-              <label className={labelClass}>Ciudad <span className={reqClass}>*</span></label>
-              <select className={inputClass} name="ciudad" value={formState.ciudad} onChange={handleChange} required>
+              <label className={labelClass} htmlFor="ciudad">Ciudad <span className={reqClass}>*</span></label>
+              <select
+                id="ciudad"
+                className={inputClass}
+                name="ciudad"
+                value={formState.ciudad}
+                onChange={handleChange}
+                required
+              >
                 <option value="" disabled>Seleccionar...</option>
-                <option value="Santa Cruz">Santa Cruz</option>
-                <option value="La Paz">La Paz</option>
-                <option value="Cochabamba">Cochabamba</option>
+                {(Object.entries(BOLIVIAN_DEPARTMENT_LABELS) as [BolivianDepartment, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  )
+                )}
               </select>
             </div>
 
             <div>
               <label className={labelClass}>País <span className={reqClass}>*</span></label>
               <div className="relative">
-                <input className={`${inputClass} bg-gray-50 pl-10 cursor-not-allowed`} type="text" name="pais" value="Bolivia" disabled />
+                <input className={`${inputClass} bg-gray-50 pl-10 cursor-not-allowed`} type="text" value={PAIS} disabled />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-xl mt-1">🇧🇴</div>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600 mt-1">
                   <CheckCircleIcon className="w-5 h-5" />
@@ -110,42 +215,79 @@ export function ContactForm() {
             <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider border-b pb-2 mb-4">Persona de contacto</h4>
 
             <div>
-              <label className={labelClass}>Nombre completo <span className={reqClass}>*</span></label>
-              <input className={inputClass} type="text" name="nombreCompleto" value={formState.nombreCompleto} onChange={handleChange} required />
+              <label className={labelClass} htmlFor="nombreCompleto">Nombre completo <span className={reqClass}>*</span></label>
+              <input
+                id="nombreCompleto"
+                className={inputClass}
+                type="text"
+                name="nombreCompleto"
+                value={formState.nombreCompleto}
+                onChange={handleChange}
+                maxLength={LEAD_MAX_LENGTHS.contactFullName}
+                required
+              />
             </div>
 
             <div>
-              <label className={labelClass}>Correo electrónico <span className={reqClass}>*</span></label>
-              <input className={inputClass} type="email" name="correo" value={formState.correo} onChange={handleChange} required placeholder="ejemplo@email.com" />
+              <label className={labelClass} htmlFor="correo">Correo electrónico <span className={reqClass}>*</span></label>
+              <input
+                id="correo"
+                className={inputClass}
+                type="email"
+                name="correo"
+                value={formState.correo}
+                onChange={handleChange}
+                maxLength={LEAD_MAX_LENGTHS.contactEmail}
+                required
+                placeholder="ejemplo@email.com"
+              />
             </div>
 
-            <div className="flex gap-4">
-              <div className="w-1/3">
-                <label className={labelClass}>Código</label>
-                <select className={inputClass}>
-                  <option>+591</option>
-                </select>
-              </div>
-              <div className="w-2/3">
-                <label className={labelClass}>Teléfono <span className={reqClass}>*</span></label>
-                <input className={inputClass} type="tel" name="telefono" value={formState.telefono} onChange={handleChange} required placeholder="123 456 789" />
-              </div>
+            {/* El teléfono va en un solo campo, sin prefijo: el backend lo guarda
+                tal cual y asume Bolivia. El viejo select de "+591" no tenía
+                name ni onChange, así que nunca formó parte del envío. */}
+            <div>
+              <label className={labelClass} htmlFor="telefono">Teléfono <span className={reqClass}>*</span></label>
+              <input
+                id="telefono"
+                className={inputClass}
+                type="tel"
+                name="telefono"
+                value={formState.telefono}
+                onChange={handleChange}
+                maxLength={LEAD_MAX_LENGTHS.contactPhone}
+                required
+                placeholder="123 456 789"
+              />
+              <p className="text-xs text-gray-400 mt-1">Número boliviano, sin el prefijo +591.</p>
             </div>
 
             <div>
-              <label className={labelClass}>Preguntas o comentarios</label>
+              <label className={labelClass} htmlFor="preguntas">Preguntas o comentarios</label>
               <textarea
+                id="preguntas"
                 className={`${inputClass} resize-none h-28`}
                 name="preguntas"
                 value={formState.preguntas}
                 onChange={handleChange}
-                maxLength={200}
+                maxLength={LEAD_MAX_LENGTHS.comments}
                 placeholder="Escribe tus preguntas o comentarios aquí..."
               />
-              <div className="text-right text-xs text-gray-400 mt-1">{formState.preguntas.length} / 200</div>
+              <div className="text-right text-xs text-gray-400 mt-1">
+                {formState.preguntas.length} / {LEAD_MAX_LENGTHS.comments}
+              </div>
             </div>
           </div>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
 
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 sm:gap-4 border-t pt-8">
           <Link href="/" className="w-full sm:w-auto px-6 sm:px-8 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded transition-colors shadow-sm hover:bg-gray-50 text-center">
@@ -153,7 +295,7 @@ export function ContactForm() {
           </Link>
           <button
             type="submit"
-            disabled={isSubmitting || !formState.compania || !formState.direccion || !formState.ciudad || !formState.nombreCompleto || !formState.correo || !formState.telefono}
+            disabled={isSubmitting || isIncomplete}
             className="w-full sm:w-auto px-6 sm:px-12 py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold rounded transition-colors shadow-md uppercase tracking-wide text-center"
           >
             {isSubmitting ? "Enviando..." : "Enviar Solicitud"}

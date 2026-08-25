@@ -11,6 +11,7 @@ import {
   getAssignmentErrorMessage,
 } from "@/services/shipmentAssignmentService";
 import { SHIPMENT_OBSERVATION_LABELS } from "@/services/shipmentService";
+import { formatDateTime } from "@/utils/datetime";
 
 interface AssignmentDetailModalProps {
   assignmentId: string;
@@ -125,14 +126,14 @@ export default function AssignmentDetailModal({
                 Este intento
               </h5>
               <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                <Row label="Asignado" value={new Date(detail.assignedAt).toLocaleString("es-BO")} />
+                <Row label="Asignado" value={formatDateTime(detail.assignedAt)} />
                 <Row
                   label="Recogido"
-                  value={detail.pickedUpAt ? new Date(detail.pickedUpAt).toLocaleString("es-BO") : "—"}
+                  value={detail.pickedUpAt ? formatDateTime(detail.pickedUpAt) : "—"}
                 />
                 <Row
                   label="Cerrado"
-                  value={detail.completedAt ? new Date(detail.completedAt).toLocaleString("es-BO") : "—"}
+                  value={detail.completedAt ? formatDateTime(detail.completedAt) : "—"}
                 />
                 {detail.observation && (
                   <Row

@@ -12,6 +12,7 @@ import {
 } from "@fullcalendar/core";
 import { useModal } from "@/hooks/useModal";
 import { Modal } from "@/components/ui/modal";
+import { calendarDateToApiDay, toApiDay, todayApiDay } from "@/utils/datetime";
 
 interface CalendarEvent extends EventInput {
   extendedProps: {
@@ -44,20 +45,20 @@ const Calendar: React.FC = () => {
       {
         id: "1",
         title: "Event Conf.",
-        start: new Date().toISOString().split("T")[0],
+        start: todayApiDay(),
         extendedProps: { calendar: "Danger" },
       },
       {
         id: "2",
         title: "Meeting",
-        start: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        start: toApiDay(new Date(Date.now() + 86400000)),
         extendedProps: { calendar: "Success" },
       },
       {
         id: "3",
         title: "Workshop",
-        start: new Date(Date.now() + 172800000).toISOString().split("T")[0],
-        end: new Date(Date.now() + 259200000).toISOString().split("T")[0],
+        start: toApiDay(new Date(Date.now() + 172800000)),
+        end: toApiDay(new Date(Date.now() + 259200000)),
         extendedProps: { calendar: "Primary" },
       },
     ]);
@@ -74,8 +75,8 @@ const Calendar: React.FC = () => {
     const event = clickInfo.event;
     setSelectedEvent(event as unknown as CalendarEvent);
     setEventTitle(event.title);
-    setEventStartDate(event.start?.toISOString().split("T")[0] || "");
-    setEventEndDate(event.end?.toISOString().split("T")[0] || "");
+    setEventStartDate(event.start ? calendarDateToApiDay(event.start) : "");
+    setEventEndDate(event.end ? calendarDateToApiDay(event.end) : "");
     setEventLevel(event.extendedProps.calendar);
     openModal();
   };

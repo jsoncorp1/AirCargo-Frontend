@@ -34,8 +34,22 @@ export interface CreateBranchOfficeRequest {
 export type UpdateBranchOfficeRequest = CreateBranchOfficeRequest;
 
 export const branchOfficeService = {
-  getBranchOffices: async (page = 1, perPage = 10): Promise<BranchOfficesPaginatedResponse> => {
-    return apiClient<BranchOfficesPaginatedResponse>(`/branch-offices?page=${page}&perPage=${perPage}`);
+  // `department` es opcional y va como NOMBRE del enum ("LaPaz"), no como
+  // índice: un número da 400 `branchoffice.department.invalid` en vez de
+  // filtrar por nada y devolver 200 con la lista vacía. Es case-insensitive.
+  // El listado nunca incluye sucursales dadas de baja, así que no hace falta
+  // filtrar por `active` acá ni en memoria.
+  getBranchOffices: async (
+    page = 1,
+    perPage = 10,
+    department?: BolivianDepartment
+  ): Promise<BranchOfficesPaginatedResponse> => {
+    const query = new URLSearchParams({
+      page: String(page),
+      perPage: String(perPage),
+    });
+    if (department) query.append('department', department);
+    return apiClient<BranchOfficesPaginatedResponse>(`/branch-offices?${query}`);
   },
   getBranchOfficeById: async (id: string): Promise<BranchOffice> => {
     return apiClient<BranchOffice>(`/branch-offices/${id}`);

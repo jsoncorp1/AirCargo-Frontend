@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import Button from "@/components/ui/button/Button";
 import Label from "@/components/form/Label";
 import Badge from "@/components/ui/badge/Badge";
@@ -17,6 +17,9 @@ import {
   assignmentStatusBadge,
   shipmentStatusAfterFailure,
   getAssignmentErrorMessage,
+  getPhotoErrorMessage,
+  isStalePhotoState,
+  MAX_ASSIGNMENT_PHOTOS,
 } from "@/services/shipmentAssignmentService";
 import {
   ShipmentObservation,
@@ -56,10 +59,68 @@ export default function AssignmentActionModal({
   );
   const [observation, setObservation] = useState<ShipmentObservation | "">("");
   const [deliveryComment, setDeliveryComment] = useState("");
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  // Las fotos ya viven en el servidor: pueden venir de una subida anterior que
+  // quedó a medias (subió dos, se le cortó la señal y volvió a abrir la
+  // pantalla). El tope de 3 es acumulado, así que arrancar en cero haría que el
+  // conductor elija 3 nuevas y el backend le rebote el lote entero.
+  const [photoUrls, setPhotoUrls] = useState<string[]>(assignment.photoUrls ?? []);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const needsPhotos = action === "Delivered";
   const needsObservation = action === "Failed";
+
+  // La tarjeta del listado trae `photoCount` pero no las URLs, así que lo ya
+  // subido solo se conoce pidiendo el reparto. Se pide al elegir "Entregué",
+  // que es el único momento en que hace falta.
+  const photosLoaded = useRef(Array.isArray(assignment.photoUrls));
+
+  const loadExistingPhotos = useCallback(async () => {
+    if (photosLoaded.current) return;
+    photosLoaded.current = true;
+    setLoadingPhotos(true);
+    try {
+      const detail = await shipmentAssignmentService.getAssignmentById(assignment.id);
+      setPhotoUrls(detail.photoUrls ?? []);
+    } catch {
+      // Que vuelva a intentarlo en el próximo clic: si el contador se queda en
+      // cero, el conductor elige tres fotos nuevas y el backend rebota el lote.
+      photosLoaded.current = false;
+    } finally {
+      setLoadingPhotos(false);
+    }
+  }, [assignment.id]);
+
+  const selectAction = (next: ShipmentAssignmentStatus) => {
+    setAction(next);
+    if (next === "Delivered") void loadExistingPhotos();
+  };
+
+  // Subir y cambiar el estado son dos llamadas separadas a propósito: subir por
+  // red móvil es lo que más falla, y si la subida viviera dentro del cambio de
+  // estado, un reintento arrastraría también la transición del envío.
+  const handleUploadPhotos = async (files: File[]) => {
+    setUploadingPhotos(true);
+    try {
+      const res = await shipmentAssignmentService.uploadPhotos(assignment.id, files);
+      setPhotoUrls(res.photoUrls);
+    } catch (err) {
+      // Si el rechazo depende de cuántas fotos hay guardadas, lo que tenemos en
+      // pantalla quedó viejo: se vuelve a leer el reparto para que el contador
+      // diga la verdad y el reintento suba solo lo que falta.
+      if (isStalePhotoState(err)) {
+        try {
+          const fresh = await shipmentAssignmentService.getAssignmentById(assignment.id);
+          setPhotoUrls(fresh.photoUrls ?? []);
+        } catch {
+          // Si tampoco se puede leer, queda el mensaje del error original.
+        }
+      }
+      throw new Error(getPhotoErrorMessage(err, "No se pudieron subir las fotos."));
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +147,6 @@ export default function AssignmentActionModal({
         const res = await shipmentAssignmentService.changeStatus(assignment.id, {
           status: action,
           ...(needsObservation && observation ? { observation } : {}),
-          ...(needsPhotos ? { photoUrls } : {}),
           ...(comment ? { deliveryComment: comment } : {}),
         });
         showToast(
@@ -132,7 +192,7 @@ export default function AssignmentActionModal({
               <button
                 key={a}
                 type="button"
-                onClick={() => setAction(a)}
+                onClick={() => selectAction(a)}
                 className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                   action === a
                     ? "border-brand-300 bg-brand-50 text-brand-600 dark:border-brand-800 dark:bg-brand-500/10 dark:text-brand-400"
@@ -176,10 +236,15 @@ export default function AssignmentActionModal({
         {needsPhotos && (
           <PhotoUploader
             value={photoUrls}
-            onChange={setPhotoUrls}
-            disabled={submitting}
+            onUpload={handleUploadPhotos}
+            maxPhotos={MAX_ASSIGNMENT_PHOTOS}
+            disabled={submitting || loadingPhotos}
             label="Foto de la entrega (obligatoria)"
-            hint="Al menos una foto del paquete entregado o de la firma de quien recibe."
+            hint={
+              loadingPhotos
+                ? "Buscando las fotos que ya subiste…"
+                : "Al menos una foto del paquete entregado o de la firma de quien recibe."
+            }
           />
         )}
 
@@ -203,8 +268,12 @@ export default function AssignmentActionModal({
           <Button size="sm" variant="outline" type="button" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button size="sm" type="submit" disabled={submitting || !action}>
-            {submitting ? "Guardando…" : "Confirmar"}
+          <Button
+            size="sm"
+            type="submit"
+            disabled={submitting || !action || uploadingPhotos || loadingPhotos}
+          >
+            {submitting ? "Guardando…" : uploadingPhotos ? "Subiendo fotos…" : "Confirmar"}
           </Button>
         </div>
       </form>

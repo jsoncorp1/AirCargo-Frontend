@@ -81,6 +81,11 @@ const baseNavItems: NavItem[] = [
     path: "/reparto",
   },
   {
+    icon: <GroupIcon />,
+    name: "Clientes Potenciales",
+    path: "/leads",
+  },
+  {
     name: "Administración",
     icon: <PlugInIcon />,
     subItems: [

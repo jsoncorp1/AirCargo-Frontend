@@ -4,6 +4,7 @@ import React, { forwardRef } from "react";
 import { Shipment, SHIPMENT_STATUS_LABELS } from "@/services/shipmentService";
 import { Package, MapPin, Hash, User, Phone, Map, DollarSign, Weight, Calendar } from "lucide-react";
 import Image from "next/image";
+import { formatDateTime } from "@/utils/datetime";
 
 interface ShipmentLetterPdfProps {
   envio: Shipment;
@@ -32,7 +33,7 @@ const ShipmentLetterPdf = forwardRef<HTMLDivElement, ShipmentLetterPdfProps>(
             </h1>
             <p className="text-sm font-semibold text-gray-500 flex items-center gap-2 mt-1">
               <Calendar className="w-4 h-4" /> 
-              {new Date(envio.createdAt).toLocaleString()}
+              {formatDateTime(envio.createdAt)}
             </p>
           </div>
           

@@ -10,7 +10,9 @@ type PropsType = {
   id: string;
   mode?: "single" | "multiple" | "range" | "time";
   onChange?: Hook | Hook[];
-  defaultDate?: DateOption;
+  // Array además de valor suelto: los modos `range` y `multiple` necesitan
+  // varias fechas, y flatpickr acepta `DateOption[]` en su `defaultDate`.
+  defaultDate?: DateOption | DateOption[];
   label?: string;
   placeholder?: string;
 };

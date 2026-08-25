@@ -12,8 +12,13 @@ interface FetchOptions extends RequestInit {
 export const apiClient = async <T>(endpoint: string, options: FetchOptions = {}): Promise<T> => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
+  // Con `FormData` el Content-Type lo tiene que armar el navegador: lleva el
+  // boundary del multipart, que nosotros no conocemos. Si lo escribimos a mano
+  // la petición llega rota y el backend no encuentra ningún archivo.
+  const isFormData = typeof FormData !== 'undefined' && options.data instanceof FormData;
+
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
@@ -24,7 +29,7 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
   };
 
   if (options.data) {
-    config.body = JSON.stringify(options.data);
+    config.body = isFormData ? (options.data as FormData) : JSON.stringify(options.data);
   }
 
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
@@ -67,6 +72,15 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
         ? FORBIDDEN_FALLBACK_MESSAGE
         : 'An error occurred while processing your request.';
 
+    // El 429 del formulario público manda `Retry-After` en segundos; se sube al
+    // error para poder decirle al visitante cuánto esperar, en vez de un
+    // "intenta más tarde" sin número.
+    const retryAfterRaw = response.headers.get('Retry-After');
+    const retryAfterSeconds =
+      retryAfterRaw && /^\d+$/.test(retryAfterRaw.trim())
+        ? Number(retryAfterRaw.trim())
+        : undefined;
+
     // throw standard error combining ProblemDetails standard from .NET
     throw {
       status: response.status,
@@ -76,6 +90,7 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
       errorKey,
       detail: responseData?.detail,
       errors: responseData?.errors || {},
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     };
   }
 

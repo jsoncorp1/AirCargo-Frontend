@@ -33,6 +33,7 @@ import { useAuth } from "@/context/AuthContext";
 import ShipmentWaybill from "./ShipmentWaybill";
 import ShipmentLetterPdf from "./ShipmentLetterPdf";
 import { exportElementToPDF } from "@/utils/pdfExport";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
@@ -54,6 +55,10 @@ interface ShipmentFormProps {
 interface OrderHeaderInfo {
   clientPhone: string;
   destinationDepartment: string;
+  // Sucursal que declaró quien creó la orden. Se muestra para que el admin vea
+  // qué pidieron antes de confirmar la sucursal real del envío.
+  destinationBranchOfficeCode: string | null;
+  destinationBranchOfficeCity: string | null;
   clientAddress: string;
   deliveryType: string;
   isExpress: boolean;
@@ -131,6 +136,9 @@ export default function ShipmentForm({
   const [guia, setGuia] = useState("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
+  // El instante real del envío: `fecha` y `hora` son texto ya formateado
+  // para mostrar, y la carta PDF necesita la fecha de verdad, no ese texto.
+  const [createdAt, setCreatedAt] = useState("");
   const [cliente, setCliente] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [orderInfo, setOrderInfo] = useState<OrderHeaderInfo | null>(null);
@@ -140,7 +148,9 @@ export default function ShipmentForm({
       // Solo las órdenes sin atender se pueden convertir en envío. El backend
       // además limita el listado a las del departamento del admin: atender una
       // orden de otro departamento devuelve 403 shipment.orderdelivery.forbidden.
-      const res = await orderDeliveryService.getDeliveries(1, 100, { unattended: true });
+      const res = await orderDeliveryService.getDeliveries(1, 100, {
+        attentionStatus: "Unattended",
+      });
       setOrders(res.data);
     } catch (err) {
       console.error(err);
@@ -165,6 +175,8 @@ export default function ShipmentForm({
       setOrderInfo({
         clientPhone: order.clientPhone,
         destinationDepartment: order.destinationDepartment,
+        destinationBranchOfficeCode: order.destinationBranchOfficeCode,
+        destinationBranchOfficeCity: order.destinationBranchOfficeCity,
         clientAddress: order.clientAddress,
         deliveryType: order.deliveryType,
         isExpress: order.isExpress,
@@ -176,6 +188,13 @@ export default function ShipmentForm({
       });
 
       if (mode === "create") {
+        // La sucursal que declaró la orden se preselecciona, pero es una
+        // indicación y no una orden de mando: el admin puede cambiarla y el
+        // envío se crea con la que él elija, sin tocar la orden.
+        if (order.destinationBranchOfficeId) {
+          setDestinationBranchOfficeId(order.destinationBranchOfficeId);
+        }
+
         setLines(
           order.details.map(d => ({
             orderDeliveryDetailId: d.id,
@@ -205,8 +224,9 @@ export default function ShipmentForm({
       const shipment = await shipmentService.getShipmentById(shipmentId);
       setOrderDeliveryId(shipment.orderDeliveryId);
       setGuia(shipment.code);
-      setFecha(new Date(shipment.createdAt).toLocaleDateString("es-BO"));
-      setHora(new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }));
+      setCreatedAt(shipment.createdAt);
+      setFecha(formatDate(shipment.createdAt));
+      setHora(formatTime(shipment.createdAt));
       setCliente(shipment.clientFullName);
       setCreatedBy(shipment.createdBy);
       setPackageCount(shipment.packageCount);
@@ -227,6 +247,9 @@ export default function ShipmentForm({
       setOrderInfo((prev) => ({
         clientPhone: prev?.clientPhone ?? "",
         destinationDepartment: shipment.destinationDepartment,
+        // Estos dos vienen de la orden, no del envío: se completan abajo.
+        destinationBranchOfficeCode: prev?.destinationBranchOfficeCode ?? null,
+        destinationBranchOfficeCity: prev?.destinationBranchOfficeCity ?? null,
         clientAddress: shipment.clientAddress,
         deliveryType: prev?.deliveryType ?? "",
         isExpress: prev?.isExpress ?? false,
@@ -252,6 +275,8 @@ export default function ShipmentForm({
         setOrderInfo({
           clientPhone: order.clientPhone,
           destinationDepartment: shipment.destinationDepartment,
+          destinationBranchOfficeCode: order.destinationBranchOfficeCode,
+          destinationBranchOfficeCity: order.destinationBranchOfficeCity,
           clientAddress: shipment.clientAddress,
           deliveryType: order.deliveryType,
           isExpress: order.isExpress,
@@ -527,7 +552,7 @@ export default function ShipmentForm({
                 shippingPrice: lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0),
                 packageCount: packageCount,
                 packageDescription: packageDescription,
-                createdAt: fecha && hora ? `${fecha} ${hora}` : new Date().toISOString(),
+                createdAt: createdAt || new Date().toISOString(),
                 createdBy: createdBy,
                 details: lines.map((l, i) => ({
                   id: String(i),
@@ -668,7 +693,7 @@ export default function ShipmentForm({
                     <option value="" disabled>Seleccione una orden</option>
                     {orders.map((o) => (
                       <option key={o.id} value={o.id}>
-                        [{new Date(o.createdAt).toLocaleDateString()}] {o.clientFullName} - {o.destinationDepartment}
+                        [{formatDate(o.createdAt)}] {o.clientFullName} - {o.destinationDepartment}
                       </option>
                     ))}
                   </select>
@@ -715,7 +740,9 @@ export default function ShipmentForm({
                   required
                 >
                   <option value="" disabled>Seleccione la sucursal de destino</option>
-                  {branchOffices.map((b) => (
+                  {branchOffices
+                    .filter((b) => !orderInfo?.destinationDepartment || b.bolivianDepartment === orderInfo.destinationDepartment)
+                    .map((b) => (
                     <option key={b.id} value={b.id}>{b.code} — {b.city}</option>
                   ))}
                 </select>
@@ -736,7 +763,16 @@ export default function ShipmentForm({
               {mode !== "create" && <InfoField label="Fecha" value={fecha} />}
               <InfoField label="Cliente" value={cliente} />
               <InfoField label="Teléfono" value={orderInfo?.clientPhone} />
-              <InfoField label="Destino" value={orderInfo?.destinationDepartment} />
+              <InfoField
+                label="Destino"
+                value={
+                  orderInfo?.destinationDepartment
+                    ? orderInfo.destinationBranchOfficeCity
+                      ? `${orderInfo.destinationDepartment} · ${orderInfo.destinationBranchOfficeCity}`
+                      : orderInfo.destinationDepartment
+                    : undefined
+                }
+              />
               <InfoField label="Dirección" value={orderInfo?.clientAddress} />
               <InfoField
                 label="Tipo de Entrega"

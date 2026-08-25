@@ -11,6 +11,9 @@ type NavItem = {
   path: string;
 };
 
+// El orden sigue el flujo de trabajo del proveedor: primero se crea la orden,
+// después se despacha como envío, y Artículos queda al final por ser dato
+// maestro que se toca de vez en cuando.
 const navItems: NavItem[] = [
   {
     icon: <PageIcon />,
@@ -18,14 +21,14 @@ const navItems: NavItem[] = [
     path: "/proveedor/ordenes",
   },
   {
-    icon: <BoxIcon />,
-    name: "Artículos",
-    path: "/proveedor/articulos",
-  },
-  {
     icon: <BoxCubeIcon />,
     name: "Envíos",
     path: "/proveedor/envios",
+  },
+  {
+    icon: <BoxIcon />,
+    name: "Artículos",
+    path: "/proveedor/articulos",
   },
 ];
 
@@ -33,7 +36,10 @@ const SupplierSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
-  const isActive = (path: string) => path === pathname;
+  // Las subrutas también marcan al padre: estando en /proveedor/ordenes/nueva
+  // el ítem "Órdenes de Entrega" tiene que seguir resaltado.
+  const isActive = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
 
   return (
     <aside

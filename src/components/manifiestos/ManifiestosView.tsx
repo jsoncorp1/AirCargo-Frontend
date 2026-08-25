@@ -28,6 +28,7 @@ import {
   manifestStatusBadge,
 } from "@/services/manifestService";
 import CreateManifestModal from "./CreateManifestModal";
+import { formatDate, formatDateTime } from "@/utils/datetime";
 
 const DEFAULT_PER_PAGE = 10;
 
@@ -194,11 +195,11 @@ export default function ManifiestosView({ basePath }: ManifiestosViewProps) {
                       </TableCell>
                       <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
                         {manifest.departureAt
-                          ? new Date(manifest.departureAt).toLocaleString("es-BO")
+                          ? formatDateTime(manifest.departureAt)
                           : "—"}
                       </TableCell>
                       <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
-                        {new Date(manifest.createdAt).toLocaleDateString("es-BO")}
+                        {formatDate(manifest.createdAt)}
                       </TableCell>
                       <TableCell className="px-5 py-3 text-right">
                         <Link

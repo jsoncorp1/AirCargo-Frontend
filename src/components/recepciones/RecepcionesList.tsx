@@ -4,6 +4,7 @@ import Badge from "@/components/ui/badge/Badge";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon } from "@/icons";
 import { ArticleReceipt } from "@/services/articleReceiptService";
+import { formatDateTime } from "@/utils/datetime";
 
 interface RecepcionesListProps {
   receipts: ArticleReceipt[];
@@ -89,10 +90,7 @@ export default function RecepcionesList({
                     </Badge>
                   </TableCell>
                   <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400 font-medium">
-                    {new Date(receipt.createdAt).toLocaleString("es-BO", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                    {formatDateTime(receipt.createdAt)}
                   </TableCell>
                   <TableCell className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">

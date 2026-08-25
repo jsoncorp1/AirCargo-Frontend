@@ -16,12 +16,15 @@ import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 import { articleService, Article } from "@/services/articleService";
+import { BolivianDepartment } from "@/services/supplierService";
+import { useDestinationBranchOffices } from "@/hooks/useDestinationBranchOffices";
 import {
   orderDeliveryService,
   CreateOrderDeliveryRequest,
 } from "@/services/orderDeliveryService";
 import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
 import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
+import { formatDateTimeLong } from "@/utils/datetime";
 
 // unitPrice is kept as a raw string while editing so the user can type
 // decimals (e.g. "42.") without React snapping it back to 0 mid-keystroke —
@@ -75,6 +78,14 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
 
   // Form State
   const [department, setDepartment] = useState<number>(0);
+  const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
+  // La sucursal que traía la orden al abrirla. Se guarda aparte para poder
+  // mostrarla aunque haya sido dada de baja y ya no venga en el listado.
+  const [loadedBranch, setLoadedBranch] = useState<{
+    id: string;
+    code: string | null;
+    city: string | null;
+  } | null>(null);
   const [clientFullName, setClientFullName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
@@ -91,7 +102,10 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
   } | null>(null);
 
   // Quién creó la orden: informativo, lo saca el backend del token (JWT) del usuario logueado.
-  const [createdByName, setCreatedByName] = useState("");
+  const [createdByEmail, setCreatedByEmail] = useState("");
+  // Cuándo la registró el usuario empresa. Se muestra al pie del detalle junto
+  // con quién la creó.
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
 
   const fetchDependencies = useCallback(async () => {
     try {
@@ -107,8 +121,21 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
     if (!orderId) return;
     try {
       const order = await orderDeliveryService.getDeliveryById(orderId);
-      setCreatedByName(order.userName);
+      setCreatedByEmail(order.createdBy);
+      setCreatedAt(order.createdAt);
       setDepartment(DEPARTAMENTOS.findIndex((d) => d.value === order.destinationDepartment));
+      // Se precarga y se vuelve a mandar en el PUT: omitirla borra la sucursal
+      // que declaró el proveedor al crear la orden.
+      setDestinationBranchOfficeId(order.destinationBranchOfficeId ?? "");
+      setLoadedBranch(
+        order.destinationBranchOfficeId
+          ? {
+              id: order.destinationBranchOfficeId,
+              code: order.destinationBranchOfficeCode,
+              city: order.destinationBranchOfficeCity,
+            }
+          : null
+      );
       setClientFullName(order.clientFullName);
       setClientPhone(order.clientPhone);
       setClientAddress(order.clientAddress);
@@ -142,6 +169,30 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
       }
     });
   }, [fetchDependencies, loadOrder, mode]);
+
+  // Segundo nivel de la cascada. El reset va en el handler y no en un efecto:
+  // un efecto sobre `department` también dispararía al cargar una orden para
+  // editar, borrando la sucursal que acabamos de precargar.
+  const selectedDepartment = DEPARTAMENTOS[department]?.value as
+    | BolivianDepartment
+    | undefined;
+  const {
+    branches: branchesInDepartment,
+    loading: loadingBranches,
+    unavailable: branchesUnavailable,
+  } = useDestinationBranchOffices(selectedDepartment);
+
+  const handleDepartmentChange = (value: number) => {
+    setDepartment(value);
+    setDestinationBranchOfficeId("");
+  };
+
+  // Si la sucursal guardada ya no está en el listado (la dieron de baja después
+  // de crear la orden), se muestra igual para que se vea qué decía la orden.
+  const missingLoadedBranch =
+    loadedBranch && !branchesInDepartment.some((b) => b.id === loadedBranch.id)
+      ? loadedBranch
+      : null;
 
   // Solo se pueden agregar artículos con stock disponible; los que ya están
   // en una línea existente (ej. al editar) se siguen mostrando aunque su
@@ -200,9 +251,14 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           unitPrice: Number(l.unitPrice) || 0,
         }));
 
+        // null y no "" cuando no se eligió sucursal: el campo es opcional y el
+        // backend espera ausencia, no un id vacío.
+        const branchOfficeId = destinationBranchOfficeId || null;
+
         if (mode === "create") {
           const payload: CreateOrderDeliveryRequest = {
             destinationDepartment: department,
+            destinationBranchOfficeId: branchOfficeId,
             clientFullName,
             clientPhone,
             clientAddress,
@@ -221,6 +277,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           await withConcurrencyRetry(() =>
             orderDeliveryService.updateDelivery(orderId, {
               destinationDepartment: department,
+              destinationBranchOfficeId: branchOfficeId,
               clientFullName,
               clientPhone,
               clientAddress,
@@ -296,7 +353,10 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           <div>
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Datos del Cliente y Destino</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div className="sm:col-span-2">
+              {/* Nombre y teléfono comparten fila para que Departamento y
+                  Sucursal queden uno al lado del otro: la cascada se lee mal
+                  si el segundo paso cae en la fila siguiente. */}
+              <div>
                 <Label required>Nombre del Cliente</Label>
                 <Input
                   value={clientFullName}
@@ -306,7 +366,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                   placeholder="Ej. Juan Pérez"
                 />
               </div>
-              
+
               <div>
                 <Label required>Teléfono</Label>
                 <Input
@@ -323,7 +383,7 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                   value={department}
-                  onChange={(e) => setDepartment(Number(e.target.value))}
+                  onChange={(e) => handleDepartmentChange(Number(e.target.value))}
                   disabled={readOnly}
                   required
                 >
@@ -331,6 +391,52 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                     <option key={dep.value} value={idx}>{dep.label}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Opcional: si el departamento no tiene sucursales, la orden se
+                  crea igual y se elige al despachar. */}
+              <div>
+                <Label>Sucursal de Destino</Label>
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
+                  value={destinationBranchOfficeId}
+                  onChange={(e) => setDestinationBranchOfficeId(e.target.value)}
+                  disabled={
+                    readOnly ||
+                    loadingBranches ||
+                    (branchesInDepartment.length === 0 && !missingLoadedBranch)
+                  }
+                >
+                  <option value="">
+                    {loadingBranches
+                      ? "Cargando sucursales…"
+                      : branchesInDepartment.length === 0
+                      ? "Sin sucursales en este departamento"
+                      : "Seleccioná una sucursal"}
+                  </option>
+                  {missingLoadedBranch && (
+                    <option value={missingLoadedBranch.id}>
+                      {missingLoadedBranch.city ?? "Sucursal"}
+                      {missingLoadedBranch.code ? ` — ${missingLoadedBranch.code}` : ""}
+                      {" (dada de baja)"}
+                    </option>
+                  )}
+                  {branchesInDepartment.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.city}
+                      {branch.code ? ` — ${branch.code}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  {branchesUnavailable
+                    ? "No se pudieron cargar las sucursales."
+                    : missingLoadedBranch
+                    ? "La sucursal declarada ya no está activa: elegí otra para poder guardar."
+                    : branchesInDepartment.length === 0
+                    ? "La entrega se coordina desde la sucursal más cercana."
+                    : "Sucursal donde se recibe el paquete en destino."}
+                </p>
               </div>
 
               <div className="sm:col-span-2">
@@ -352,15 +458,6 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
           <div>
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Configuración de la Orden</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              {mode !== "create" && createdByName && (
-                <div>
-                  <Label>Creado por</Label>
-                  <div className="flex h-11 w-full items-center rounded-lg border border-gray-200 bg-gray-50 px-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-300">
-                    {createdByName}
-                  </div>
-                </div>
-              )}
-
               <div>
                 <Label required>Tipo de Entrega</Label>
                 <select
@@ -527,6 +624,27 @@ export default function OrderDeliveryForm({ mode, orderId, onClose, onSaved }: O
                     Bs {totalOrder.toFixed(2)}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Trazabilidad: quién registró la orden y cuándo. Va al pie porque
+                es dato de auditoría, no un campo que se edite. */}
+            {mode !== "create" && createdByEmail && (
+              <div className="mt-6 border-t border-gray-100 pt-4 dark:border-gray-800">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Orden creada por{" "}
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {createdByEmail}
+                  </span>
+                  {createdAt && (
+                    <>
+                      {" "}el{" "}
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">
+                        {formatDateTimeLong(createdAt)}
+                      </span>
+                    </>
+                  )}
+                </p>
               </div>
             )}
           </div>

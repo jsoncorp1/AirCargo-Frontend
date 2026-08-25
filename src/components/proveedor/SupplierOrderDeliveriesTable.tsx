@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -16,22 +17,29 @@ import { useToast } from "@/context/ToastContext";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon } from "@/icons";
 import {
+  AttentionStatus,
   OrderDeliveryPaginatedItem,
   orderDeliveryService,
 } from "@/services/orderDeliveryService";
+import {
+  ATTENTION_DATE_HEADERS,
+  attentionDate,
+} from "@/utils/orderAttentionDate";
+import { isOrderOwner } from "@/utils/orderOwnership";
+import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
 import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
-import SupplierOrderDeliveryForm from "./SupplierOrderDeliveryForm";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
   CashOnDelivery: "Por Pagar",
 };
 
-type FormMode = "create" | "edit" | "view";
-
 interface SupplierOrderDeliveriesTableProps {
   orders: OrderDeliveryPaginatedItem[];
+  // Pestaña activa: define qué fecha muestra la columna y con qué encabezado.
+  attentionStatus: AttentionStatus;
   loading: boolean;
   totalPages: number;
   currentPage: number;
@@ -44,7 +52,7 @@ interface SupplierOrderDeliveriesTableProps {
 function SkeletonRow() {
   return (
     <TableRow>
-      {[24, 60, 32, 28, 20, 32].map((w, i) => (
+      {[6, 24, 40, 24, 24, 20, 32].map((w, i) => (
         <TableCell key={i} className="px-5 py-4">
           <div className={`h-4 w-${w} animate-pulse rounded bg-gray-100 dark:bg-gray-800`} />
         </TableCell>
@@ -55,6 +63,7 @@ function SkeletonRow() {
 
 export default function SupplierOrderDeliveriesTable({
   orders,
+  attentionStatus,
   loading,
   totalPages,
   currentPage,
@@ -64,35 +73,15 @@ export default function SupplierOrderDeliveriesTable({
   onDataChange,
 }: SupplierOrderDeliveriesTableProps) {
   const { showToast } = useToast();
-  const formModal = useModal();
+  // Editar y eliminar quedan reservados a quien creó cada orden.
+  const { user } = useAuth();
+  const userEmail = user?.email;
   const deleteModal = useModal();
 
-  const [formMode, setFormMode] = useState<FormMode>("create");
+  // Cuántas filas quedaron atrás en las páginas anteriores.
+  const rowOffset = (currentPage - 1) * (perPage ?? orders.length);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const openCreate = useCallback(() => {
-    setSelectedId(null);
-    setFormMode("create");
-    formModal.openModal();
-  }, [formModal]);
-
-  const openView = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("view");
-      formModal.openModal();
-    },
-    [formModal]
-  );
-
-  const openEdit = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      setFormMode("edit");
-      formModal.openModal();
-    },
-    [formModal]
-  );
 
   const askDelete = useCallback(
     (id: string) => {
@@ -107,6 +96,33 @@ export default function SupplierOrderDeliveriesTable({
   const handleDelete = () =>
     runDelete(async () => {
       if (!selectedId) return;
+
+      // El autor se comprueba contra el DETALLE, no contra la fila del listado:
+      // `OrderDeliveryPaginatedItem` todavía no trae `createdBy`, así que la
+      // fila no alcanza para saber de quién es. Es un GET de más antes de una
+      // operación irreversible, y hasta que el listado traiga el campo es la
+      // única forma de cerrarlo desde el front.
+      try {
+        const target = await orderDeliveryService.getDeliveryById(selectedId);
+        if (!isOrderOwner(target, userEmail)) {
+          showToast(
+            "error",
+            "No se puede eliminar",
+            "Solo quien creó esta orden puede eliminarla."
+          );
+          deleteModal.closeModal();
+          onDataChange();
+          return;
+        }
+      } catch (error: unknown) {
+        showToast(
+          "error",
+          "Error al eliminar",
+          getApiErrorMessage(error, "No se pudo verificar la orden.")
+        );
+        return;
+      }
+
       try {
         // Eliminar devuelve el stock al artículo: mismo token de concurrencia,
         // mismo 409 sin cambios guardados. Reintentar no borra dos veces.
@@ -129,15 +145,17 @@ export default function SupplierOrderDeliveriesTable({
   return (
     <>
       <div className="flex justify-end mb-4">
-        <button
-          onClick={openCreate}
+        {/* Crear tiene ruta propia: el formulario es largo y en modal quedaba
+            apretado. Ver y editar siguen en modal, que son consultas cortas. */}
+        <Link
+          href="/proveedor/ordenes/nueva"
           className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 active:bg-brand-700 transition-colors"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Nueva Orden de Entrega
-        </button>
+        </Link>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
@@ -145,20 +163,23 @@ export default function SupplierOrderDeliveriesTable({
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Fecha
+                <TableCell isHeader className="w-14 px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Nro
                 </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Cliente / Destino
+                <TableCell isHeader className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {ATTENTION_DATE_HEADERS[attentionStatus]}
                 </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Tipo Entrega
+                <TableCell isHeader className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Cliente
                 </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                <TableCell isHeader className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Destino
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Tipo de Entrega
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Total
-                </TableCell>
-                <TableCell isHeader className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Estado
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Acciones
@@ -171,7 +192,7 @@ export default function SupplierOrderDeliveriesTable({
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
               ) : orders.length === 0 ? (
                 <TableRow>
-                  <TableCell className="px-5 py-16 text-center" colSpan={6}>
+                  <TableCell className="px-5 py-16 text-center" colSpan={7}>
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800">
                         <BoxCubeIcon className="size-7 text-gray-400" />
@@ -186,26 +207,76 @@ export default function SupplierOrderDeliveriesTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                orders.map((order) => (
+                orders.map((order, index) => (
                   <TableRow
                     key={order.id}
                     className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] transition-colors"
                   >
-                    <TableCell className="px-5 py-4 text-gray-500 text-theme-sm dark:text-gray-400">
-                      {new Date(order.createdAt).toLocaleDateString("es-BO")}
+                    {/* Correlativo de la vista, no de la orden: sigue contando
+                        entre páginas para que la fila 11 sea la 11 y no la 1. */}
+                    <TableCell className="w-14 whitespace-nowrap px-5 py-4 text-right align-middle text-theme-sm tabular-nums text-gray-400">
+                      {rowOffset + index + 1}
                     </TableCell>
 
-                    <TableCell className="px-5 py-4">
+                    <TableCell className="whitespace-nowrap px-5 py-4 align-middle">
+                      {(() => {
+                        const date = attentionDate(order, attentionStatus);
+                        return (
+                          <>
+                            <p className="text-gray-800 text-theme-sm dark:text-gray-300 font-medium">
+                              {formatDate(date.at)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                              {formatTime(date.at)}
+                            </p>
+                            {/* En "Todas" conviven las dos fechas, así que la
+                                fila aclara de cuál está hablando. */}
+                            {attentionStatus === "All" && (
+                              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                {date.kind === "attended" ? "Atendida" : "Creada"}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4 align-middle">
                       <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                         {order.clientFullName}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {order.destinationDepartment}
-                      </p>
+                      {order.clientPhone ? (
+                        <a
+                          href={`tel:${order.clientPhone}`}
+                          className="mt-0.5 block font-mono text-xs text-gray-500 hover:text-brand-500 dark:text-gray-400"
+                        >
+                          {order.clientPhone}
+                        </a>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-gray-400">—</p>
+                      )}
                     </TableCell>
 
-                    <TableCell className="px-5 py-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                    {/* La sucursal va debajo del departamento: es opcional, así
+                        que la fila tiene que leerse igual cuando no está. */}
+                    <TableCell className="px-5 py-4 align-middle">
+                      <p className="text-theme-sm text-gray-600 dark:text-gray-300">
+                        {order.destinationDepartment}
+                      </p>
+                      {order.destinationBranchOfficeCity && (
+                        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                          {order.destinationBranchOfficeCity}
+                          {order.destinationBranchOfficeCode
+                            ? ` — ${order.destinationBranchOfficeCode}`
+                            : ""}
+                        </p>
+                      )}
+                    </TableCell>
+
+                    {/* "Expreso" va debajo y no al lado: al lado empujaba el
+                        ancho de la columna y desalineaba las filas vecinas. */}
+                    <TableCell className="px-5 py-4 align-middle">
+                      <div className="flex flex-col items-start gap-1">
                         <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
                           {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
                         </Badge>
@@ -215,39 +286,47 @@ export default function SupplierOrderDeliveriesTable({
                       </div>
                     </TableCell>
 
-                    <TableCell className="px-5 py-4 font-semibold text-gray-800 text-theme-sm dark:text-white/90">
+                    <TableCell className="whitespace-nowrap px-5 py-4 text-right align-middle font-semibold text-gray-800 text-theme-sm tabular-nums dark:text-white/90">
                       Bs {order.totalPrice.toFixed(2)}
                     </TableCell>
 
-                    <TableCell className="px-5 py-4">
-                      <Badge size="sm" color={order.isAttended ? "success" : "light"}>
-                        {order.isAttended ? "Atendida" : "Pendiente"}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="px-5 py-4 text-right">
+                    <TableCell className="whitespace-nowrap px-5 py-4 text-right align-middle">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openView(order.id)}
+                        {/* Ver y editar tienen ruta propia, igual que crear: el
+                            detalle y el formulario son largos y en modal
+                            obligaban a scrollear dentro de una caja. */}
+                        <Link
+                          href={`/proveedor/ordenes/${order.id}`}
                           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-gray-300 transition-colors"
                           title="Ver detalle"
                         >
                           <EyeIcon className="size-4 shrink-0" /> Ver
-                        </button>
-                        <button
-                          onClick={() => openEdit(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                          title="Editar"
-                        >
-                          <PencilIcon className="size-4 shrink-0" /> Editar
-                        </button>
-                        <button
-                          onClick={() => askDelete(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                          title="Eliminar"
-                        >
-                          <TrashBinIcon className="size-4 shrink-0" /> Eliminar
-                        </button>
+                        </Link>
+                        {/* Dos motivos para no ofrecer estas acciones:
+                            - la orden ya se convirtió en envío, y el backend
+                              rechaza editarla o borrarla;
+                            - la creó otro usuario del proveedor, y solo su
+                              autor puede tocarla.
+                            En los dos casos el botón no se muestra, en vez de
+                            ofrecer algo que va a rebotar. */}
+                        {!order.isAttended && isOrderOwner(order, userEmail) && (
+                          <>
+                            <Link
+                              href={`/proveedor/ordenes/${order.id}/editar`}
+                              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                              title="Editar"
+                            >
+                              <PencilIcon className="size-4 shrink-0" /> Editar
+                            </Link>
+                            <button
+                              onClick={() => askDelete(order.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                              title="Eliminar"
+                            >
+                              <TrashBinIcon className="size-4 shrink-0" /> Eliminar
+                            </button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -267,22 +346,6 @@ export default function SupplierOrderDeliveriesTable({
           />
         </div>
       </div>
-
-      <Modal
-        isOpen={formModal.isOpen}
-        onClose={formModal.closeModal}
-        className="max-w-[700px] m-4 z-50"
-      >
-        {formModal.isOpen && (
-          <SupplierOrderDeliveryForm
-            key={selectedId ?? "new"}
-            mode={formMode}
-            orderId={selectedId}
-            onClose={formModal.closeModal}
-            onSaved={onDataChange}
-          />
-        )}
-      </Modal>
 
       <Modal
         isOpen={deleteModal.isOpen}

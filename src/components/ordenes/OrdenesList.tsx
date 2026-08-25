@@ -3,20 +3,25 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import Badge from "@/components/ui/badge/Badge";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon, TaskIcon } from "@/icons";
-import { OrderDeliveryPaginatedItem } from "@/services/orderDeliveryService";
+import {
+  AttentionStatus,
+  OrderDeliveryPaginatedItem,
+} from "@/services/orderDeliveryService";
+import {
+  ATTENTION_DATE_HEADERS,
+  attentionDate,
+} from "@/utils/orderAttentionDate";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 const DELIVERY_TYPE_LABELS: Record<string, string> = {
   Prepaid: "Pagada",
   CashOnDelivery: "Por Pagar",
 };
 
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  Corporate: "Corporativa",
-  Sporadic: "Esporádica",
-};
-
 interface OrdenesListProps {
   orders: OrderDeliveryPaginatedItem[];
+  // Pestaña activa: define qué fecha muestra la columna y con qué encabezado.
+  attentionStatus: AttentionStatus;
   loading: boolean;
   currentPage: number;
   totalPages: number;
@@ -31,6 +36,7 @@ interface OrdenesListProps {
 
 export default function OrdenesList({
   orders,
+  attentionStatus,
   loading,
   currentPage,
   totalPages,
@@ -42,19 +48,22 @@ export default function OrdenesList({
   onAttend,
   onDelete,
 }: OrdenesListProps) {
+  // Cuántas filas quedaron atrás en las páginas anteriores.
+  const rowOffset = (currentPage - 1) * perPage;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
       <div className="max-w-full overflow-x-auto">
         <Table>
           <TableHeader className="border-gray-100 dark:border-gray-800 border-y bg-gray-50/50 dark:bg-white/[0.02]">
             <TableRow>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Fecha</TableCell>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Cliente / Destino</TableCell>
+              <TableCell isHeader className="w-14 px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">Nro</TableCell>
+              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">{ATTENTION_DATE_HEADERS[attentionStatus]}</TableCell>
+              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Cliente</TableCell>
+              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Destino</TableCell>
               <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Proveedor</TableCell>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Tipo de Orden</TableCell>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Condiciones</TableCell>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Total</TableCell>
-              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
+              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Tipo de Entrega</TableCell>
+              <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">Total</TableCell>
               <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">Acciones</TableCell>
             </TableRow>
           </TableHeader>
@@ -87,36 +96,74 @@ export default function OrdenesList({
                 </TableCell>
               </TableRow>
             ) : (
-              orders.map((order) => (
+              orders.map((order, index) => (
                 <TableRow key={order.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                  <TableCell className="px-5 py-4">
-                    <p className="text-gray-800 text-theme-sm dark:text-gray-300 font-medium">
-                      {new Date(order.createdAt).toLocaleDateString("es-BO")}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {new Date(order.createdAt).toLocaleTimeString("es-BO", { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                  {/* Correlativo de la vista, no de la orden: sigue contando
+                      entre páginas para que la fila 11 sea la 11 y no la 1. */}
+                  <TableCell className="w-14 whitespace-nowrap px-5 py-4 text-right align-middle text-theme-sm tabular-nums text-gray-400">
+                    {rowOffset + index + 1}
                   </TableCell>
-                  <TableCell className="px-5 py-4">
+                  <TableCell className="whitespace-nowrap px-5 py-4 align-middle">
+                    {(() => {
+                      const date = attentionDate(order, attentionStatus);
+                      return (
+                        <>
+                          <p className="text-gray-800 text-theme-sm dark:text-gray-300 font-medium">
+                            {formatDate(date.at)}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {formatTime(date.at)}
+                          </p>
+                          {/* En "Todas" conviven las dos fechas, así que la
+                              fila aclara de cuál está hablando. */}
+                          {attentionStatus === "All" && (
+                            <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                              {date.kind === "attended" ? "Atendida" : "Creada"}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell className="px-5 py-4 align-middle">
                     <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                       {order.clientFullName}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {order.clientPhone ? (
+                      <a
+                        href={`tel:${order.clientPhone}`}
+                        className="mt-0.5 block font-mono text-xs text-gray-500 hover:text-brand-500 dark:text-gray-400"
+                      >
+                        {order.clientPhone}
+                      </a>
+                    ) : (
+                      <p className="mt-0.5 text-xs text-gray-400">—</p>
+                    )}
+                  </TableCell>
+                  {/* La sucursal va debajo del departamento: es opcional, así
+                      que la fila tiene que leerse igual cuando no está. */}
+                  <TableCell className="px-5 py-4 align-middle">
+                    <p className="text-theme-sm text-gray-600 dark:text-gray-300">
                       {order.destinationDepartment}
                     </p>
+                    {order.destinationBranchOfficeCity && (
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {order.destinationBranchOfficeCity}
+                        {order.destinationBranchOfficeCode
+                          ? ` — ${order.destinationBranchOfficeCode}`
+                          : ""}
+                      </p>
+                    )}
                   </TableCell>
-                  <TableCell className="px-5 py-4">
+                  <TableCell className="px-5 py-4 align-middle">
                     <span className="text-theme-sm text-gray-600 dark:text-gray-300">
                       {order.supplierName ?? "Cliente esporádico"}
                     </span>
                   </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <Badge size="sm" color={order.orderType === "Sporadic" ? "info" : "primary"}>
-                      {ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <div className="flex flex-wrap items-center gap-1.5">
+                  {/* "Expreso" va debajo y no al lado: al lado empujaba el ancho
+                      de la columna y desalineaba las filas vecinas. */}
+                  <TableCell className="px-5 py-4 align-middle">
+                    <div className="flex flex-col items-start gap-1">
                       <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
                         {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
                       </Badge>
@@ -125,15 +172,10 @@ export default function OrdenesList({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="px-5 py-4 font-bold text-gray-800 text-theme-sm dark:text-white/90">
+                  <TableCell className="whitespace-nowrap px-5 py-4 text-right align-middle font-bold text-gray-800 text-theme-sm tabular-nums dark:text-white/90">
                     Bs {order.totalPrice.toFixed(2)}
                   </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <Badge size="sm" color={order.isAttended ? "success" : "light"}>
-                      {order.isAttended ? "Atendida" : "Pendiente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-right">
+                  <TableCell className="whitespace-nowrap px-5 py-4 text-right align-middle">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => onView(order.id)}
@@ -151,22 +193,30 @@ export default function OrdenesList({
                           <TaskIcon className="size-4 shrink-0" /> Atender
                         </button>
                       )}
-                      {order.orderType !== "Sporadic" && (
-                        <button
-                          onClick={() => onEdit(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
-                          title="Editar"
-                        >
-                          <PencilIcon className="size-4 shrink-0" /> Editar
-                        </button>
+                      {/* Una orden atendida ya se convirtió en envío: el backend
+                          rechaza editarla o borrarla, así que acá los botones no
+                          se muestran en vez de ofrecer una acción que va a
+                          rebotar. La esporádica además nunca se edita. */}
+                      {!order.isAttended && (
+                        <>
+                          {order.orderType !== "Sporadic" && (
+                            <button
+                              onClick={() => onEdit(order.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/10 dark:hover:text-brand-400 transition-colors"
+                              title="Editar"
+                            >
+                              <PencilIcon className="size-4 shrink-0" /> Editar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onDelete(order.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-error-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
+                            title="Eliminar"
+                          >
+                            <TrashBinIcon className="size-4 shrink-0" /> Eliminar
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={() => onDelete(order.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-error-500 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400 transition-colors"
-                        title="Eliminar"
-                      >
-                        <TrashBinIcon className="size-4 shrink-0" /> Eliminar
-                      </button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -24,6 +24,7 @@ import {
 } from "@/services/shipmentService";
 import ShipmentForm from "./ShipmentForm";
 import ShipmentStatusModal from "./ShipmentStatusModal";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 type FormMode = "create" | "edit" | "view";
 
@@ -163,10 +164,10 @@ export default function ShipmentsTable({
                   >
                     <TableCell className="px-5 py-4 text-theme-sm">
                       <p className="text-gray-700 dark:text-gray-300">
-                        {new Date(shipment.createdAt).toLocaleDateString("es-BO")}
+                        {formatDate(shipment.createdAt)}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(shipment.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}
+                        {formatTime(shipment.createdAt)}
                       </p>
                     </TableCell>
 

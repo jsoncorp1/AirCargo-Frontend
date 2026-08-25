@@ -49,7 +49,9 @@ export default function WizardNuevoEnvio() {
       try {
         setLoading(true);
         const res = await branchOfficeService.getBranchOffices(1, 100);
-        setBranchOffices(res.data.filter(b => b.active));
+        // Sin filtrar por `active`: el endpoint nunca devuelve sucursales dadas
+        // de baja, así que el filtro en memoria no descartaba nada.
+        setBranchOffices(res.data);
       } catch (err) {
         console.error("Error fetching branches", err);
       } finally {

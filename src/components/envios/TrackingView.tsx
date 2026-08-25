@@ -23,6 +23,7 @@ import Image from "next/image";
 import { exportElementToPDF } from "@/utils/pdfExport";
 import ShipmentWaybill from "./ShipmentWaybill";
 import ShipmentLetterPdf from "./ShipmentLetterPdf";
+import { formatDate, formatTime, formatDateTime } from "@/utils/datetime";
 
 export default function TrackingView() {
   const params = useParams();
@@ -175,9 +176,9 @@ export default function TrackingView() {
                   </p>
                 )}
                 <p className="mt-2 text-xs text-gray-500">
-                  Asignado el {new Date(envio.currentAssignment.assignedAt).toLocaleString("es-BO")}
+                  Asignado el {formatDateTime(envio.currentAssignment.assignedAt)}
                   {envio.currentAssignment.pickedUpAt &&
-                    ` · Recogido el ${new Date(envio.currentAssignment.pickedUpAt).toLocaleString("es-BO")}`}
+                    ` · Recogido el ${formatDateTime(envio.currentAssignment.pickedUpAt)}`}
                 </p>
               </div>
             )}
@@ -211,7 +212,7 @@ export default function TrackingView() {
                 <p className="text-sm text-gray-500 flex items-center gap-2">
                   <Hash className="w-4 h-4" /> {envio.waybillNumber}
                   <span className="text-gray-300">|</span>
-                  {new Date(envio.createdAt).toLocaleString()}
+                  {formatDateTime(envio.createdAt)}
                 </p>
               </div>
             </div>
@@ -359,8 +360,8 @@ export default function TrackingView() {
           packageCount={envio.packageCount}
           packageDescription={envio.packageDescription || ""}
           lines={envio.details || []}
-          fecha={new Date(envio.createdAt).toLocaleDateString()}
-          hora={new Date(envio.createdAt).toLocaleTimeString()}
+          fecha={formatDate(envio.createdAt)}
+          hora={formatTime(envio.createdAt)}
           createdBy={envio.senderFullName}
         />
       </div>
