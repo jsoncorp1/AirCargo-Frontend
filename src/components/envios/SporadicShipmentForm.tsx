@@ -17,6 +17,7 @@ import {
 } from "@/services/supplierService";
 import {
   PaymentType,
+  PaymentMethod,
   ServicePointType,
   VehicleType,
   VEHICLE_TYPE_OPTIONS,
@@ -78,6 +79,7 @@ export default function SporadicShipmentForm() {
   const [destinationLocationUrl, setDestinationLocationUrl] = useState("");
   const [destinationAddressReference, setDestinationAddressReference] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType>("Prepaid");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [isExpress, setIsExpress] = useState(false);
   const [packageCount, setPackageCount] = useState(1);
   const [packageDescription, setPackageDescription] = useState("");
@@ -104,6 +106,12 @@ export default function SporadicShipmentForm() {
     fetchBranchOffices();
   }, [showToast]);
 
+  useEffect(() => {
+    if (paymentType !== "Prepaid") {
+      setPaymentMethod("");
+    }
+  }, [paymentType]);
+
   const resetForm = () => {
     setDestinationBranchOfficeId("");
     setOriginBranchOfficeId("");
@@ -118,6 +126,7 @@ export default function SporadicShipmentForm() {
     setDestinationLocationUrl("");
     setDestinationAddressReference("");
     setPaymentType("Prepaid");
+    setPaymentMethod("");
     setIsExpress(false);
     setPackageCount(1);
     setPackageDescription("");
@@ -189,6 +198,8 @@ export default function SporadicShipmentForm() {
       return showToast("error", "Error", "Si la entrega es a domicilio, indique la dirección.");
     if (isSuperAdminUser && !originBranchOfficeId)
       return showToast("error", "Error", "Seleccione la sucursal de origen.");
+    if (paymentType === "Prepaid" && !paymentMethod)
+      return showToast("error", "Error", "Debe seleccionar un medio de pago para un envío prepagado.");
     // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
     // y se pierde toda la carga del formulario.
     if (needsOverrideReason(priceOverride, quote?.total))
@@ -216,6 +227,7 @@ export default function SporadicShipmentForm() {
           destinationLocationUrl: destinationLocationUrl.trim() || null,
           destinationAddressReference: destinationAddressReference.trim() || null,
           paymentType,
+          paymentMethod: paymentMethod || null,
           isExpress,
           packageCount,
           packageDescription: packageDescription.trim(),
@@ -292,6 +304,8 @@ export default function SporadicShipmentForm() {
           setDestinationAddressReference={setDestinationAddressReference}
           paymentType={paymentType}
           setPaymentType={setPaymentType}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
           isExpress={isExpress}
           setIsExpress={setIsExpress}
           packageCount={packageCount}

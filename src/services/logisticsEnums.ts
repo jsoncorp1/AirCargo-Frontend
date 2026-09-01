@@ -86,6 +86,25 @@ export function paymentTypeOptions(
   return options;
 }
 
+// ─── Medio de pago ───────────────────────────────────────────────────────────
+//
+// Con qué se pagó el envío cuando es Prepaid (entró a la caja).
+// Para los demás envíos no viaja o se manda en null.
+export type PaymentMethod = 'Cash' | 'Qr';
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  Cash: 'Efectivo',
+  Qr: 'QR',
+};
+
+export const paymentMethodLabel = (value: PaymentMethod | string): string =>
+  PAYMENT_METHOD_LABELS[value as PaymentMethod] ?? value;
+
+export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
+  { value: 'Cash', label: PAYMENT_METHOD_LABELS.Cash },
+  { value: 'Qr', label: PAYMENT_METHOD_LABELS.Qr },
+];
+
 // ─── Vehículo ────────────────────────────────────────────────────────────────
 //
 // Define el cargo de puerta (una tarifa por departamento y por vehículo) y con

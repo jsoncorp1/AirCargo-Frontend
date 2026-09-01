@@ -22,6 +22,7 @@ import {
   SHIPMENT_STATUS_BADGE,
   SHIPMENT_OBSERVATION_LABELS,
 } from "@/services/shipmentService";
+import { paymentMethodLabel } from "@/services/logisticsEnums";
 import ShipmentForm from "./ShipmentForm";
 import ShipmentStatusModal from "./ShipmentStatusModal";
 import { formatDate, formatTime } from "@/utils/datetime";
@@ -214,8 +215,15 @@ export default function ShipmentsTable({
                       Bs {(orderTotals[shipment.orderDeliveryId] ?? 0).toFixed(2)}
                     </TableCell>
 
-                    <TableCell className="px-5 py-4 text-gray-600 text-theme-sm dark:text-gray-300">
-                      Bs {shipment.shippingPrice.toFixed(2)}
+                    <TableCell className="px-5 py-4 text-theme-sm">
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Bs {shipment.shippingPrice.toFixed(2)}
+                      </p>
+                      {shipment.paymentMethod && (
+                        <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                          Cobro: {paymentMethodLabel(shipment.paymentMethod)}
+                        </p>
+                      )}
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-right">

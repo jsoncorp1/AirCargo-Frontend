@@ -5,7 +5,7 @@ import { getApiErrorMessage } from './apiErrorMessages';
 // queda un ciclo en runtime.
 import type { ManifestStatus } from './manifestService';
 import type { DriverTaskStatus } from './driverTaskService';
-import type { PaymentType, ServicePointType, VehicleType } from './logisticsEnums';
+import type { PaymentMethod, PaymentType, ServicePointType, VehicleType } from './logisticsEnums';
 
 // ─── Estados y observaciones ─────────────────────────────────────────────────
 
@@ -338,6 +338,7 @@ export interface Shipment {
   originPointType?: ServicePointType | null;
   destinationPointType?: ServicePointType | null;
   paymentType?: PaymentType | null;
+  paymentMethod?: PaymentMethod | null;
   clientPhoneAlt?: string | null;
   destinationLocationUrl?: string | null;
   destinationAddressReference?: string | null;
@@ -396,6 +397,7 @@ export interface ShipmentPaginatedItem {
   // y la columna de retiro, sin un GET por fila.
   destinationPointType?: ServicePointType | null;
   paymentType?: PaymentType | null;
+  paymentMethod?: PaymentMethod | null;
   pickupOrderId?: string | null;
   calculatedPrice?: number | null;
   handoverAt?: string | null;
@@ -489,6 +491,7 @@ export interface CreateShipmentRequest
   extends ShipmentOriginRequest,
     ShipmentPricingRequest {
   orderDeliveryId: string;
+  paymentMethod?: PaymentMethod | null;
   // Sucursal de destino (obligatoria).
   destinationBranchOfficeId: string;
   packageCount: number;
@@ -505,6 +508,7 @@ export interface UpdateShipmentLineRequest {
 // precio, en vez de dejar el importe viejo. Si el envío está fiado, también
 // corrige la línea de la cuenta corriente cuando el período sigue abierto.
 export interface UpdateShipmentRequest extends ShipmentPricingRequest {
+  paymentMethod?: PaymentMethod | null;
   packageCount: number;
   packageDescription: string;
   lines: UpdateShipmentLineRequest[];
@@ -548,6 +552,7 @@ export interface CreateSporadicShipmentRequest
    * cargarle el fiado y el backend responde `billing.supplier.required`.
    */
   paymentType: PaymentType;
+  paymentMethod?: PaymentMethod | null;
   isExpress: boolean;
   packageCount: number;
   packageDescription: string;
@@ -576,6 +581,7 @@ export interface SporadicShipmentResponse {
   packageCount: number;
   packageDescription: string;
   details: SporadicShipmentDetailItem[];
+  paymentMethod?: PaymentMethod | null;
   // Para poder mostrar "tarifa 94 Bs → cobrado 90 Bs" en la misma pantalla.
   calculatedPrice?: number | null;
   priceWasOverridden?: boolean | null;

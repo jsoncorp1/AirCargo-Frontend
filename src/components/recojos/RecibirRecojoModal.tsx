@@ -12,7 +12,11 @@ import {
   PickupOrder,
   getPickupOrderErrorMessage,
 } from "@/services/pickupOrderService";
-import { formatBs } from "@/services/logisticsEnums";
+import {
+  PaymentMethod,
+  PAYMENT_METHOD_OPTIONS,
+  formatBs,
+} from "@/services/logisticsEnums";
 import type { QuoteRequest, QuoteResponse } from "@/services/pricingService";
 import QuotePanel from "@/components/pricing/QuotePanel";
 import PriceOverrideField, {
@@ -54,6 +58,7 @@ export default function RecibirRecojoModal({
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState(
     pickupOrder.destinationBranchOfficeId ?? ""
   );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [priceOverride, setPriceOverride] = useState<PriceOverrideState>(emptyPriceOverride);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
 
@@ -100,6 +105,15 @@ export default function RecibirRecojoModal({
       return;
     }
 
+    if (pickupOrder.paymentType === "Prepaid" && !paymentMethod) {
+      showToast(
+        "error",
+        "Falta medio de pago",
+        "Seleccioná con qué medio de pago se cobró este envío prepagado."
+      );
+      return;
+    }
+
     runSubmit(async () => {
       try {
         const res = await pickupOrderService.receive(pickupOrder.id, {
@@ -107,6 +121,7 @@ export default function RecibirRecojoModal({
           packageCount,
           packageDescription: packageDescription.trim(),
           destinationBranchOfficeId: destinationBranchOfficeId || null,
+          paymentMethod: paymentMethod || null,
           ...priceOverridePayload(priceOverride, quote?.total),
         });
         showToast(
@@ -227,6 +242,23 @@ export default function RecibirRecojoModal({
               ))}
             </select>
           </div>
+
+          {pickupOrder.paymentType === "Prepaid" && (
+            <div className="sm:col-span-2">
+              <Label required>Medio de Cobro</Label>
+              <select
+                className={selectClassName}
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                required
+              >
+                <option value="" disabled>Seleccione el medio de pago</option>
+                {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

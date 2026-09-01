@@ -4,7 +4,7 @@ import type { BadgeColor } from './shipmentService';
 import type { BolivianDepartment } from './supplierService';
 import type { OrderType } from './orderDeliveryService';
 import type { DriverTaskStatus } from './driverTaskService';
-import type { PaymentType, ServicePointType, VehicleType } from './logisticsEnums';
+import type { PaymentMethod, PaymentType, ServicePointType, VehicleType } from './logisticsEnums';
 
 // Solicitud de recojo: el pedido de que un conductor pase a buscar un paquete
 // por un domicilio.
@@ -330,6 +330,7 @@ export interface ReceivePickupOrderRequest {
   shippingPrice?: number | null;
   /** OBLIGATORIO si `shippingPrice` difiere del calculado. */
   priceOverrideReason?: string | null;
+  paymentMethod?: PaymentMethod | null;
 }
 
 export interface ReceivePickupOrderResponse {

@@ -33,10 +33,13 @@ import { branchOfficeService, BranchOffice } from "@/services/branchOfficeServic
 import type { BolivianDepartment } from "@/services/supplierService";
 import {
   PaymentType,
+  PaymentMethod,
   ServicePointType,
   VehicleType,
   VEHICLE_TYPE_OPTIONS,
+  PAYMENT_METHOD_OPTIONS,
   paymentTypeLabel,
+  paymentMethodLabel,
   servicePointTypeLabel,
   formatBs,
 } from "@/services/logisticsEnums";
@@ -155,6 +158,7 @@ export default function ShipmentForm({
   // Define el cargo de puerta. Solo pesa si el destino es domicilio: en un
   // retiro en mostrador no se cobra viaje.
   const [deliveryVehicleType, setDeliveryVehicleType] = useState<VehicleType>("Motorcycle");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   // El precio sale de la tarifa; esto es solo el ajuste manual y su motivo.
   const [priceOverride, setPriceOverride] = useState<PriceOverrideState>(emptyPriceOverride);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
@@ -286,6 +290,7 @@ export default function ShipmentForm({
       setStatus(shipment.status ?? null);
       setObservation(shipment.observation ?? null);
       setDeliveryComment(shipment.deliveryComment ?? null);
+      setPaymentMethod(shipment.paymentMethod ?? "");
       setOrderInfo((prev) => ({
         clientPhone: prev?.clientPhone ?? "",
         destinationDepartment: shipment.destinationDepartment,
@@ -389,6 +394,12 @@ export default function ShipmentForm({
     loadOrderDetails(val);
   };
 
+  useEffect(() => {
+    if (orderInfo?.paymentType !== "Prepaid") {
+      setPaymentMethod("");
+    }
+  }, [orderInfo?.paymentType]);
+
   // Solo el peso: el costo por línea lo calcula el backend repartiendo el precio
   // del envío, así que ya no hay nada que tipear en esa columna.
   const handleWeightChange = (index: number, value: string) => {
@@ -419,6 +430,10 @@ export default function ShipmentForm({
       showToast("error", "Error", "Debe seleccionar la sucursal de origen.");
       return;
     }
+    if (orderInfo?.paymentType === "Prepaid" && !paymentMethod) {
+      showToast("error", "Error", "Debe seleccionar un medio de pago para un envío prepagado.");
+      return;
+    }
     // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
     // y se pierde toda la carga; cortarlo acá deja el formulario intacto.
     if (needsOverrideReason(priceOverride, quote?.total)) {
@@ -445,6 +460,7 @@ export default function ShipmentForm({
             packageCount,
             packageDescription: packageDescription.trim(),
             deliveryVehicleType,
+            paymentMethod: paymentMethod || null,
             ...pricing,
             lines: lines.map((l) => ({
               orderDeliveryDetailId: l.orderDeliveryDetailId,
@@ -466,6 +482,7 @@ export default function ShipmentForm({
             packageCount,
             packageDescription: packageDescription.trim(),
             deliveryVehicleType,
+            paymentMethod: paymentMethod || null,
             ...pricing,
             lines: lines.map((l) => ({
               shipmentDetailId: l.shipmentDetailId ?? "",
@@ -895,6 +912,12 @@ export default function ShipmentForm({
                 label="Forma de Pago"
                 value={orderInfo?.paymentType ? paymentTypeLabel(orderInfo.paymentType) : undefined}
               />
+              {(mode !== "create" || orderInfo?.paymentType === "Prepaid") && (
+                <InfoField
+                  label="Cobro"
+                  value={paymentMethod ? paymentMethodLabel(paymentMethod) : undefined}
+                />
+              )}
               <InfoField
                 label="Modalidad"
                 value={
@@ -1079,6 +1102,26 @@ export default function ShipmentForm({
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       El cliente retira en sucursal, así que no se cobra viaje a domicilio.
                     </p>
+                  )}
+
+                  {orderInfo?.paymentType === "Prepaid" && (
+                    <div>
+                      <Label required>Medio de Cobro</Label>
+                      <select
+                        className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                        required
+                      >
+                        <option value="" disabled>Seleccione el medio de pago</option>
+                        {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                        Cómo ingresó el dinero a la caja.
+                      </p>
+                    </div>
                   )}
 
                   <PriceOverrideField

@@ -5,8 +5,10 @@ import Checkbox from "@/components/form/input/Checkbox";
 import { BranchOffice } from "@/services/branchOfficeService";
 import {
   PaymentType,
+  PaymentMethod,
   ServicePointType,
   SERVICE_POINT_TYPE_OPTIONS,
+  PAYMENT_METHOD_OPTIONS,
   paymentTypeOptions,
 } from "@/services/logisticsEnums";
 
@@ -31,6 +33,8 @@ interface DestinationSectionProps {
   setDestinationAddressReference: (val: string) => void;
   paymentType: PaymentType;
   setPaymentType: (val: PaymentType) => void;
+  paymentMethod: PaymentMethod | "";
+  setPaymentMethod: (val: PaymentMethod | "") => void;
   isExpress: boolean;
   setIsExpress: (val: boolean) => void;
   packageCount: number;
@@ -69,6 +73,8 @@ export default function DestinationSection({
   setDestinationAddressReference,
   paymentType,
   setPaymentType,
+  paymentMethod,
+  setPaymentMethod,
   isExpress,
   setIsExpress,
   packageCount,
@@ -215,6 +221,23 @@ export default function DestinationSection({
             ))}
           </select>
         </div>
+
+        {paymentType === "Prepaid" && (
+          <div>
+            <Label required>Medio de Cobro</Label>
+            <select
+              className={selectClassName}
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              required
+            >
+              <option value="" disabled>Seleccione el medio de pago</option>
+              {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Los datos del domicilio solo tienen sentido si va un conductor. */}
         {!isBranchPickup && (

@@ -104,6 +104,14 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     'La fecha "desde" no puede ser mayor que la fecha "hasta".',
   'orderdelivery.stock.insufficient':
     'No hay stock suficiente para uno de los artículos. El stock sube con las recepciones.',
+  'shipment.paymentmethod.required':
+    'Debes indicar con qué medio de pago se cobró este envío.',
+  'shipment.paymentmethod.notallowed':
+    'Solo los envíos prepagados pueden tener un medio de pago registrado.',
+  'sporadicshipment.paymentmethod.required':
+    'Debes indicar con qué medio de pago se cobró este envío.',
+  'sporadicshipment.paymentmethod.notallowed':
+    'Solo los envíos prepagados pueden tener un medio de pago registrado.',
 
   // ─── Manifiestos ───────────────────────────────────────────────────────────
   // El lote de transporte entre dos sucursales. El admin solo opera sobre los
@@ -214,6 +222,10 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'pickuporder.delete.hasopentask':
     'Esta solicitud tiene un recojo en curso. Anula la tarea del conductor antes de eliminarla.',
   'pickuporder.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+  'pickuporder.receive.paymentmethod.required':
+    'Debes indicar con qué medio de pago se cobró este envío.',
+  'pickuporder.receive.paymentmethod.notallowed':
+    'Solo los envíos prepagados pueden tener un medio de pago registrado.',
 
   // ─── Perfiles de conductor y tareas ────────────────────────────────────────
   'drivertask.notfound': 'La tarea no existe.',
