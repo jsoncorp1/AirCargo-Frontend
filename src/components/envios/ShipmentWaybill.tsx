@@ -134,7 +134,7 @@ function BlankLine() {
 
 function SignatureLine({ label }: { label: string }) {
   return (
-    <div className="mt-8 mb-4 flex items-end gap-1">
+    <div className="mt-6 mb-4 flex items-end gap-1">
       <span className="whitespace-nowrap text-[10px] font-bold text-black">{label}:</span>
       <span className="flex-1 border-b border-black" />
     </div>
@@ -457,10 +457,14 @@ export default function ShipmentWaybill({
       <Divider />
 
       {/* Firmas */}
-      <div>
+      <div className="flex-1 flex flex-col justify-end">
+        <br />
         <SignatureLine label="Firma remitente" />
+        <br />
         <SignatureLine label="Firma de AirCargo" />
+        <br />
         <SignatureLine label="Firma de Destinatario" />
+        <br />
       </div>
 
       {/* Pie: se empuja al final de los 20 cm */}
