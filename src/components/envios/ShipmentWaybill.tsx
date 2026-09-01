@@ -128,7 +128,7 @@ function BlankLine() {
 
 function SignatureLine({ label }: { label: string }) {
   return (
-    <div className="mt-4 flex items-end gap-1">
+    <div className="mt-8 mb-4 flex items-end gap-1">
       <span className="whitespace-nowrap text-[10px] font-bold text-black">{label}:</span>
       <span className="flex-1 border-b border-black" />
     </div>

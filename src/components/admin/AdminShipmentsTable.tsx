@@ -33,6 +33,7 @@ interface AdminShipmentsTableProps {
   perPage?: number;
   onPerPageChange?: (perPage: number) => void;
   onDataChange?: () => void;
+  currentBranchId?: string;
 }
 
 function SkeletonRow() {
@@ -57,6 +58,7 @@ export default function AdminShipmentsTable({
   perPage,
   onPerPageChange,
   onDataChange,
+  currentBranchId,
 }: AdminShipmentsTableProps) {
   const viewModal = useModal();
   const statusModal = useModal();
@@ -97,8 +99,22 @@ export default function AdminShipmentsTable({
     }
   };
 
+  const selectedShipments = shipments.filter(s => selectedShipmentIds.includes(s.id));
+  const isLocalDelivery = selectedShipments.every(s => s.destinationBranchOfficeId === currentBranchId);
+  const uniqueDestinations = new Set(selectedShipments.map(s => s.destinationBranchOfficeId));
+  const isSameDestination = uniqueDestinations.size === 1;
+
   const handleAssignSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLocalDelivery) {
+      setTimeout(() => {
+        alert(`Se creó un manifiesto con ${selectedShipmentIds.length} envíos (Mock)`);
+        setSelectedShipmentIds([]);
+        assignModal.closeModal();
+      }, 500);
+      return;
+    }
+
     if (!selectedDriver) return;
     setTimeout(() => {
       alert(`Se asignaron ${selectedShipmentIds.length} envíos al conductor ${selectedDriver}`);
@@ -116,12 +132,18 @@ export default function AdminShipmentsTable({
         <div className="mb-4 p-3 bg-brand-50 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-800 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-300">
           <p className="text-sm text-brand-700 dark:text-brand-300 font-medium">
             <span className="font-bold">{selectedShipmentIds.length}</span> envíos seleccionados
+            {!isLocalDelivery && !isSameDestination && (
+              <span className="ml-2 text-error-600 text-xs font-normal">
+                (Los envíos para manifiesto deben ir al mismo destino)
+              </span>
+            )}
           </p>
           <button 
             onClick={() => assignModal.openModal()}
-            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors"
+            disabled={!isLocalDelivery && !isSameDestination}
+            className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors"
           >
-            Asignar a Conductor
+            {isLocalDelivery ? "Asignar a Conductor" : "Crear Manifiesto"}
           </button>
         </div>
       )}
@@ -332,23 +354,34 @@ export default function AdminShipmentsTable({
       >
         <div className="p-6">
           <h4 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-            Asignar {selectedShipmentIds.length} envíos a Conductor
+            {isLocalDelivery 
+              ? `Asignar ${selectedShipmentIds.length} envíos a Conductor`
+              : `Crear manifiesto con ${selectedShipmentIds.length} envíos`
+            }
           </h4>
           <form onSubmit={handleAssignSubmit}>
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seleccione Conductor (Mock)</label>
-              <select 
-                value={selectedDriver}
-                onChange={(e) => setSelectedDriver(e.target.value)}
-                required
-                className="w-full h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-              >
-                <option value="" disabled>Elegir conductor...</option>
-                <option value="Juan Pérez">Juan Pérez - Moto 1</option>
-                <option value="Carlos Gómez">Carlos Gómez - Furgoneta A</option>
-                <option value="Miguel Suárez">Miguel Suárez - Moto 2</option>
-              </select>
-            </div>
+            {isLocalDelivery ? (
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seleccione Conductor (Mock)</label>
+                <select 
+                  value={selectedDriver}
+                  onChange={(e) => setSelectedDriver(e.target.value)}
+                  required
+                  className="w-full h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                >
+                  <option value="" disabled>Elegir conductor...</option>
+                  <option value="Juan Pérez">Juan Pérez - Moto 1</option>
+                  <option value="Carlos Gómez">Carlos Gómez - Furgoneta A</option>
+                  <option value="Miguel Suárez">Miguel Suárez - Moto 2</option>
+                </select>
+              </div>
+            ) : (
+              <div className="mb-5">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Se generará un manifiesto para enviar estos paquetes a la sucursal de destino. (Mock)
+                </p>
+              </div>
+            )}
             <div className="flex justify-end gap-3">
               <button
                 type="button"
