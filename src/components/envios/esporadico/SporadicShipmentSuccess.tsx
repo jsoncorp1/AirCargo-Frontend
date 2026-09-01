@@ -1,4 +1,5 @@
 import React from "react";
+import { Printer } from "lucide-react";
 import ComponentCard from "@/components/common/ComponentCard";
 import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
@@ -8,11 +9,13 @@ import { SporadicShipmentResponse } from "@/services/shipmentService";
 interface SporadicShipmentSuccessProps {
   result: SporadicShipmentResponse;
   onReset: () => void;
+  waybillElement?: React.ReactNode;
 }
 
 export default function SporadicShipmentSuccess({
   result,
   onReset,
+  waybillElement,
 }: SporadicShipmentSuccessProps) {
   return (
     <ComponentCard title="Envío Esporádico Registrado">
@@ -58,7 +61,7 @@ export default function SporadicShipmentSuccess({
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col sm:flex-row justify-center gap-3">
+        <div className="mt-6 flex flex-col sm:flex-row justify-center gap-3 print:hidden">
           <Button onClick={onReset} className="px-8 shadow-sm hover:shadow-md">
             Registrar Nuevo Envío
           </Button>
@@ -69,8 +72,23 @@ export default function SporadicShipmentSuccess({
           >
             Ver Guía Creada
           </Button>
+          {waybillElement && (
+            <Button
+              variant="outline"
+              onClick={() => window.print()}
+              className="px-8 shadow-sm hover:shadow-md flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4" /> Imprimir Guía
+            </Button>
+          )}
         </div>
       </div>
+
+      {waybillElement && (
+        <div className="hidden print:flex print:justify-center w-full bg-white mt-8">
+          {waybillElement}
+        </div>
+      )}
     </ComponentCard>
   );
 }

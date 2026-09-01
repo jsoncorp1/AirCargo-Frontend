@@ -34,6 +34,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 import SporadicShipmentSuccess from "./esporadico/SporadicShipmentSuccess";
+import ShipmentWaybill from "./ShipmentWaybill";
 import SenderSection from "./esporadico/SenderSection";
 import DestinationSection from "./esporadico/DestinationSection";
 import GeneralInfoSection from "./esporadico/GeneralInfoSection";
@@ -241,6 +242,14 @@ export default function SporadicShipmentForm() {
   };
 
   if (result) {
+    // Obtenemos la dirección de la sucursal de origen si fue seleccionada
+    const originBranch = branchOffices.find((b) => b.id === originBranchOfficeId);
+    
+    // Obtenemos la fecha actual para la impresión
+    const today = new Date();
+    const fechaStr = today.toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const horaStr = today.toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hour12: false });
+
     return (
       <SporadicShipmentSuccess
         result={result}
@@ -248,6 +257,34 @@ export default function SporadicShipmentForm() {
           setResult(null);
           resetForm();
         }}
+        waybillElement={
+          <ShipmentWaybill
+            code={result.code}
+            orderType="Sporadic"
+            originDepartment={originDepartment || ""}
+            originBranchAddress={originBranch?.address || null}
+            destinationDepartment={destinationDepartment}
+            senderFullName={senderFullName}
+            senderPhone={senderPhone}
+            senderAddress=""
+            clientFullName={clientFullName}
+            clientPhone={clientPhone}
+            clientAddress={clientAddress}
+            paymentType={paymentType}
+            paymentMethod={paymentMethod || null}
+            originPointType="Branch"
+            destinationPointType={destinationPointType}
+            destinationLocationUrl={destinationLocationUrl || null}
+            destinationAddressReference={destinationAddressReference || null}
+            isExpress={isExpress}
+            packageCount={packageCount}
+            packageDescription={packageDescription}
+            lines={result.details}
+            fecha={fechaStr}
+            hora={horaStr}
+            createdBy="Sistema AirCargo"
+          />
+        }
       />
     );
   }
