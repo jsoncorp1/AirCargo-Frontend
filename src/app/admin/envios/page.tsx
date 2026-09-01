@@ -14,6 +14,7 @@ import {
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
 import { formatDate, formatTime } from "@/utils/datetime";
+import ExcelJS from "exceljs";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 import ShipmentDateRangeFilter, {
   DateRange,
@@ -122,29 +123,62 @@ export default function AdminEnviosPage() {
         return;
       }
       
-      const headers = ["Fecha", "Hora", "Guia", "Cliente", "Origen", "Destino", "Estado", "Peso (kg)", "Costo Envio (Bs)"];
-      const rows = data.map(s => [
-        formatDate(s.createdAt),
-        formatTime(s.createdAt),
-        s.code,
-        s.clientFullName,
-        s.originBranchOfficeCode || "-",
-        s.destinationBranchOfficeCode || "-",
-        SHIPMENT_STATUS_LABELS[s.status] || s.status,
-        s.totalWeight,
-        s.shippingPrice
-      ]);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Envíos');
+
+      // Define columns
+      worksheet.columns = [
+        { header: 'Fecha', key: 'fecha', width: 12 },
+        { header: 'Hora', key: 'hora', width: 10 },
+        { header: 'Guía', key: 'guia', width: 15 },
+        { header: 'Cliente', key: 'cliente', width: 30 },
+        { header: 'Origen', key: 'origen', width: 20 },
+        { header: 'Destino', key: 'destino', width: 20 },
+        { header: 'Estado', key: 'estado', width: 18 },
+        { header: 'Peso (kg)', key: 'peso', width: 12 },
+        { header: 'Costo (Bs)', key: 'costo', width: 15 }
+      ];
+
+      // Style headers
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1F2937' } // dark gray background
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
       
-      const csvContent = [
-        headers.join(","),
-        ...rows.map(e => e.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      ].join("\n");
+      // Add data
+      data.forEach(s => {
+        worksheet.addRow({
+          fecha: formatDate(s.createdAt),
+          hora: formatTime(s.createdAt),
+          guia: s.code,
+          cliente: s.clientFullName,
+          origen: s.originBranchOfficeCode || "-",
+          destino: s.destinationBranchOfficeCode || "-",
+          estado: SHIPMENT_STATUS_LABELS[s.status] || s.status,
+          peso: s.totalWeight,
+          costo: s.shippingPrice
+        });
+      });
+
+      // Style data rows
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          row.alignment = { vertical: 'middle', horizontal: 'left' };
+          row.getCell('peso').alignment = { vertical: 'middle', horizontal: 'right' };
+          row.getCell('costo').alignment = { vertical: 'middle', horizontal: 'right' };
+        }
+      });
       
-      const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `Envios_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute("download", `Envios_${new Date().toISOString().split('T')[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
