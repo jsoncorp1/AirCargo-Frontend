@@ -33,7 +33,7 @@ interface AdminShipmentsTableProps {
   perPage?: number;
   onPerPageChange?: (perPage: number) => void;
   onDataChange?: () => void;
-  currentBranchId?: string;
+  currentBranchId?: string | null;
 }
 
 function SkeletonRow() {
