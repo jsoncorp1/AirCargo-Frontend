@@ -36,6 +36,7 @@ import { useSubmitLock } from "@/hooks/useSubmitLock";
 import SporadicShipmentSuccess from "./esporadico/SporadicShipmentSuccess";
 import SenderSection from "./esporadico/SenderSection";
 import DestinationSection from "./esporadico/DestinationSection";
+import GeneralInfoSection from "./esporadico/GeneralInfoSection";
 import ArticlesSection, { SporadicLineFormState } from "./esporadico/ArticlesSection";
 
 const DECIMAL_PATTERN = /^\d*\.?\d*$/;
@@ -49,8 +50,6 @@ const DEFAULT_DEPARTMENT = DEPARTAMENTOS[0].value;
 const emptyLine = (): SporadicLineFormState => ({
   articleName: "",
   quantity: 1,
-  unitPrice: "0",
-  weight: "0",
 });
 
 export default function SporadicShipmentForm() {
@@ -83,6 +82,8 @@ export default function SporadicShipmentForm() {
   const [isExpress, setIsExpress] = useState(false);
   const [packageCount, setPackageCount] = useState(1);
   const [packageDescription, setPackageDescription] = useState("");
+  const [totalWeightStr, setTotalWeightStr] = useState("");
+  const [declaredValueStr, setDeclaredValueStr] = useState("");
 
   // Precio: sale de la tarifa vigente. Esto es solo el vehículo que define el
   // cargo de puerta y el ajuste manual con su motivo.
@@ -130,6 +131,8 @@ export default function SporadicShipmentForm() {
     setIsExpress(false);
     setPackageCount(1);
     setPackageDescription("");
+    setTotalWeightStr("");
+    setDeclaredValueStr("");
     setDeliveryVehicleType("Motorcycle");
     setPriceOverride(emptyPriceOverride);
     setLines([emptyLine()]);
@@ -146,19 +149,8 @@ export default function SporadicShipmentForm() {
     newLines[index] = { ...newLines[index], [field]: value } as SporadicLineFormState;
     setLines(newLines);
   };
-  const handleDecimalChange = (
-    index: number,
-    field: "unitPrice" | "weight",
-    raw: string
-  ) => {
-    if (!DECIMAL_PATTERN.test(raw)) return;
-    handleLineChange(index, field, raw);
-  };
 
-  const lineTotal = (line: SporadicLineFormState) =>
-    line.quantity * (Number(line.unitPrice) || 0);
-  const totalPrice = lines.reduce((acc, line) => acc + lineTotal(line), 0);
-  const totalWeight = lines.reduce((acc, line) => acc + (Number(line.weight) || 0), 0);
+  const totalWeight = Number(totalWeightStr) || 0;
 
   // El origen de un esporádico es SIEMPRE el mostrador: un origen a domicilio
   // es una solicitud de recojo, no un envío que se registra acá.
@@ -186,10 +178,9 @@ export default function SporadicShipmentForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (lines.length === 0) return showToast("error", "Error", "Debe agregar al menos un artículo.");
-    if (lines.some((l) => !l.articleName.trim())) return showToast("error", "Error", "Todos los artículos deben tener un nombre.");
-    if (lines.some((l) => l.quantity <= 0)) return showToast("error", "Error", "La cantidad debe ser mayor a cero en todos los artículos.");
-    if (lines.some((l) => (Number(l.weight) || 0) <= 0)) return showToast("error", "Error", "El peso debe ser mayor a cero.");
+    const validLines = lines.filter(l => l.articleName.trim() !== "");
+    if (validLines.some((l) => l.quantity <= 0)) return showToast("error", "Error", "La cantidad debe ser mayor a cero en los artículos ingresados.");
+    if (totalWeight <= 0) return showToast("error", "Error", "El peso total debe ser mayor a cero.");
     if (!senderFullName.trim() || !senderPhone.trim()) return showToast("error", "Error", "Complete los datos del remitente.");
     if (packageCount <= 0) return showToast("error", "Error", "La cantidad de paquetes debe ser mayor a cero.");
     if (!packageDescription.trim()) return showToast("error", "Error", "Debe describir los paquetes del envío.");
@@ -225,12 +216,20 @@ export default function SporadicShipmentForm() {
           packageDescription: packageDescription.trim(),
           deliveryVehicleType,
           ...priceOverridePayload(priceOverride, quote?.total),
-          lines: lines.map((l) => ({
-            articleName: l.articleName.trim(),
-            quantity: l.quantity,
-            unitPrice: Number(l.unitPrice) || 0,
-            weight: Number(l.weight) || 0,
-          })),
+          lines: validLines.length > 0 
+            ? validLines.map((l, idx) => ({
+                articleName: l.articleName.trim(),
+                quantity: l.quantity,
+                // Asignamos el valor y peso global al primer artículo de la lista
+                unitPrice: idx === 0 ? (Number(declaredValueStr) || 0) : 0,
+                weight: idx === 0 ? totalWeight : 0,
+              }))
+            : [{
+                articleName: packageDescription.trim() || "Paquetes varios",
+                quantity: packageCount,
+                unitPrice: Number(declaredValueStr) || 0,
+                weight: totalWeight,
+              }],
         };
         const response = await shipmentService.createSporadicShipment(payload);
         setResult(response);
@@ -294,18 +293,25 @@ export default function SporadicShipmentForm() {
           setDestinationLocationUrl={setDestinationLocationUrl}
           destinationAddressReference={destinationAddressReference}
           setDestinationAddressReference={setDestinationAddressReference}
+          branchOffices={branchOffices}
+          departamentos={DEPARTAMENTOS}
+        />
+
+        <GeneralInfoSection
           paymentType={paymentType}
           setPaymentType={setPaymentType}
           paymentMethod={paymentMethod}
           setPaymentMethod={setPaymentMethod}
-          isExpress={isExpress}
-          setIsExpress={setIsExpress}
           packageCount={packageCount}
           setPackageCount={setPackageCount}
           packageDescription={packageDescription}
           setPackageDescription={setPackageDescription}
-          branchOffices={branchOffices}
-          departamentos={DEPARTAMENTOS}
+          isExpress={isExpress}
+          setIsExpress={setIsExpress}
+          totalWeight={totalWeightStr}
+          setTotalWeight={setTotalWeightStr}
+          declaredValue={declaredValueStr}
+          setDeclaredValue={setDeclaredValueStr}
         />
 
         <ArticlesSection
@@ -313,17 +319,13 @@ export default function SporadicShipmentForm() {
           handleAddLine={handleAddLine}
           handleRemoveLine={handleRemoveLine}
           handleLineChange={handleLineChange}
-          handleDecimalChange={handleDecimalChange}
-          lineTotal={lineTotal}
-          totalWeight={totalWeight}
-          totalPrice={totalPrice}
         />
 
         {/* Precio: sale de la tarifa vigente, no se carga a mano. */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 font-bold">
-              4
+              5
             </div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
               Precio del Envío
