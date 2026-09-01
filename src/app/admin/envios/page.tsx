@@ -14,6 +14,7 @@ import {
 import { orderDeliveryService } from "@/services/orderDeliveryService";
 import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
 import { formatDate, formatTime } from "@/utils/datetime";
+import { paymentTypeLabel } from "@/services/logisticsEnums";
 import ExcelJS from "exceljs";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 import ShipmentDateRangeFilter, {
@@ -135,6 +136,7 @@ export default function AdminEnviosPage() {
         { header: 'Origen', key: 'origen', width: 20 },
         { header: 'Destino', key: 'destino', width: 20 },
         { header: 'Estado', key: 'estado', width: 18 },
+        { header: 'Tipo de Pago', key: 'pago', width: 15 },
         { header: 'Peso (kg)', key: 'peso', width: 12 },
         { header: 'Costo (Bs)', key: 'costo', width: 15 }
       ];
@@ -159,6 +161,7 @@ export default function AdminEnviosPage() {
           origen: s.originBranchOfficeCode || "-",
           destino: s.destinationBranchOfficeCode || "-",
           estado: SHIPMENT_STATUS_LABELS[s.status] || s.status,
+          pago: s.paymentType ? paymentTypeLabel(s.paymentType) : "-",
           peso: s.totalWeight,
           costo: s.shippingPrice
         });
