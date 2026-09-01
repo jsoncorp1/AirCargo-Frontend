@@ -1,0 +1,24 @@
+# Lo pesado primero: sin esto el contexto de build sube cientos de megas por red
+# en cada deploy, y ademas `node_modules` del host es de Windows — las binarias
+# nativas no sirven dentro de la imagen Linux.
+node_modules/
+.next/
+.git/
+
+# Configuracion local de editores y del toolchain
+.idea/
+.vscode/
+.claude/
+
+# Secretos: nunca entran a la imagen. El .env.example si puede quedar.
+.env*.local
+
+# Ruido que no cambia el build
+*.log
+*.tsbuildinfo
+coverage/
+LICENSE
+README*.md
+banner.png
+Dockerfile
+.dockerignore

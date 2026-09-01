@@ -175,6 +175,106 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     'No se pudo subir la foto al servidor de imágenes. Vuelve a intentarlo.',
   'assignment.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
 
+  // ─── Tarifas y cotizador ───────────────────────────────────────────────────
+  // Estas dos NO son un error del usuario ni un bug del front: falta cargar la
+  // tarifa de esa ruta. Ver `isMissingRateError` en pricingService: la pantalla
+  // tiene que decir eso y, si quien mira es superadmin, ofrecer el link al ABM.
+  'pricing.rate.notfound':
+    'No hay una tarifa de flete cargada para esta ruta. Hay que cargarla antes de poder cotizar.',
+  'pricing.doorrate.notfound':
+    'No hay una tarifa de servicio a domicilio cargada para ese departamento y vehículo.',
+  'shipment.priceoverride.reasonrequired':
+    'Cambiaste el precio calculado: indica el motivo del ajuste.',
+
+  // ─── Solicitudes de recojo ─────────────────────────────────────────────────
+  'pickuporder.notfound': 'La solicitud de recojo no existe.',
+  'pickuporder.notowner': 'Esta solicitud de recojo es de otra empresa.',
+  'pickuporder.access.forbidden': 'Esta solicitud de recojo no está a tu alcance.',
+  'pickuporder.edit.invalidstatus':
+    'La solicitud ya fue confirmada: el precio estimado es un compromiso y no se puede editar.',
+  'pickuporder.statuschange.invalidtransition':
+    'Ese cambio de estado no está permitido para la solicitud.',
+  'pickuporder.cancellationreason.required':
+    'Para anular una solicitud debes indicar el motivo.',
+  'pickuporder.pickupdate.past': 'La fecha de recojo no puede ser anterior a hoy.',
+  'pickuporder.pickupwindow.invalid':
+    'La ventana horaria no es válida: la hora de inicio tiene que ser anterior a la de fin.',
+  'pickuporder.payment.creditnotallowed':
+    'Esta empresa no tiene cuenta corriente habilitada, así que no puede fiar el envío.',
+  'pickuporder.destinationbranch.required':
+    'Si el destino es una sucursal, tienes que indicar cuál.',
+  'pickuporder.destinationaddress.required':
+    'Si el destino es un domicilio, tienes que indicar la dirección y el enlace de mapa.',
+  'pickuporder.assign.invalidstatus':
+    'Solo se le puede asignar un conductor a una solicitud confirmada.',
+  'pickuporder.receive.invalidstatus':
+    'Solo se puede recibir una solicitud que el conductor ya recogió.',
+  'pickuporder.delete.hasshipment':
+    'Esta solicitud ya generó un envío: no se puede eliminar.',
+  'pickuporder.delete.hasopentask':
+    'Esta solicitud tiene un recojo en curso. Anula la tarea del conductor antes de eliminarla.',
+  'pickuporder.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+
+  // ─── Perfiles de conductor y tareas ────────────────────────────────────────
+  'drivertask.notfound': 'La tarea no existe.',
+  'drivertask.access.forbidden': 'Esta tarea no es tuya ni pertenece a tu sucursal.',
+  'drivertask.driver.noprofile':
+    'Este conductor todavía no tiene perfil cargado (vehículo y modalidad), así que no puede recibir tareas.',
+  'drivertask.driver.offline':
+    'Este conductor es esporádico y no está en línea, así que no puede recibir tareas ahora.',
+  'drivertask.vehicle.mismatch':
+    'El vehículo del conductor no coincide con el que pidió la solicitud.',
+  'drivertask.statuschange.invalidtransition':
+    'La transición de estado de la tarea no está permitida.',
+  'driver.notfound': 'El conductor no tiene perfil cargado.',
+  'driver.user.notdriver': 'El usuario indicado no tiene rol conductor.',
+  'driver.alreadyexists': 'Este conductor ya tiene un perfil cargado.',
+  'driver.platenumber.duplicated': 'Ya hay otro conductor activo con esa placa.',
+  'driver.monthlysalary.required':
+    'Un conductor de planta necesita un sueldo mensual.',
+  'driver.monthlysalary.notallowed':
+    'Un conductor esporádico no lleva sueldo mensual: cobra por comisión.',
+
+  // ─── Empresas: configuración ───────────────────────────────────────────────
+  'supplier.kind.hascatalog':
+    'Esta empresa tiene artículos cargados. Para pasarla a "solo recojos" hay que dar de baja su catálogo primero.',
+  'supplier.businesshours.incomplete':
+    'El horario de atención va completo: las dos horas o ninguna.',
+  'supplier.businesshours.invalid':
+    'La hora de apertura tiene que ser anterior a la de cierre.',
+  'supplier.paymentdueday.invalid':
+    'El día de vencimiento tiene que estar entre 1 y 28.',
+
+  // ─── Órdenes: modalidad de destino y forma de pago ─────────────────────────
+  'orderdelivery.destinationbranch.required':
+    'Si el destino es una sucursal, tienes que indicar cuál.',
+  'orderdelivery.destinationaddress.required':
+    'Si el destino es un domicilio, tienes que indicar la dirección.',
+  'orderdelivery.payment.creditnotallowed':
+    'Esta empresa no tiene cuenta corriente habilitada, así que no puede fiar el envío.',
+  'orderdelivery.supplier.nocatalog':
+    'Esta empresa no tiene catálogo: sus envíos se piden como solicitud de recojo, no como orden.',
+
+  // ─── Retiro en mostrador ───────────────────────────────────────────────────
+  'shipment.handover.invalidstatus':
+    'Solo se puede registrar el retiro de un envío que está esperando que lo vengan a buscar.',
+  'shipment.handover.namerequired': 'Indica el nombre de quien retira.',
+  'shipment.handover.documentrequired': 'Indica el documento de quien retira.',
+
+  // ─── Cuenta corriente y liquidaciones ──────────────────────────────────────
+  'billing.supplier.required':
+    'Un envío esporádico no tiene empresa a la que cargarle la cuenta corriente. Elige otra forma de pago.',
+  'billing.period.notfound': 'El período no existe.',
+  'billing.period.access.forbidden': 'Este período es de otra empresa.',
+  'billing.period.stillopen':
+    'El mes todavía no terminó: el período se puede cerrar recién a partir del primer día del mes siguiente.',
+  'billing.period.notclosed': 'Hay que cerrar el período antes de registrar el cobro.',
+  'billing.period.alreadysettled': 'Este período ya figura como cobrado.',
+  'driversettlement.notfound': 'La liquidación no existe.',
+  'driversettlement.access.forbidden': 'Esta liquidación es de otro conductor.',
+  'driversettlement.notclosed': 'Hay que cerrar la liquidación antes de pagarla.',
+  'driversettlement.alreadypaid': 'Esta liquidación ya figura como pagada.',
+
   // ─── Clientes potenciales (leads) ──────────────────────────────────────────
   // El formulario de contacto es público, así que los mensajes de validación
   // los puede llegar a leer un visitante: van sin jerga interna.
@@ -213,6 +313,8 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'shipment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'manifest.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'assignment.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+  'drivertask.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+  'pickuporder.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   // Llega como 400 y no como 404, pero significa lo mismo: token huérfano.
   'lead.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'user.actor.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
@@ -227,6 +329,8 @@ export const ORPHAN_TOKEN_ERROR_KEYS = new Set([
   'shipment.user.notfound',
   'manifest.user.notfound',
   'assignment.user.notfound',
+  'drivertask.user.notfound',
+  'pickuporder.user.notfound',
   'lead.user.notfound',
   'user.actor.notfound',
 ]);

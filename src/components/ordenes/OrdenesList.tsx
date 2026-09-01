@@ -1,6 +1,7 @@
 import React from "react";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
+import { paymentTypeLabel, paymentTypeBadge } from "@/services/logisticsEnums";
 import Pagination from "@/components/tables/Pagination";
 import { EyeIcon, PencilIcon, TrashBinIcon, BoxCubeIcon, TaskIcon } from "@/icons";
 import {
@@ -12,11 +13,6 @@ import {
   attentionDate,
 } from "@/utils/orderAttentionDate";
 import { formatDate, formatTime } from "@/utils/datetime";
-
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
 
 interface OrdenesListProps {
   orders: OrderDeliveryPaginatedItem[];
@@ -164,8 +160,8 @@ export default function OrdenesList({
                       de la columna y desalineaba las filas vecinas. */}
                   <TableCell className="px-5 py-4 align-middle">
                     <div className="flex flex-col items-start gap-1">
-                      <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
-                        {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
+                      <Badge size="sm" color={paymentTypeBadge(order.paymentType)}>
+                        {paymentTypeLabel(order.paymentType)}
                       </Badge>
                       {order.isExpress && (
                         <Badge size="sm" color="error">Expreso</Badge>

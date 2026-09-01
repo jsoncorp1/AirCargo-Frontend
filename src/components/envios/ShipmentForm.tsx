@@ -17,6 +17,7 @@ import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
   orderDeliveryService,
   OrderDeliveryPaginatedItem,
+  OrderType,
 } from "@/services/orderDeliveryService";
 import {
   shipmentService,
@@ -29,16 +30,29 @@ import {
   getShipmentErrorMessage,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
+import type { BolivianDepartment } from "@/services/supplierService";
+import {
+  PaymentType,
+  ServicePointType,
+  VehicleType,
+  VEHICLE_TYPE_OPTIONS,
+  paymentTypeLabel,
+  servicePointTypeLabel,
+  formatBs,
+} from "@/services/logisticsEnums";
+import type { QuoteRequest, QuoteResponse } from "@/services/pricingService";
+import QuotePanel from "@/components/pricing/QuotePanel";
+import PriceOverrideField, {
+  PriceOverrideState,
+  emptyPriceOverride,
+  needsOverrideReason,
+  priceOverridePayload,
+} from "@/components/pricing/PriceOverrideField";
 import { useAuth } from "@/context/AuthContext";
 import ShipmentWaybill from "./ShipmentWaybill";
 import ShipmentLetterPdf from "./ShipmentLetterPdf";
 import { exportElementToPDF } from "@/utils/pdfExport";
 import { formatDate, formatTime } from "@/utils/datetime";
-
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
 
 interface ShipmentFormProps {
   mode: "create" | "edit" | "view";
@@ -60,8 +74,20 @@ interface OrderHeaderInfo {
   destinationBranchOfficeCode: string | null;
   destinationBranchOfficeCity: string | null;
   clientAddress: string;
-  deliveryType: string;
+  paymentType: PaymentType;
+  // Modalidad de destino: define si el precio incluye cargo de puerta y si el
+  // envío va a esperar un retiro en mostrador en vez de un conductor.
+  destinationPointType: ServicePointType;
+  // Modalidad de origen: con la de destino arma el tipo de envío (P2P/S2P/…)
+  // que imprime la guía.
+  originPointType: ServicePointType;
+  // Ubicación y observación del destino: la guía corporativa las imprime.
+  destinationLocationUrl: string | null;
+  destinationAddressReference: string | null;
+  // Corporativa o esporádica: define qué variante de guía se imprime.
+  orderType: OrderType;
   isExpress: boolean;
+  supplierId: string | null;
   supplierName: string | null;
   originDepartment: string;
   senderFullName: string;
@@ -76,6 +102,8 @@ interface ShipmentLineFormState {
   quantity: number;
   unitPrice: number;
   weight: number;
+  // Solo de LECTURA: lo calcula el backend repartiendo el precio del envío
+  // entre las líneas según su peso. Ya no se carga a mano ni se manda.
   shippingCost: number;
 }
 
@@ -124,6 +152,12 @@ export default function ShipmentForm({
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState<string>("");
   const [packageCount, setPackageCount] = useState<number>(1);
   const [packageDescription, setPackageDescription] = useState<string>("");
+  // Define el cargo de puerta. Solo pesa si el destino es domicilio: en un
+  // retiro en mostrador no se cobra viaje.
+  const [deliveryVehicleType, setDeliveryVehicleType] = useState<VehicleType>("Motorcycle");
+  // El precio sale de la tarifa; esto es solo el ajuste manual y su motivo.
+  const [priceOverride, setPriceOverride] = useState<PriceOverrideState>(emptyPriceOverride);
+  const [quote, setQuote] = useState<QuoteResponse | null>(null);
 
   // Multisucursal / estado (solo lectura, viene del backend)
   const [originBranchLabel, setOriginBranchLabel] = useState<string | null>(null);
@@ -178,8 +212,16 @@ export default function ShipmentForm({
         destinationBranchOfficeCode: order.destinationBranchOfficeCode,
         destinationBranchOfficeCity: order.destinationBranchOfficeCity,
         clientAddress: order.clientAddress,
-        deliveryType: order.deliveryType,
+        paymentType: order.paymentType,
+        destinationPointType: order.destinationPointType ?? "Door",
+        // Una orden despacha siempre desde mostrador; el origen a domicilio
+        // solo existe cuando el envío nació de una solicitud de recojo.
+        originPointType: "Branch",
+        destinationLocationUrl: order.destinationLocationUrl ?? null,
+        destinationAddressReference: order.destinationAddressReference ?? null,
+        orderType: order.orderType,
         isExpress: order.isExpress,
+        supplierId: order.supplierId,
         supplierName: order.supplierName,
         originDepartment: order.originDepartment,
         senderFullName: order.senderFullName,
@@ -251,8 +293,21 @@ export default function ShipmentForm({
         destinationBranchOfficeCode: prev?.destinationBranchOfficeCode ?? null,
         destinationBranchOfficeCity: prev?.destinationBranchOfficeCity ?? null,
         clientAddress: shipment.clientAddress,
-        deliveryType: prev?.deliveryType ?? "",
+        paymentType: prev?.paymentType ?? shipment.paymentType ?? "Prepaid",
+        destinationPointType:
+          shipment.destinationPointType ?? prev?.destinationPointType ?? "Door",
+        originPointType: shipment.originPointType ?? prev?.originPointType ?? "Branch",
+        destinationLocationUrl:
+          shipment.destinationLocationUrl ?? prev?.destinationLocationUrl ?? null,
+        destinationAddressReference:
+          shipment.destinationAddressReference ?? prev?.destinationAddressReference ?? null,
+        // El envío no dice de qué tipo de orden salió, pero su código sí
+        // (`COR-…`/`ESP-…`): la guía lo deduce sola si acá no hay nada todavía.
+        orderType: prev?.orderType ?? (shipment.code?.toUpperCase().startsWith("ESP")
+          ? "Sporadic"
+          : "Corporate"),
         isExpress: prev?.isExpress ?? false,
+        supplierId: prev?.supplierId ?? null,
         supplierName: prev?.supplierName ?? "",
         originDepartment: shipment.originDepartment,
         senderFullName: shipment.senderFullName,
@@ -278,8 +333,17 @@ export default function ShipmentForm({
           destinationBranchOfficeCode: order.destinationBranchOfficeCode,
           destinationBranchOfficeCity: order.destinationBranchOfficeCity,
           clientAddress: shipment.clientAddress,
-          deliveryType: order.deliveryType,
+          paymentType: order.paymentType,
+          destinationPointType:
+            shipment.destinationPointType ?? order.destinationPointType ?? "Door",
+          originPointType: shipment.originPointType ?? "Branch",
+          destinationLocationUrl:
+            shipment.destinationLocationUrl ?? order.destinationLocationUrl ?? null,
+          destinationAddressReference:
+            shipment.destinationAddressReference ?? order.destinationAddressReference ?? null,
+          orderType: order.orderType,
           isExpress: order.isExpress,
+          supplierId: order.supplierId,
           supplierName: order.supplierName,
           originDepartment: shipment.originDepartment,
           senderFullName: shipment.senderFullName,
@@ -325,9 +389,11 @@ export default function ShipmentForm({
     loadOrderDetails(val);
   };
 
-  const handleLineChange = (index: number, field: "weight" | "shippingCost", value: string) => {
+  // Solo el peso: el costo por línea lo calcula el backend repartiendo el precio
+  // del envío, así que ya no hay nada que tipear en esa columna.
+  const handleWeightChange = (index: number, value: string) => {
     const newLines = [...lines];
-    newLines[index] = { ...newLines[index], [field]: parseFloat(value) || 0 };
+    newLines[index] = { ...newLines[index], weight: parseFloat(value) || 0 };
     setLines(newLines);
   };
 
@@ -353,9 +419,23 @@ export default function ShipmentForm({
       showToast("error", "Error", "Debe seleccionar la sucursal de origen.");
       return;
     }
+    // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
+    // y se pierde toda la carga; cortarlo acá deja el formulario intacto.
+    if (needsOverrideReason(priceOverride, quote?.total)) {
+      showToast(
+        "error",
+        "Falta el motivo",
+        "Cambiaste el precio calculado: indica por qué antes de guardar."
+      );
+      return;
+    }
 
     runSubmit(async () => {
       try {
+        // `shippingPrice: null` = manda la tarifa. Solo se manda un número
+        // cuando el operador la ajustó a mano, y ahí va con su motivo.
+        const pricing = priceOverridePayload(priceOverride, quote?.total);
+
         if (mode === "create") {
           const payload: CreateShipmentRequest = {
             orderDeliveryId,
@@ -364,10 +444,11 @@ export default function ShipmentForm({
             destinationBranchOfficeId,
             packageCount,
             packageDescription: packageDescription.trim(),
+            deliveryVehicleType,
+            ...pricing,
             lines: lines.map((l) => ({
               orderDeliveryDetailId: l.orderDeliveryDetailId,
               weight: l.weight,
-              shippingCost: l.shippingCost,
             })),
           };
           await shipmentService.createShipment(payload);
@@ -379,13 +460,16 @@ export default function ShipmentForm({
               : "El envío fue registrado exitosamente."
           );
         } else if (mode === "edit" && shipmentId) {
+          // El PUT recotiza con el peso corregido: cambiar el peso cambia el
+          // precio en vez de dejar el importe viejo.
           await shipmentService.updateShipment(shipmentId, {
             packageCount,
             packageDescription: packageDescription.trim(),
+            deliveryVehicleType,
+            ...pricing,
             lines: lines.map((l) => ({
               shipmentDetailId: l.shipmentDetailId ?? "",
               weight: l.weight,
-              shippingCost: l.shippingCost,
             })),
           });
           showToast("success", "Envío actualizado", "El envío fue actualizado exitosamente.");
@@ -472,6 +556,33 @@ export default function ShipmentForm({
   const totalCost = lines.reduce((acc, line) => acc + (line.shippingCost || 0), 0);
   const totalWeight = lines.reduce((acc, line) => acc + (line.weight || 0), 0);
 
+  // El departamento desde el que sale: la sucursal elegida manda sobre el de la
+  // orden, que solo dice dónde está la empresa.
+  const originDepartment =
+    (branchOffices.find((b) => b.id === originBranchOfficeId)?.bolivianDepartment as
+      | BolivianDepartment
+      | undefined) ?? (orderInfo?.originDepartment as BolivianDepartment | undefined);
+
+  // Una orden corporativa despacha SIEMPRE desde el mostrador: el origen es
+  // `Branch` y no se elige. Un origen a domicilio es una solicitud de recojo.
+  const quoteRequest: QuoteRequest | null =
+    readOnly || !orderInfo || !originDepartment || totalWeight <= 0
+      ? null
+      : {
+          supplierId: orderInfo.supplierId,
+          originDepartment,
+          destinationDepartment: orderInfo.destinationDepartment,
+          originPointType: "Branch",
+          destinationPointType: orderInfo.destinationPointType,
+          weight: totalWeight,
+          isExpress: orderInfo.isExpress,
+          vehicleType: deliveryVehicleType,
+        };
+
+  // El cargo de puerta solo existe si va un conductor. En un retiro en mostrador
+  // el vehículo no cambia el precio, así que preguntarlo sería ruido.
+  const chargesDoorService = orderInfo?.destinationPointType === "Door";
+
   if (loading) {
     return <div className="p-10 text-center text-gray-500">Cargando datos del envío...</div>;
   }
@@ -511,9 +622,10 @@ export default function ShipmentForm({
               )}
             </div>
           )}
-          <div ref={waybillRef}>
+          <div ref={waybillRef} className="flex justify-center">
             <ShipmentWaybill
               code={guia}
+              orderType={orderInfo?.orderType}
               originDepartment={orderInfo?.originDepartment ?? ""}
               destinationDepartment={orderInfo?.destinationDepartment ?? ""}
               senderFullName={orderInfo?.senderFullName ?? ""}
@@ -522,7 +634,11 @@ export default function ShipmentForm({
               clientFullName={cliente}
               clientPhone={orderInfo?.clientPhone ?? ""}
               clientAddress={orderInfo?.clientAddress ?? ""}
-              deliveryType={orderInfo?.deliveryType ?? ""}
+              paymentType={orderInfo?.paymentType ?? "Prepaid"}
+              originPointType={orderInfo?.originPointType}
+              destinationPointType={orderInfo?.destinationPointType}
+              destinationLocationUrl={orderInfo?.destinationLocationUrl}
+              destinationAddressReference={orderInfo?.destinationAddressReference}
               isExpress={orderInfo?.isExpress ?? false}
               packageCount={packageCount}
               packageDescription={packageDescription}
@@ -564,7 +680,8 @@ export default function ShipmentForm({
                   shippingCost: l.shippingCost
                 })),
                 status: status || "AtOriginBranch",
-                deliveryType: orderInfo?.deliveryType ?? "Prepaid",
+                paymentType: orderInfo?.paymentType ?? "Prepaid",
+                destinationPointType: orderInfo?.destinationPointType ?? "Door",
               } as any}
             />
           </div>
@@ -775,8 +892,16 @@ export default function ShipmentForm({
               />
               <InfoField label="Dirección" value={orderInfo?.clientAddress} />
               <InfoField
-                label="Tipo de Entrega"
-                value={orderInfo?.deliveryType ? DELIVERY_TYPE_LABELS[orderInfo.deliveryType] ?? orderInfo.deliveryType : undefined}
+                label="Forma de Pago"
+                value={orderInfo?.paymentType ? paymentTypeLabel(orderInfo.paymentType) : undefined}
+              />
+              <InfoField
+                label="Modalidad"
+                value={
+                  orderInfo?.destinationPointType
+                    ? servicePointTypeLabel(orderInfo.destinationPointType)
+                    : undefined
+                }
               />
               <div className="min-w-0">
                 <p className="text-xs text-gray-400 dark:text-gray-500">Envío Expreso</p>
@@ -883,7 +1008,7 @@ export default function ShipmentForm({
                         <TableCell isHeader className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                           Peso (kg)
                         </TableCell>
-                        <TableCell isHeader className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <TableCell isHeader className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                           Costo Envío
                         </TableCell>
                       </TableRow>
@@ -906,31 +1031,65 @@ export default function ShipmentForm({
                               step={0.01}
                               min="0"
                               value={line.weight}
-                              onChange={(e) => handleLineChange(idx, "weight", e.target.value)}
+                              onChange={(e) => handleWeightChange(idx, e.target.value)}
                               disabled={readOnly}
                               required
                               placeholder="0.00"
                               className="!h-9"
                             />
                           </TableCell>
-                          <TableCell className="px-3 py-2">
-                            <Input
-                              type="number"
-                              step={0.1}
-                              min="0"
-                              value={line.shippingCost}
-                              onChange={(e) => handleLineChange(idx, "shippingCost", e.target.value)}
-                              disabled={readOnly}
-                              required
-                              placeholder="0.00"
-                              className="!h-9"
-                            />
+                          {/* Ya no se carga: el backend reparte el precio del
+                              envío entre las líneas según su peso. */}
+                          <TableCell className="whitespace-nowrap px-3 py-2 text-right align-middle text-sm tabular-nums text-gray-600 dark:text-gray-300">
+                            {line.shippingCost > 0 ? formatBs(line.shippingCost) : "—"}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
+              </div>
+            )}
+
+            {/* Precio: sale de la tarifa vigente, no se carga a mano. */}
+            {!readOnly && lines.length > 0 && (
+              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="space-y-4">
+                  {/* El vehículo define el cargo de puerta, así que solo se
+                      pregunta cuando hay puerta que cobrar. */}
+                  {chargesDoorService && (
+                    <div>
+                      <Label required>Vehículo para la entrega</Label>
+                      <select
+                        className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                        value={deliveryVehicleType}
+                        onChange={(e) => setDeliveryVehicleType(e.target.value as VehicleType)}
+                      >
+                        {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                        El auto cuesta más que la moto: elegí el que realmente va a ir.
+                      </p>
+                    </div>
+                  )}
+
+                  {!chargesDoorService && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      El cliente retira en sucursal, así que no se cobra viaje a domicilio.
+                    </p>
+                  )}
+
+                  <PriceOverrideField
+                    value={priceOverride}
+                    onChange={setPriceOverride}
+                    calculatedPrice={quote?.total}
+                    disabled={submitting}
+                  />
+                </div>
+
+                <QuotePanel request={quoteRequest} onQuote={setQuote} />
               </div>
             )}
 

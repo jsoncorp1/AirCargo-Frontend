@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Button from "@/components/ui/button/Button";
+import Label from "@/components/form/Label";
 import { useToast } from "@/context/ToastContext";
 import {
   shipmentService,
@@ -10,6 +11,24 @@ import {
   getShipmentErrorMessage,
 } from "@/services/shipmentService";
 import { branchOfficeService, BranchOffice } from "@/services/branchOfficeService";
+import {
+  BOLIVIAN_DEPARTMENT_LABELS,
+  BolivianDepartment,
+} from "@/services/supplierService";
+import {
+  PaymentType,
+  ServicePointType,
+  VehicleType,
+  VEHICLE_TYPE_OPTIONS,
+} from "@/services/logisticsEnums";
+import type { QuoteRequest, QuoteResponse } from "@/services/pricingService";
+import QuotePanel from "@/components/pricing/QuotePanel";
+import PriceOverrideField, {
+  PriceOverrideState,
+  emptyPriceOverride,
+  needsOverrideReason,
+  priceOverridePayload,
+} from "@/components/pricing/PriceOverrideField";
 import { useAuth } from "@/context/AuthContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 
@@ -20,29 +39,17 @@ import ArticlesSection, { SporadicLineFormState } from "./esporadico/ArticlesSec
 
 const DECIMAL_PATTERN = /^\d*\.?\d*$/;
 
-const DEPARTAMENTOS = [
-  { value: "Beni", label: "Beni" },
-  { value: "Chuquisaca", label: "Chuquisaca" },
-  { value: "Cochabamba", label: "Cochabamba" },
-  { value: "LaPaz", label: "La Paz" },
-  { value: "Oruro", label: "Oruro" },
-  { value: "Pando", label: "Pando" },
-  { value: "Potosi", label: "Potosí" },
-  { value: "SantaCruz", label: "Santa Cruz" },
-  { value: "Tarija", label: "Tarija" },
-];
+const DEPARTAMENTOS = (
+  Object.entries(BOLIVIAN_DEPARTMENT_LABELS) as [BolivianDepartment, string][]
+).map(([value, label]) => ({ value, label }));
 
-const TIPOS_ENTREGA = [
-  { value: "Prepaid", label: "Pagada" },
-  { value: "CashOnDelivery", label: "Por Pagar" },
-];
+const DEFAULT_DEPARTMENT = DEPARTAMENTOS[0].value;
 
 const emptyLine = (): SporadicLineFormState => ({
   articleName: "",
   quantity: 1,
   unitPrice: "0",
   weight: "0",
-  shippingCost: "0",
 });
 
 export default function SporadicShipmentForm() {
@@ -61,14 +68,25 @@ export default function SporadicShipmentForm() {
 
   // Destination State
   const [destinationBranchOfficeId, setDestinationBranchOfficeId] = useState("");
-  const [destinationDepartment, setDestinationDepartment] = useState(DEPARTAMENTOS[0].value);
+  const [destinationDepartment, setDestinationDepartment] =
+    useState<string>(DEFAULT_DEPARTMENT);
+  const [destinationPointType, setDestinationPointType] = useState<ServicePointType>("Door");
   const [clientFullName, setClientFullName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientPhoneAlt, setClientPhoneAlt] = useState("");
   const [clientAddress, setClientAddress] = useState("");
-  const [deliveryType, setDeliveryType] = useState(TIPOS_ENTREGA[0].value);
+  const [destinationLocationUrl, setDestinationLocationUrl] = useState("");
+  const [destinationAddressReference, setDestinationAddressReference] = useState("");
+  const [paymentType, setPaymentType] = useState<PaymentType>("Prepaid");
   const [isExpress, setIsExpress] = useState(false);
   const [packageCount, setPackageCount] = useState(1);
   const [packageDescription, setPackageDescription] = useState("");
+
+  // Precio: sale de la tarifa vigente. Esto es solo el vehículo que define el
+  // cargo de puerta y el ajuste manual con su motivo.
+  const [deliveryVehicleType, setDeliveryVehicleType] = useState<VehicleType>("Motorcycle");
+  const [priceOverride, setPriceOverride] = useState<PriceOverrideState>(emptyPriceOverride);
+  const [quote, setQuote] = useState<QuoteResponse | null>(null);
 
   // Articles State
   const [lines, setLines] = useState<SporadicLineFormState[]>([emptyLine()]);
@@ -91,33 +109,71 @@ export default function SporadicShipmentForm() {
     setOriginBranchOfficeId("");
     setSenderFullName("");
     setSenderPhone("");
-    setDestinationDepartment(DEPARTAMENTOS[0].value);
+    setDestinationDepartment(DEFAULT_DEPARTMENT);
+    setDestinationPointType("Door");
     setClientFullName("");
     setClientPhone("");
+    setClientPhoneAlt("");
     setClientAddress("");
-    setDeliveryType(TIPOS_ENTREGA[0].value);
+    setDestinationLocationUrl("");
+    setDestinationAddressReference("");
+    setPaymentType("Prepaid");
     setIsExpress(false);
     setPackageCount(1);
     setPackageDescription("");
+    setDeliveryVehicleType("Motorcycle");
+    setPriceOverride(emptyPriceOverride);
     setLines([emptyLine()]);
   };
 
   const handleAddLine = () => setLines([...lines, emptyLine()]);
   const handleRemoveLine = (index: number) => setLines(lines.filter((_, i) => i !== index));
-  const handleLineChange = (index: number, field: keyof SporadicLineFormState, value: string | number) => {
+  const handleLineChange = (
+    index: number,
+    field: keyof SporadicLineFormState,
+    value: string | number
+  ) => {
     const newLines = [...lines];
     newLines[index] = { ...newLines[index], [field]: value } as SporadicLineFormState;
     setLines(newLines);
   };
-  const handleDecimalChange = (index: number, field: "unitPrice" | "weight" | "shippingCost", raw: string) => {
+  const handleDecimalChange = (
+    index: number,
+    field: "unitPrice" | "weight",
+    raw: string
+  ) => {
     if (!DECIMAL_PATTERN.test(raw)) return;
     handleLineChange(index, field, raw);
   };
 
-  const lineTotal = (line: SporadicLineFormState) => line.quantity * (Number(line.unitPrice) || 0);
+  const lineTotal = (line: SporadicLineFormState) =>
+    line.quantity * (Number(line.unitPrice) || 0);
   const totalPrice = lines.reduce((acc, line) => acc + lineTotal(line), 0);
   const totalWeight = lines.reduce((acc, line) => acc + (Number(line.weight) || 0), 0);
-  const totalShippingCost = lines.reduce((acc, line) => acc + (Number(line.shippingCost) || 0), 0);
+
+  // El origen de un esporádico es SIEMPRE el mostrador: un origen a domicilio
+  // es una solicitud de recojo, no un envío que se registra acá.
+  const originDepartment = branchOffices.find(
+    (b) => b.id === originBranchOfficeId
+  )?.bolivianDepartment;
+
+  const quoteRequest: QuoteRequest | null =
+    !destinationDepartment || totalWeight <= 0 || (isSuperAdminUser && !originDepartment)
+      ? null
+      : {
+          // Un esporádico no tiene empresa: cotiza con la tarifa pública.
+          supplierId: null,
+          originDepartment: (originDepartment ??
+            destinationDepartment) as BolivianDepartment,
+          destinationDepartment,
+          originPointType: "Branch",
+          destinationPointType,
+          weight: totalWeight,
+          isExpress,
+          vehicleType: deliveryVehicleType,
+        };
+
+  const chargesDoorService = destinationPointType === "Door";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,13 +181,22 @@ export default function SporadicShipmentForm() {
     if (lines.some((l) => !l.articleName.trim())) return showToast("error", "Error", "Todos los artículos deben tener un nombre.");
     if (lines.some((l) => l.quantity <= 0)) return showToast("error", "Error", "La cantidad debe ser mayor a cero en todos los artículos.");
     if (lines.some((l) => (Number(l.weight) || 0) <= 0)) return showToast("error", "Error", "El peso debe ser mayor a cero.");
-    if (lines.some((l) => (Number(l.shippingCost) || 0) < 0)) return showToast("error", "Error", "El costo de envío no puede ser negativo.");
     if (!senderFullName.trim() || !senderPhone.trim()) return showToast("error", "Error", "Complete los datos del remitente.");
     if (packageCount <= 0) return showToast("error", "Error", "La cantidad de paquetes debe ser mayor a cero.");
     if (!packageDescription.trim()) return showToast("error", "Error", "Debe describir los paquetes del envío.");
     if (!destinationBranchOfficeId) return showToast("error", "Error", "Seleccione la sucursal de destino.");
+    if (chargesDoorService && !clientAddress.trim())
+      return showToast("error", "Error", "Si la entrega es a domicilio, indique la dirección.");
     if (isSuperAdminUser && !originBranchOfficeId)
       return showToast("error", "Error", "Seleccione la sucursal de origen.");
+    // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
+    // y se pierde toda la carga del formulario.
+    if (needsOverrideReason(priceOverride, quote?.total))
+      return showToast(
+        "error",
+        "Falta el motivo",
+        "Cambiaste el precio calculado: indica por qué antes de guardar."
+      );
 
     runSubmit(async () => {
       try {
@@ -143,19 +208,24 @@ export default function SporadicShipmentForm() {
           senderPhone: senderPhone.trim(),
           senderAddress: "",
           destinationDepartment,
+          destinationPointType,
           clientPhone,
+          clientPhoneAlt: clientPhoneAlt.trim() || null,
           clientFullName,
           clientAddress,
-          deliveryType,
+          destinationLocationUrl: destinationLocationUrl.trim() || null,
+          destinationAddressReference: destinationAddressReference.trim() || null,
+          paymentType,
           isExpress,
           packageCount,
           packageDescription: packageDescription.trim(),
+          deliveryVehicleType,
+          ...priceOverridePayload(priceOverride, quote?.total),
           lines: lines.map((l) => ({
             articleName: l.articleName.trim(),
             quantity: l.quantity,
             unitPrice: Number(l.unitPrice) || 0,
             weight: Number(l.weight) || 0,
-            shippingCost: Number(l.shippingCost) || 0,
           })),
         };
         const response = await shipmentService.createSporadicShipment(payload);
@@ -206,14 +276,22 @@ export default function SporadicShipmentForm() {
           setClientFullName={setClientFullName}
           clientPhone={clientPhone}
           setClientPhone={setClientPhone}
+          clientPhoneAlt={clientPhoneAlt}
+          setClientPhoneAlt={setClientPhoneAlt}
           destinationDepartment={destinationDepartment}
           setDestinationDepartment={setDestinationDepartment}
           destinationBranchOfficeId={destinationBranchOfficeId}
           setDestinationBranchOfficeId={setDestinationBranchOfficeId}
+          destinationPointType={destinationPointType}
+          setDestinationPointType={setDestinationPointType}
           clientAddress={clientAddress}
           setClientAddress={setClientAddress}
-          deliveryType={deliveryType}
-          setDeliveryType={setDeliveryType}
+          destinationLocationUrl={destinationLocationUrl}
+          setDestinationLocationUrl={setDestinationLocationUrl}
+          destinationAddressReference={destinationAddressReference}
+          setDestinationAddressReference={setDestinationAddressReference}
+          paymentType={paymentType}
+          setPaymentType={setPaymentType}
           isExpress={isExpress}
           setIsExpress={setIsExpress}
           packageCount={packageCount}
@@ -222,7 +300,6 @@ export default function SporadicShipmentForm() {
           setPackageDescription={setPackageDescription}
           branchOffices={branchOffices}
           departamentos={DEPARTAMENTOS}
-          tiposEntrega={TIPOS_ENTREGA}
         />
 
         <ArticlesSection
@@ -233,9 +310,57 @@ export default function SporadicShipmentForm() {
           handleDecimalChange={handleDecimalChange}
           lineTotal={lineTotal}
           totalWeight={totalWeight}
-          totalShippingCost={totalShippingCost}
           totalPrice={totalPrice}
         />
+
+        {/* Precio: sale de la tarifa vigente, no se carga a mano. */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.02]">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 font-bold">
+              4
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Precio del Envío
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="space-y-4">
+              {/* El vehículo define el cargo de puerta, así que solo se pregunta
+                  cuando hay puerta que cobrar. */}
+              {chargesDoorService ? (
+                <div>
+                  <Label required>Vehículo para la entrega</Label>
+                  <select
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    value={deliveryVehicleType}
+                    onChange={(e) => setDeliveryVehicleType(e.target.value as VehicleType)}
+                  >
+                    {VEHICLE_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                    El auto cuesta más que la moto: elegí el que realmente va a ir.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  El cliente retira en sucursal, así que no se cobra viaje a domicilio.
+                </p>
+              )}
+
+              <PriceOverrideField
+                value={priceOverride}
+                onChange={setPriceOverride}
+                calculatedPrice={quote?.total}
+                disabled={submitting}
+              />
+            </div>
+
+            <QuotePanel request={quoteRequest} onQuote={setQuote} />
+          </div>
+        </div>
 
         <div className="flex items-center justify-end gap-4 pt-4">
           <Button type="button" variant="outline" onClick={resetForm} disabled={submitting}>

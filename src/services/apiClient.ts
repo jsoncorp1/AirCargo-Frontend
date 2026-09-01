@@ -61,12 +61,19 @@ export const apiClient = async <T>(endpoint: string, options: FetchOptions = {})
       }
     }
 
-    // Los errores de permisos llegan como ProblemDetails con `title` = error key
-    // y `detail` en español. El 403 del middleware de roles llega sin body.
+    // Los errores llegan como ProblemDetails con `title` = clave estable y
+    // `detail` = mensaje en castellano YA REDACTADO para mostrar. El 403 del
+    // middleware de roles llega sin body.
+    //
+    // El orden importa: primero el mensaje propio de la clave (más contexto de
+    // pantalla que el genérico del backend), después el `detail`, y la clave
+    // cruda solo como último recurso. Al revés, una clave que este build todavía
+    // no conoce le mostraba al usuario "pricing.rate.notfound" en vez de la
+    // explicación en castellano que el backend ya había mandado.
     const mappedMessage =
       (errorKey && API_ERROR_MESSAGES[errorKey]) ||
-      errorKey ||
-      responseData?.detail;
+      responseData?.detail ||
+      errorKey;
     const fallbackMessage =
       response.status === 403
         ? FORBIDDEN_FALLBACK_MESSAGE

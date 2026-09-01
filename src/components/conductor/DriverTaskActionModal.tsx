@@ -9,28 +9,35 @@ import PhotoUploader from "@/components/common/PhotoUploader";
 import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
-  shipmentAssignmentService,
-  ShipmentAssignment,
-  ShipmentAssignmentStatus,
-  DRIVER_ASSIGNMENT_TRANSITIONS,
-  assignmentStatusLabel,
-  assignmentStatusBadge,
+  driverTaskService,
+  DriverTask,
+  DriverTaskStatus,
+  DRIVER_TASK_TRANSITIONS,
+  driverTaskStatusLabel,
+  driverTaskStatusBadge,
+  driverTaskKindLabel,
+  driverTaskKindBadge,
+  driverTaskActionLabel,
+  driverTaskRequiresObservation,
+  driverTaskRequiresPhotos,
   shipmentStatusAfterFailure,
-  getAssignmentErrorMessage,
+  getDriverTaskErrorMessage,
   getPhotoErrorMessage,
   isStalePhotoState,
-  MAX_ASSIGNMENT_PHOTOS,
-} from "@/services/shipmentAssignmentService";
+  MAX_TASK_PHOTOS,
+} from "@/services/driverTaskService";
 import {
   ShipmentObservation,
   SHIPMENT_OBSERVATION_LABELS,
   shipmentStatusLabel,
 } from "@/services/shipmentService";
+import { pickupOrderStatusLabel } from "@/services/pickupOrderService";
+import { formatBs } from "@/services/logisticsEnums";
 
 const MAX_COMMENT_LENGTH = 500;
 
-interface AssignmentActionModalProps {
-  assignment: ShipmentAssignment;
+interface DriverTaskActionModalProps {
+  task: DriverTask;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -38,49 +45,43 @@ interface AssignmentActionModalProps {
 const selectClassName =
   "h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
 
-// Lo que el conductor ve como botón, por transición.
-const ACTION_LABELS: Partial<Record<ShipmentAssignmentStatus, string>> = {
-  PickedUp: "Recogí el paquete",
-  Delivered: "Entregué",
-  Failed: "No pude entregar",
-};
-
-export default function AssignmentActionModal({
-  assignment,
+export default function DriverTaskActionModal({
+  task,
   onClose,
   onSaved,
-}: AssignmentActionModalProps) {
+}: DriverTaskActionModalProps) {
   const { showToast } = useToast();
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
-  const actions = DRIVER_ASSIGNMENT_TRANSITIONS[assignment.status] ?? [];
-  const [action, setAction] = useState<ShipmentAssignmentStatus | "">(
+  const isPickup = task.kind === "Pickup";
+  const actions = DRIVER_TASK_TRANSITIONS[task.status] ?? [];
+  const [action, setAction] = useState<DriverTaskStatus | "">(
     actions.length === 1 ? actions[0] : ""
   );
   const [observation, setObservation] = useState<ShipmentObservation | "">("");
-  const [deliveryComment, setDeliveryComment] = useState("");
+  const [comment, setComment] = useState("");
   // Las fotos ya viven en el servidor: pueden venir de una subida anterior que
   // quedó a medias (subió dos, se le cortó la señal y volvió a abrir la
   // pantalla). El tope de 3 es acumulado, así que arrancar en cero haría que el
   // conductor elija 3 nuevas y el backend le rebote el lote entero.
-  const [photoUrls, setPhotoUrls] = useState<string[]>(assignment.photoUrls ?? []);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
-  const needsPhotos = action === "Delivered";
-  const needsObservation = action === "Failed";
+  const needsPhotos = !!action && driverTaskRequiresPhotos(action);
+  const needsObservation = !!action && driverTaskRequiresObservation(action);
 
   // La tarjeta del listado trae `photoCount` pero no las URLs, así que lo ya
-  // subido solo se conoce pidiendo el reparto. Se pide al elegir "Entregué",
-  // que es el único momento en que hace falta.
-  const photosLoaded = useRef(Array.isArray(assignment.photoUrls));
+  // subido solo se conoce pidiendo la tarea. Se pide al elegir cerrarla, que es
+  // el único momento en que hace falta.
+  const photosLoaded = useRef(false);
 
   const loadExistingPhotos = useCallback(async () => {
     if (photosLoaded.current) return;
     photosLoaded.current = true;
     setLoadingPhotos(true);
     try {
-      const detail = await shipmentAssignmentService.getAssignmentById(assignment.id);
+      const detail = await driverTaskService.getTaskById(task.id);
       setPhotoUrls(detail.photoUrls ?? []);
     } catch {
       // Que vuelva a intentarlo en el próximo clic: si el contador se queda en
@@ -89,11 +90,11 @@ export default function AssignmentActionModal({
     } finally {
       setLoadingPhotos(false);
     }
-  }, [assignment.id]);
+  }, [task.id]);
 
-  const selectAction = (next: ShipmentAssignmentStatus) => {
+  const selectAction = (next: DriverTaskStatus) => {
     setAction(next);
-    if (next === "Delivered") void loadExistingPhotos();
+    if (driverTaskRequiresPhotos(next)) void loadExistingPhotos();
   };
 
   // Subir y cambiar el estado son dos llamadas separadas a propósito: subir por
@@ -102,15 +103,15 @@ export default function AssignmentActionModal({
   const handleUploadPhotos = async (files: File[]) => {
     setUploadingPhotos(true);
     try {
-      const res = await shipmentAssignmentService.uploadPhotos(assignment.id, files);
+      const res = await driverTaskService.uploadPhotos(task.id, files);
       setPhotoUrls(res.photoUrls);
     } catch (err) {
       // Si el rechazo depende de cuántas fotos hay guardadas, lo que tenemos en
-      // pantalla quedó viejo: se vuelve a leer el reparto para que el contador
+      // pantalla quedó viejo: se vuelve a leer la tarea para que el contador
       // diga la verdad y el reintento suba solo lo que falta.
       if (isStalePhotoState(err)) {
         try {
-          const fresh = await shipmentAssignmentService.getAssignmentById(assignment.id);
+          const fresh = await driverTaskService.getTaskById(task.id);
           setPhotoUrls(fresh.photoUrls ?? []);
         } catch {
           // Si tampoco se puede leer, queda el mensaje del error original.
@@ -122,37 +123,64 @@ export default function AssignmentActionModal({
     }
   };
 
+  /** Qué le va a pasar al envío o a la solicitud, para decirlo antes de guardar. */
+  const outcomeHint = (): string => {
+    if (!action) return "";
+    if (isPickup) {
+      if (action === "Completed") {
+        return "La solicitud queda lista para que el mostrador la reciba y la pese.";
+      }
+      if (action === "Failed") {
+        return "La solicitud vuelve a quedar confirmada para reasignarse a otro conductor.";
+      }
+      return `La solicitud queda en "${pickupOrderStatusLabel("InTransit")}".`;
+    }
+    if (action === "Failed") {
+      return `El envío va a quedar en "${shipmentStatusLabel(
+        shipmentStatusAfterFailure(observation)
+      )}".${observation !== "CustomerRefused" ? " Tu sucursal podrá reasignarlo para un nuevo intento." : ""}`;
+    }
+    if (action === "Completed") return "El envío queda entregado.";
+    return "";
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!action) {
-      showToast("error", "Error", "Selecciona qué pasó con la entrega.");
+      showToast("error", "Error", "Selecciona qué pasó con la tarea.");
       return;
     }
-    // Mismas reglas que el backend, para no gastar un viaje: `assignment.photos.required`
-    // y `assignment.observation.required`.
+    // Mismas reglas que el backend, para no gastar un viaje:
+    // `assignment.photos.required` y `assignment.observation.required`.
     if (needsPhotos && photoUrls.length === 0) {
-      showToast("error", "Falta la foto", "Para registrar la entrega debes adjuntar al menos una foto.");
+      showToast(
+        "error",
+        "Falta la foto",
+        isPickup
+          ? "Saca al menos una foto del paquete que estás recogiendo."
+          : "Para registrar la entrega debes adjuntar al menos una foto."
+      );
       return;
     }
     if (needsObservation && !observation) {
-      showToast("error", "Falta el motivo", "Indica por qué no se pudo entregar.");
+      showToast("error", "Falta el motivo", "Indica por qué no se pudo completar.");
       return;
     }
 
-    const comment = deliveryComment.trim();
+    const trimmed = comment.trim();
 
     runSubmit(async () => {
       try {
-        const res = await shipmentAssignmentService.changeStatus(assignment.id, {
+        const res = await driverTaskService.changeStatus(task.id, {
           status: action,
           ...(needsObservation && observation ? { observation } : {}),
-          ...(comment ? { deliveryComment: comment } : {}),
+          ...(trimmed ? { comment: trimmed } : {}),
         });
         showToast(
           "success",
-          "Reparto actualizado",
-          `La guía ${res.shipmentCode} quedó en "${shipmentStatusLabel(res.shipmentStatus)}".`
+          "Tarea actualizada",
+          `${driverTaskKindLabel(res.kind)} en "${driverTaskStatusLabel(res.status)}".`
         );
         onSaved();
         onClose();
@@ -160,31 +188,47 @@ export default function AssignmentActionModal({
         showToast(
           "error",
           "Error",
-          getAssignmentErrorMessage(err, "No se pudo actualizar el reparto.")
+          getDriverTaskErrorMessage(err, "No se pudo actualizar la tarea.")
         );
       }
     });
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex max-h-[85vh] flex-col">
       <div className="border-b border-gray-100 px-6 py-5 dark:border-gray-800">
-        <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">Registrar reparto</h4>
-        <div className="mt-1 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+          {isPickup ? "Registrar recojo" : "Registrar entrega"}
+        </h4>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <Badge size="sm" color={driverTaskKindBadge(task.kind)}>
+            {driverTaskKindLabel(task.kind)}
+          </Badge>
           <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-            {assignment.shipmentCode}
+            {(isPickup ? task.pickupOrderCode : task.shipmentCode) ?? "—"}
           </span>
-          <Badge size="sm" color={assignmentStatusBadge(assignment.status)}>
-            {assignmentStatusLabel(assignment.status)}
+          <Badge size="sm" color={driverTaskStatusBadge(task.status)}>
+            {driverTaskStatusLabel(task.status)}
           </Badge>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
+        {task.amountToCollect > 0 && (
+          <div className="flex items-center justify-between rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 dark:border-warning-900/40 dark:bg-warning-500/10">
+            <span className="text-sm font-semibold text-warning-700 dark:text-warning-400">
+              Tienes que cobrar
+            </span>
+            <span className="text-xl font-bold tabular-nums text-warning-700 dark:text-warning-400">
+              {formatBs(task.amountToCollect)}
+            </span>
+          </div>
+        )}
+
         {actions.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-300">
-            Este intento de reparto ya está cerrado. Si el envío se reasignó, vas a verlo como
-            una entrega nueva en tu lista.
+            Esta tarea ya está cerrada. Si se reasignó, vas a verla como una tarea nueva en tu
+            lista.
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -199,7 +243,7 @@ export default function AssignmentActionModal({
                     : "border-gray-300 text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03]"
                 }`}
               >
-                {ACTION_LABELS[a] ?? assignmentStatusLabel(a)}
+                {driverTaskActionLabel(task.kind, a)}
               </button>
             ))}
           </div>
@@ -225,11 +269,7 @@ export default function AssignmentActionModal({
                 )
               )}
             </select>
-            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-              El envío va a quedar en &quot;{shipmentStatusLabel(shipmentStatusAfterFailure(observation))}
-              &quot;.
-              {observation !== "CustomerRefused" && " Tu sucursal podrá reasignarlo para un nuevo intento."}
-            </p>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{outcomeHint()}</p>
           </div>
         )}
 
@@ -237,15 +277,21 @@ export default function AssignmentActionModal({
           <PhotoUploader
             value={photoUrls}
             onUpload={handleUploadPhotos}
-            maxPhotos={MAX_ASSIGNMENT_PHOTOS}
+            maxPhotos={MAX_TASK_PHOTOS}
             disabled={submitting || loadingPhotos}
-            label="Foto de la entrega (obligatoria)"
+            label={isPickup ? "Foto del paquete (obligatoria)" : "Foto de la entrega (obligatoria)"}
             hint={
               loadingPhotos
                 ? "Buscando las fotos que ya subiste…"
+                : isPickup
+                ? "La foto es la constancia de qué recogiste y en qué estado."
                 : "Al menos una foto del paquete entregado o de la firma de quien recibe."
             }
           />
+        )}
+
+        {action && !needsObservation && outcomeHint() && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">{outcomeHint()}</p>
         )}
 
         {action && (
@@ -255,11 +301,11 @@ export default function AssignmentActionModal({
               <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
             </Label>
             <TextArea
-              value={deliveryComment}
-              onChange={(value) => value.length <= MAX_COMMENT_LENGTH && setDeliveryComment(value)}
+              value={comment}
+              onChange={(value) => value.length <= MAX_COMMENT_LENGTH && setComment(value)}
               rows={3}
-              placeholder="Ej. Entregado a la esposa"
-              hint={`${deliveryComment.length}/${MAX_COMMENT_LENGTH}`}
+              placeholder={isPickup ? "Ej. Dos cajas más de lo declarado" : "Ej. Entregado a la esposa"}
+              hint={`${comment.length}/${MAX_COMMENT_LENGTH}`}
             />
           </div>
         )}

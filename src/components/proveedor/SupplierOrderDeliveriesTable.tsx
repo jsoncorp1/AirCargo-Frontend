@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
+import { paymentTypeLabel, paymentTypeBadge } from "@/services/logisticsEnums";
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
@@ -30,11 +31,6 @@ import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage, isConcurrencyConflict } from "@/services/apiErrorMessages";
 import { withConcurrencyRetry } from "@/services/withConcurrencyRetry";
 import { formatDate, formatTime } from "@/utils/datetime";
-
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
 
 interface SupplierOrderDeliveriesTableProps {
   orders: OrderDeliveryPaginatedItem[];
@@ -277,8 +273,8 @@ export default function SupplierOrderDeliveriesTable({
                         ancho de la columna y desalineaba las filas vecinas. */}
                     <TableCell className="px-5 py-4 align-middle">
                       <div className="flex flex-col items-start gap-1">
-                        <Badge size="sm" color={order.deliveryType === "Prepaid" ? "success" : "warning"}>
-                          {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
+                        <Badge size="sm" color={paymentTypeBadge(order.paymentType)}>
+                          {paymentTypeLabel(order.paymentType)}
                         </Badge>
                         {order.isExpress && (
                           <Badge size="sm" color="error">Expreso</Badge>

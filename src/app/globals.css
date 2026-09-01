@@ -752,6 +752,14 @@ span.flatpickr-weekday,
 }
 
 @media print {
+  /* Lo único que se imprime desde una pantalla del panel es la guía de envío,
+     y va en ticket de 8 cm x 20 cm. Sin esto el navegador la centra en una
+     hoja carta y la corta donde quiere. */
+  @page {
+    size: 80mm 200mm;
+    margin: 0;
+  }
+
   header, aside, nav, footer, .app-header, .app-sidebar {
     display: none !important;
   }

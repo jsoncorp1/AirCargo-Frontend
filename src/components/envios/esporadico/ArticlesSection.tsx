@@ -9,12 +9,13 @@ import {
 import Input from "@/components/form/input/InputField";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 
+// Sin `shippingCost`: el precio del envío ya no se carga por línea, sale de la
+// tarifa vigente y el backend lo reparte según el peso.
 export interface SporadicLineFormState {
   articleName: string;
   quantity: number;
   unitPrice: string;
   weight: string;
-  shippingCost: string;
 }
 
 interface ArticlesSectionProps {
@@ -22,10 +23,9 @@ interface ArticlesSectionProps {
   handleAddLine: () => void;
   handleRemoveLine: (index: number) => void;
   handleLineChange: (index: number, field: keyof SporadicLineFormState, value: string | number) => void;
-  handleDecimalChange: (index: number, field: "unitPrice" | "weight" | "shippingCost", raw: string) => void;
+  handleDecimalChange: (index: number, field: "unitPrice" | "weight", raw: string) => void;
   lineTotal: (line: SporadicLineFormState) => number;
   totalWeight: number;
-  totalShippingCost: number;
   totalPrice: number;
 }
 
@@ -37,7 +37,6 @@ export default function ArticlesSection({
   handleDecimalChange,
   lineTotal,
   totalWeight,
-  totalShippingCost,
   totalPrice,
 }: ArticlesSectionProps) {
   return (
@@ -76,9 +75,6 @@ export default function ArticlesSection({
                 </TableCell>
                 <TableCell isHeader className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Peso (kg)
-                </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Costo Envío
                 </TableCell>
                 <TableCell isHeader className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Total
@@ -128,16 +124,6 @@ export default function ArticlesSection({
                       className="!h-10"
                     />
                   </TableCell>
-                  <TableCell className="w-32 px-4 py-3">
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={line.shippingCost}
-                      onChange={(e: any) => handleDecimalChange(idx, "shippingCost", e.target.value)}
-                      required
-                      className="!h-10"
-                    />
-                  </TableCell>
                   <TableCell className="w-32 px-4 py-3 text-right font-semibold text-gray-800 dark:text-white/90">
                     Bs {lineTotal(line).toFixed(2)}
                   </TableCell>
@@ -159,20 +145,20 @@ export default function ArticlesSection({
         </div>
       </div>
 
-      {/* Totales */}
-      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Totales. El precio del envío ya no vive acá: sale de la tarifa y se
+          muestra en el bloque de precio, con su desglose. */}
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-800/20">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Peso Total</p>
           <p className="text-2xl font-black text-gray-700 dark:text-gray-300">{totalWeight.toFixed(2)} kg</p>
         </div>
         <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-800/20">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Envío</p>
-          <p className="text-2xl font-black text-gray-700 dark:text-gray-300">Bs {totalShippingCost.toFixed(2)}</p>
-        </div>
-        <div className="flex flex-col items-center justify-center rounded-xl border border-brand-200 bg-brand-50 shadow-sm p-4 dark:border-brand-500/30 dark:bg-brand-500/10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-brand-500 opacity-5 rounded-bl-full"></div>
-          <p className="text-xs font-bold text-brand-600 uppercase tracking-widest mb-1 dark:text-brand-400">Total a Cobrar</p>
-          <p className="text-3xl font-black text-brand-700 dark:text-brand-300">Bs {(totalPrice + totalShippingCost).toFixed(2)}</p>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+            Valor Declarado
+          </p>
+          <p className="text-2xl font-black text-gray-700 dark:text-gray-300">
+            Bs {totalPrice.toFixed(2)}
+          </p>
         </div>
       </div>
     </div>

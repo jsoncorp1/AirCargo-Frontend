@@ -4,8 +4,8 @@ import React, { useCallback, useRef, useState } from "react";
 import {
   ACCEPTED_PHOTO_TYPES,
   getPhotoFileError,
-  MAX_ASSIGNMENT_PHOTOS,
-} from "@/services/shipmentAssignmentService";
+  MAX_TASK_PHOTOS,
+} from "@/services/driverTaskService";
 
 interface PhotoUploaderProps {
   /** URLs de las fotos YA guardadas en el servidor. */
@@ -25,7 +25,7 @@ interface PhotoUploaderProps {
 export default function PhotoUploader({
   value,
   onUpload,
-  maxPhotos = MAX_ASSIGNMENT_PHOTOS,
+  maxPhotos = MAX_TASK_PHOTOS,
   disabled = false,
   label = "Evidencia fotográfica",
   hint,
@@ -60,7 +60,7 @@ export default function PhotoUploader({
 
       // El backend rechaza el lote entero si un archivo no sirve, así que se
       // corta acá antes de gastar la subida.
-      const rejected = files.map(getPhotoFileError).find(Boolean);
+      const rejected = files.map(getPhotoFileError).find((msg): msg is string => !!msg);
       if (rejected) {
         setError(rejected);
         clearInput();

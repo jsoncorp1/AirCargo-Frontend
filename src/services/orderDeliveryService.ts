@@ -1,4 +1,6 @@
 import { apiClient } from './apiClient';
+import type { BolivianDepartment } from './supplierService';
+import type { PaymentType, ServicePointType } from './logisticsEnums';
 
 // ─── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -41,9 +43,17 @@ export interface OrderDelivery {
   destinationBranchOfficeCode: string | null;
   destinationBranchOfficeCity: string | null;
   clientPhone: string;
+  clientPhoneAlt?: string | null;
   clientFullName: string;
   clientAddress: string;
-  deliveryType: string;
+  // Modalidad de destino. `Branch` = el cliente retira en mostrador y el envío
+  // no se asigna a ningún conductor.
+  destinationPointType?: ServicePointType | null;
+  destinationLocationUrl?: string | null;
+  destinationAddressReference?: string | null;
+  // Antes `deliveryType`. Suma `OnAccount`, que solo admiten las empresas con
+  // cuenta corriente habilitada.
+  paymentType: PaymentType;
   isExpress: boolean;
   totalPrice: number;
   isAttended: boolean;
@@ -79,7 +89,8 @@ export interface OrderDeliveryPaginatedItem {
   destinationBranchOfficeId: string | null;
   destinationBranchOfficeCode: string | null;
   destinationBranchOfficeCity: string | null;
-  deliveryType: string;
+  destinationPointType?: ServicePointType | null;
+  paymentType: PaymentType;
   isExpress: boolean;
   totalPrice: number;
   isAttended: boolean;
@@ -108,15 +119,36 @@ export interface CreateOrderDeliveryLineRequest {
   unitPrice: number;
 }
 
+// Los enums van como NOMBRE ("LaPaz", "Prepaid"), igual que en el resto de la
+// API. Antes se mandaba el índice del selector, que ataba el contrato al orden
+// de un arreglo del front.
 export interface CreateOrderDeliveryRequest {
-  destinationDepartment: number;
-  // Opcional. Si va, el backend valida que pertenezca a `destinationDepartment`
-  // (400 `orderdelivery.destinationbranch.mismatch`); no lo corrige en silencio.
+  destinationDepartment: BolivianDepartment;
+  // Opcional salvo que el destino sea `Branch`. Si va, el backend valida que
+  // pertenezca a `destinationDepartment` (400
+  // `orderdelivery.destinationbranch.mismatch`); no lo corrige en silencio.
   destinationBranchOfficeId?: string | null;
+  /**
+   * Modalidad de destino.
+   *   `Branch` → `destinationBranchOfficeId` obligatorio
+   *              (`orderdelivery.destinationbranch.required`).
+   *   `Door`   → `clientAddress` obligatorio
+   *              (`orderdelivery.destinationaddress.required`).
+   *
+   * El ORIGEN no se elige: una orden corporativa despacha siempre desde el
+   * mostrador. Un origen a domicilio es una solicitud de recojo.
+   */
+  destinationPointType: ServicePointType;
   clientPhone: string;
+  clientPhoneAlt?: string | null;
   clientFullName: string;
   clientAddress: string;
-  deliveryType: number;
+  // El enlace de mapa acá es deseable, no requerido: el mostrador siempre
+  // trabajó con la dirección escrita y las órdenes viejas no lo tienen.
+  destinationLocationUrl?: string | null;
+  destinationAddressReference?: string | null;
+  /** `OnAccount` solo si la empresa tiene `hasCreditAccount`. */
+  paymentType: PaymentType;
   isExpress: boolean;
   lines: CreateOrderDeliveryLineRequest[];
 }
@@ -124,16 +156,7 @@ export interface CreateOrderDeliveryRequest {
 // El PUT reemplaza la orden completa: omitir `destinationBranchOfficeId` la
 // deja sin sucursal. Al editar hay que precargar la que vino del GET y
 // remandarla, o se borra el dato que declaró el proveedor.
-export interface UpdateOrderDeliveryRequest {
-  destinationDepartment: number;
-  destinationBranchOfficeId?: string | null;
-  clientPhone: string;
-  clientFullName: string;
-  clientAddress: string;
-  deliveryType: number;
-  isExpress: boolean;
-  lines: CreateOrderDeliveryLineRequest[];
-}
+export type UpdateOrderDeliveryRequest = CreateOrderDeliveryRequest;
 
 // ─── Service ─────────────────────────────────────────────────────────────────
 

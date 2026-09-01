@@ -130,12 +130,28 @@ export default function EmpresasTable() {
   };
 
   const handleSubmit = async (data: EmpresaFormData) => {
+    // El PUT reemplaza la empresa completa: se mandan TODOS los campos de
+    // configuración, no solo los tres de siempre. Omitir uno lo borra.
+    const payload = {
+      name: data.name,
+      description: data.description,
+      department: data.department,
+      kind: data.kind,
+      address: data.address ?? null,
+      locationUrl: data.locationUrl ?? null,
+      contactPhone: data.contactPhone ?? null,
+      businessHoursStart: data.businessHoursStart ?? null,
+      businessHoursEnd: data.businessHoursEnd ?? null,
+      hasCreditAccount: !!data.hasCreditAccount,
+      paymentDueDay: data.paymentDueDay ?? null,
+    };
+
     try {
       if (formMode === "create") {
-        await supplierService.createSupplier({ name: data.name, description: data.description, department: data.department });
+        await supplierService.createSupplier(payload);
         showToast("success", "Empresa creada", `La empresa "${data.name}" se creó exitosamente.`);
       } else if (formMode === "edit" && selectedEmpresa) {
-        await supplierService.updateSupplier(selectedEmpresa.id, { name: data.name, description: data.description, department: data.department });
+        await supplierService.updateSupplier(selectedEmpresa.id, payload);
         showToast("success", "Empresa actualizada", `La empresa "${data.name}" se actualizó exitosamente.`);
       }
       fetchAll();

@@ -2,6 +2,7 @@
 
 import React from "react";
 import Badge from "@/components/ui/badge/Badge";
+import { paymentTypeLabel, paymentTypeBadge } from "@/services/logisticsEnums";
 import {
   Table,
   TableBody,
@@ -12,11 +13,6 @@ import {
 import { OrderDelivery } from "@/services/orderDeliveryService";
 import { BoxCubeIcon, CheckLineIcon } from "@/icons";
 import { formatDate, formatTime } from "@/utils/datetime";
-
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
 
 /**
  * Una fila etiqueta/valor. El valor cae a "—" cuando no hay dato para que las
@@ -183,9 +179,9 @@ export default function SupplierOrderDetailView({
               )}
               <Badge
                 size="sm"
-                color={order.deliveryType === "Prepaid" ? "success" : "warning"}
+                color={paymentTypeBadge(order.paymentType)}
               >
-                {DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}
+                {paymentTypeLabel(order.paymentType)}
               </Badge>
             </div>
             {/* Sin línea de "registrada por": quién la creó ya lo dice el hito

@@ -43,9 +43,29 @@ const navItems: NavItem[] = [
     path: "/admin/reparto",
   },
   {
+    icon: <TaskIcon />,
+    name: "Solicitudes de Recojo",
+    path: "/admin/recojos",
+  },
+  {
     icon: <UserCircleIcon />,
     name: "Mis Conductores",
     path: "/admin/conductores",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Perfiles de Conductor",
+    path: "/admin/conductores/perfiles",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Cotizador",
+    path: "/admin/cotizador",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Cobranzas",
+    path: "/admin/cuenta-corriente",
   },
   {
     icon: <PageIcon />,

@@ -1,34 +1,43 @@
 import { apiClient } from './apiClient';
 import { getApiErrorMessage } from './apiErrorMessages';
-// `import type` a propósito: manifestService y shipmentAssignmentService importan
+// `import type` a propósito: manifestService y driverTaskService importan
 // `ShipmentStatus` de acá. Al ser solo tipos, el import se borra al compilar y no
 // queda un ciclo en runtime.
 import type { ManifestStatus } from './manifestService';
-import type { ShipmentAssignmentStatus } from './shipmentAssignmentService';
+import type { DriverTaskStatus } from './driverTaskService';
+import type { PaymentType, ServicePointType, VehicleType } from './logisticsEnums';
 
 // ─── Estados y observaciones ─────────────────────────────────────────────────
 
 // El estado del envío casi nunca se cambia a mano: lo arrastra el manifiesto
-// durante el viaje entre sucursales (§manifestService) y la asignación durante
-// el reparto final (§shipmentAssignmentService). `PATCH /shipments/{id}/status`
+// durante el viaje entre sucursales (§manifestService) y la tarea del conductor
+// durante el reparto final (§driverTaskService). `PATCH /shipments/{id}/status`
 // queda para correcciones del admin.
+//
+// Desde la Fase 2 la última milla tiene DOS finales según cómo termine el
+// envío. Si el destino es un domicilio va un conductor; si es una sucursal, el
+// envío espera a que lo vengan a buscar y se cierra con el registro del retiro
+// (`PATCH /shipments/{id}/handover`).
 //
 //                         ┌─── manifiesto ────┐
 // AtOriginBranch → InManifest → InTransit → AtDestinationBranch
 //       ↑              │                            │
-//       └──────────────┘                            │
-//    (se saca del lote)          ┌─── asignación ───┘
-//                                ↓
-//                             Assigned → OutForDelivery → Delivered
-//                                ↑            │
-//                                │            ├──→ Observed ──→ (se reasigna)
-//                                └────────────┤
-//                                             └──→ Rejected ──┴──→ Returned
+//       └──────────────┘                            ├── destino Branch ──┐
+//    (se saca del lote)     ┌── destino Door ───────┘                    ↓
+//                           ↓                              AwaitingCustomerPickup
+//                        Assigned → OutForDelivery → Delivered ←─────────┘
+//                           ↑            │
+//                           │            ├──→ Observed ──→ (se reasigna)
+//                           └────────────┤
+//                                        └──→ Rejected ──┴──→ Returned
 export type ShipmentStatus =
   | 'AtOriginBranch'
   | 'InManifest'
   | 'InTransit'
   | 'AtDestinationBranch'
+  // Llegó a la sucursal de destino y espera que el cliente lo retire. Un envío
+  // en este estado NO se asigna a un conductor: se cierra con el retiro.
+  | 'AwaitingCustomerPickup'
   | 'Assigned'
   | 'OutForDelivery'
   | 'Observed'
@@ -41,6 +50,7 @@ export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
   InManifest: 'En manifiesto',
   InTransit: 'En tránsito',
   AtDestinationBranch: 'En sucursal destino',
+  AwaitingCustomerPickup: 'Esperando retiro',
   Assigned: 'Asignado',
   OutForDelivery: 'En reparto',
   Observed: 'Observado',
@@ -57,6 +67,7 @@ export const SHIPMENT_STATUS_BADGE: Record<ShipmentStatus, BadgeColor> = {
   InManifest: 'primary',
   InTransit: 'info',
   AtDestinationBranch: 'primary',
+  AwaitingCustomerPickup: 'warning',
   Assigned: 'primary',
   OutForDelivery: 'info',
   Observed: 'warning',
@@ -74,8 +85,9 @@ export const shipmentStatusLabel = (status: ShipmentStatus | string): string =>
 export const shipmentStatusBadge = (status: ShipmentStatus | string): BadgeColor =>
   SHIPMENT_STATUS_BADGE[status as ShipmentStatus] ?? 'light';
 
-// Camino feliz, en orden. Los estados de excepción (Observed/Rejected/Returned)
-// se salen de esta línea y se tratan aparte en el timeline.
+// Camino feliz del envío que se ENTREGA A DOMICILIO, en orden. Los estados de
+// excepción (Observed/Rejected/Returned) se salen de esta línea y se tratan
+// aparte en el timeline.
 export const SHIPMENT_STATUS_ORDER: ShipmentStatus[] = [
   'AtOriginBranch',
   'InManifest',
@@ -83,6 +95,17 @@ export const SHIPMENT_STATUS_ORDER: ShipmentStatus[] = [
   'AtDestinationBranch',
   'Assigned',
   'OutForDelivery',
+  'Delivered',
+];
+
+// Camino feliz del envío que el cliente RETIRA EN MOSTRADOR. No pasa por ningún
+// conductor: de la sucursal de destino va directo a esperar el retiro.
+export const SHIPMENT_COUNTER_STATUS_ORDER: ShipmentStatus[] = [
+  'AtOriginBranch',
+  'InManifest',
+  'InTransit',
+  'AtDestinationBranch',
+  'AwaitingCustomerPickup',
   'Delivered',
 ];
 
@@ -98,10 +121,23 @@ export const isExceptionStatus = (status: ShipmentStatus | string): boolean =>
 // Lista ordenada para los filtros de estado, compartida por todas las pantallas
 // (toolbar del superadmin, tabs del admin, select del conductor y del proveedor)
 // para que ninguna se quede con un subconjunto viejo hardcodeado.
+// `AwaitingCustomerPickup` se intercala donde ocurre —después de llegar a la
+// sucursal de destino—: es la cola de "qué está esperando que lo vengan a
+// buscar", y sin filtro propio esa cola no se puede mirar.
 export const SHIPMENT_STATUS_FILTER_OPTIONS: { value: ShipmentStatus; label: string }[] = [
-  ...SHIPMENT_STATUS_ORDER,
+  'AtOriginBranch',
+  'InManifest',
+  'InTransit',
+  'AtDestinationBranch',
+  'AwaitingCustomerPickup',
+  'Assigned',
+  'OutForDelivery',
+  'Delivered',
   ...SHIPMENT_EXCEPTION_STATUSES,
-].map((value) => ({ value, label: SHIPMENT_STATUS_LABELS[value] }));
+].map((value) => ({
+  value: value as ShipmentStatus,
+  label: SHIPMENT_STATUS_LABELS[value as ShipmentStatus],
+}));
 
 export interface TimelineStep {
   status: ShipmentStatus;
@@ -112,23 +148,47 @@ export interface TimelineStep {
   exception: boolean;
 }
 
+export interface ShipmentTimelineOptions {
+  /** Sucursal origen = destino: el envío no viaja, salta el tramo de manifiesto. */
+  isLocal?: boolean;
+  /**
+   * Cómo termina el envío. `Branch` (retiro en mostrador) cambia el final de la
+   * línea: no hay conductor, hay una espera. Si no se pasa, se deduce del
+   * estado actual — que solo alcanza una vez que el envío ya llegó.
+   */
+  destinationPointType?: ServicePointType | null;
+}
+
 /**
  * Pasos a mostrar en el seguimiento de un envío.
  *
- * El camino feliz es `SHIPMENT_STATUS_ORDER`. Si el envío se desvió
- * (Observed/Rejected/Returned) la desviación ocurre siempre en la calle, así que
- * el paso de excepción reemplaza a `Delivered` al final de la línea.
+ * Hay dos caminos felices y los separa la modalidad de destino: a domicilio
+ * termina con un conductor (`SHIPMENT_STATUS_ORDER`), en mostrador termina
+ * esperando el retiro (`SHIPMENT_COUNTER_STATUS_ORDER`).
  *
- * `isLocal` (sucursal origen = destino) salta el tramo de manifiesto: ese envío
- * nace directamente en `AtDestinationBranch` y no viaja a ningún lado.
+ * Si el envío se desvió (Observed/Rejected/Returned) la desviación ocurre
+ * siempre en la calle, así que el paso de excepción reemplaza a `Delivered` al
+ * final de la línea.
  */
 export function buildShipmentTimeline(
   status: ShipmentStatus,
-  isLocal = false
+  options: ShipmentTimelineOptions = {}
 ): TimelineStep[] {
-  const happyPath = isLocal
-    ? SHIPMENT_STATUS_ORDER.filter((s) => s !== 'InManifest' && s !== 'InTransit')
+  const { isLocal = false, destinationPointType } = options;
+
+  // Sin la modalidad a mano (listados viejos, envíos anteriores al campo) el
+  // estado la delata en cuanto el envío llega: solo un retiro en mostrador pasa
+  // por `AwaitingCustomerPickup`.
+  const isCounterPickup =
+    destinationPointType === 'Branch' || status === 'AwaitingCustomerPickup';
+
+  const fullPath = isCounterPickup
+    ? SHIPMENT_COUNTER_STATUS_ORDER
     : SHIPMENT_STATUS_ORDER;
+
+  const happyPath = isLocal
+    ? fullPath.filter((s) => s !== 'InManifest' && s !== 'InTransit')
+    : fullPath;
 
   const exception = isExceptionStatus(status);
   const steps: ShipmentStatus[] = exception
@@ -163,6 +223,9 @@ export const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[
   InManifest: [],
   InTransit: ['AtDestinationBranch'],
   AtDestinationBranch: [],
+  // El paso a `Delivered` NO va por acá: el retiro se registra con
+  // `registerHandover`, que además guarda a quién se le entregó.
+  AwaitingCustomerPickup: [],
   Assigned: [],
   OutForDelivery: [],
   Observed: ['Returned'],
@@ -170,6 +233,16 @@ export const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[
   Delivered: [],
   Returned: [],
 };
+
+/**
+ * `true` cuando el envío espera que el cliente lo retire del mostrador.
+ *
+ * En ese estado el botón de asignar conductor NO va: va el de registrar el
+ * retiro. Son mutuamente excluyentes y la máquina de estados del backend lo
+ * impide, así que la UI tiene que reflejarlo en vez de dejar apretar y fallar.
+ */
+export const isAwaitingCustomerPickup = (status: ShipmentStatus | string): boolean =>
+  status === 'AwaitingCustomerPickup';
 
 export type ShipmentObservation =
   | 'CustomerRefused'
@@ -254,18 +327,46 @@ export interface Shipment {
   manifestId?: string | null;
   manifestCode?: string | null;
   manifestStatus?: ManifestStatus | null;
-  // Intento de reparto VIGENTE. Los cerrados quedan como historial y se
-  // consultan con `shipmentAssignmentService.getAssignments({ shipmentId })`.
+  // Tarea de reparto VIGENTE. Las cerradas quedan como historial y se consultan
+  // con `driverTaskService.getTasks({ shipmentId })`.
   currentAssignment?: ShipmentCurrentAssignment | null;
+
+  // ─── Fase 2 ────────────────────────────────────────────────────────────────
+
+  // Modalidad de cada punta. El origen es `Branch` salvo que el envío haya
+  // nacido de una solicitud de recojo.
+  originPointType?: ServicePointType | null;
+  destinationPointType?: ServicePointType | null;
+  paymentType?: PaymentType | null;
+  clientPhoneAlt?: string | null;
+  destinationLocationUrl?: string | null;
+  destinationAddressReference?: string | null;
+
+  // De qué solicitud de recojo nació, si nació de una.
+  pickupOrderId?: string | null;
+  pickupOrderCode?: string | null;
+
+  // Auditoría del precio: qué dijo la tarifa, qué se cobró y quién lo cambió.
+  // Con esto la pantalla puede mostrar "tarifa 94 Bs → cobrado 90 Bs".
+  calculatedPrice?: number | null;
+  appliedShippingRateId?: string | null;
+  priceOverrideReason?: string | null;
+  /** El CORREO de quien ajustó el precio, como toda la autoría de la API. */
+  priceOverrideBy?: string | null;
+
+  // Constancia del retiro en mostrador.
+  handoverToName?: string | null;
+  handoverToDocument?: string | null;
+  handoverAt?: string | null;
 }
 
-// Resumen del intento de reparto vigente que viene embebido en `GET /shipments/{id}`.
+// Resumen de la tarea de reparto vigente que viene embebida en `GET /shipments/{id}`.
 export interface ShipmentCurrentAssignment {
   id: string;
   driverUserId: string;
   driverFullName: string;
   driverPhoneNumber?: string | null;
-  status: ShipmentAssignmentStatus;
+  status: DriverTaskStatus;
   assignedAt: string;
   pickedUpAt?: string | null;
   completedAt?: string | null;
@@ -291,7 +392,27 @@ export interface ShipmentPaginatedItem {
   // null mientras el envío no está en ningún lote.
   manifestId?: string | null;
   manifestCode?: string | null;
+  // Fase 2: alcanza para el badge de modalidad, el semáforo de ajuste de precio
+  // y la columna de retiro, sin un GET por fila.
+  destinationPointType?: ServicePointType | null;
+  paymentType?: PaymentType | null;
+  pickupOrderId?: string | null;
+  calculatedPrice?: number | null;
+  handoverAt?: string | null;
 }
+
+/**
+ * `true` cuando lo que se cobró no es lo que dijo la tarifa.
+ *
+ * El motivo y el autor del ajuste vienen en el detalle (`priceOverrideReason`,
+ * `priceOverrideBy`); en el listado alcanza con marcar la fila.
+ */
+export const wasPriceOverridden = (shipment: {
+  shippingPrice: number;
+  calculatedPrice?: number | null;
+}): boolean =>
+  typeof shipment.calculatedPrice === 'number' &&
+  Math.abs(shipment.calculatedPrice - shipment.shippingPrice) > 0.001;
 
 export interface ShipmentListFilters {
   supplierId?: string;
@@ -318,10 +439,36 @@ export interface ShipmentsPaginatedResponse {
   data: ShipmentPaginatedItem[];
 }
 
+// El costo por línea YA NO VA en el alta.
+//
+// El precio no se carga a mano: sale de la tarifa vigente y el backend lo
+// reparte entre las líneas en proporción a su peso. Sigue viniendo en la
+// RESPUESTA (`ShipmentDetailItem.shippingCost`), ya calculado.
 export interface CreateShipmentLineRequest {
   orderDeliveryDetailId: string;
   weight: number;
-  shippingCost: number;
+}
+
+/**
+ * Lo que define el precio en los tres caminos de alta de envío.
+ *
+ * Sin tarifa cargada para la ruta, los tres fallan con `pricing.rate.notfound`
+ * o `pricing.doorrate.notfound`. Es deliberado: el sistema no inventa precios.
+ */
+export interface ShipmentPricingRequest {
+  /**
+   * Define el cargo de puerta. Solo pesa si el destino es domicilio: en un
+   * retiro en mostrador no se cobra viaje.
+   */
+  deliveryVehicleType: VehicleType;
+  /** `null` = manda la tarifa calculada. Cualquier otro valor es un ajuste. */
+  shippingPrice?: number | null;
+  /**
+   * OBLIGATORIO si `shippingPrice` difiere del calculado
+   * (`shipment.priceoverride.reasonrequired`). Hay que pedirlo en el MISMO
+   * formulario: sin él se pierde toda la carga.
+   */
+  priceOverrideReason?: string | null;
 }
 
 // Sucursal de origen del envío = la sucursal desde la que se está atendiendo.
@@ -338,7 +485,9 @@ export interface ShipmentOriginRequest {
   originBranchOfficeId?: string | null;
 }
 
-export interface CreateShipmentRequest extends ShipmentOriginRequest {
+export interface CreateShipmentRequest
+  extends ShipmentOriginRequest,
+    ShipmentPricingRequest {
   orderDeliveryId: string;
   // Sucursal de destino (obligatoria).
   destinationBranchOfficeId: string;
@@ -350,10 +499,12 @@ export interface CreateShipmentRequest extends ShipmentOriginRequest {
 export interface UpdateShipmentLineRequest {
   shipmentDetailId: string;
   weight: number;
-  shippingCost: number;
 }
 
-export interface UpdateShipmentRequest {
+// El PUT RECOTIZA con el peso corregido: cambiar el peso ahora cambia el
+// precio, en vez de dejar el importe viejo. Si el envío está fiado, también
+// corrige la línea de la cuenta corriente cuando el período sigue abierto.
+export interface UpdateShipmentRequest extends ShipmentPricingRequest {
   packageCount: number;
   packageDescription: string;
   lines: UpdateShipmentLineRequest[];
@@ -361,27 +512,42 @@ export interface UpdateShipmentRequest {
 
 // ─── DTOs: envío esporádico (mostrador) ────────────────────────────────────────
 
+// Igual que en el envío normal: sin `shippingCost`, el precio sale de la tarifa.
 export interface CreateSporadicShipmentLineRequest {
   articleName: string;
   quantity: number;
   unitPrice: number;
   weight: number;
-  shippingCost: number;
 }
 
 // El origen sigue las mismas reglas que en el envío normal (ver
 // `ShipmentOriginRequest`). En el esporádico, además, la sucursal de origen
 // define el departamento de origen de la orden que se genera.
-export interface CreateSporadicShipmentRequest extends ShipmentOriginRequest {
+//
+// El origen es SIEMPRE mostrador y no se elige: un origen a domicilio es una
+// solicitud de recojo, que crea su propia orden al recibirse.
+export interface CreateSporadicShipmentRequest
+  extends ShipmentOriginRequest,
+    ShipmentPricingRequest {
   destinationBranchOfficeId: string;
   senderFullName: string;
   senderPhone: string;
   senderAddress: string;
   destinationDepartment: string;
+  // `Branch` → `destinationBranchOfficeId` obligatorio; `Door` → `clientAddress`
+  // obligatorio. El enlace de mapa acá es deseable, no requerido.
+  destinationPointType: ServicePointType;
   clientPhone: string;
+  clientPhoneAlt?: string | null;
   clientFullName: string;
   clientAddress: string;
-  deliveryType: string;
+  destinationLocationUrl?: string | null;
+  destinationAddressReference?: string | null;
+  /**
+   * `OnAccount` NO se ofrece acá: un esporádico no tiene empresa a la que
+   * cargarle el fiado y el backend responde `billing.supplier.required`.
+   */
+  paymentType: PaymentType;
   isExpress: boolean;
   packageCount: number;
   packageDescription: string;
@@ -410,6 +576,33 @@ export interface SporadicShipmentResponse {
   packageCount: number;
   packageDescription: string;
   details: SporadicShipmentDetailItem[];
+  // Para poder mostrar "tarifa 94 Bs → cobrado 90 Bs" en la misma pantalla.
+  calculatedPrice?: number | null;
+  priceWasOverridden?: boolean | null;
+}
+
+// ─── DTOs: retiro en mostrador ────────────────────────────────────────────────
+
+/**
+ * Constancia del retiro: `AwaitingCustomerPickup → Delivered`.
+ *
+ * Roles admin / superadmin. Es lo que reemplaza al reparto cuando el envío
+ * termina en sucursal: no hay conductor al que asignárselo.
+ */
+export interface HandoverShipmentRequest {
+  handoverToName: string;
+  handoverToDocument: string;
+  /** Opcional, ya subida. */
+  photoUrl?: string | null;
+}
+
+export interface HandoverShipmentResponse {
+  id: string;
+  code: string;
+  status: ShipmentStatus;
+  handoverToName: string;
+  handoverToDocument: string;
+  handoverAt: string;
 }
 
 // ─── DTOs: cambio de estado / observación ─────────────────────────────────────
@@ -495,6 +688,22 @@ export const shipmentService = {
   ): Promise<SporadicShipmentResponse> => {
     return apiClient<SporadicShipmentResponse>('/shipments/sporadic', {
       method: 'POST',
+      data,
+    });
+  },
+
+  /**
+   * Registra el retiro en mostrador y cierra el envío como entregado.
+   *
+   * Solo desde `AwaitingCustomerPickup`. En ese estado el botón de asignar
+   * conductor no existe: son acciones mutuamente excluyentes.
+   */
+  registerHandover: async (
+    id: string,
+    data: HandoverShipmentRequest
+  ): Promise<HandoverShipmentResponse> => {
+    return apiClient<HandoverShipmentResponse>(`/shipments/${id}/handover`, {
+      method: 'PATCH',
       data,
     });
   },

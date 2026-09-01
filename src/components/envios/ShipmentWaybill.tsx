@@ -1,19 +1,55 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
+import {
+  PaymentType,
+  ServicePointType,
+  paymentTypeLabel,
+} from "@/services/logisticsEnums";
+import type { OrderType } from "@/services/orderDeliveryService";
 
 // Número fijo del callcenter que se imprime en toda guía, no depende del envío.
 const CALLCENTER_PHONE = "67723108";
+const SITE_URL = "www.aircargo.com";
 
-const DELIVERY_TYPE_LABELS: Record<string, string> = {
-  Prepaid: "Pagada",
-  CashOnDelivery: "Por Pagar",
-};
+/**
+ * Marca de los campos que el formato de guía pide pero el backend TODAVÍA NO
+ * expone: Nit/Ci del remitente, Nit/Ci y correo del destinatario, valor
+ * declarado del esporádico y la dirección de la sucursal que emite.
+ *
+ * Se imprime la etiqueta con esta marca en vez de dejar el renglón vacío para
+ * que se vea de un vistazo qué falta cablear cuando el API los agregue: un
+ * renglón en blanco se confunde con un dato que el operador no cargó.
+ */
+const FALTA = "FALTA";
 
 function formatCreatedBy(createdBy: string): string {
   if (!createdBy || createdBy.toLowerCase() === "system") return "Sistema AirCargo";
   return createdBy;
+}
+
+// El código ya viene con el prefijo del tipo de orden (`COR-000123` corporativo,
+// `ESP-000123` esporádico), así que la guía sabe qué variante imprimir aunque
+// quien la renderiza no tenga la orden a mano (el tracking solo tiene el envío).
+function isSporadicWaybill(code: string, orderType?: OrderType | null): boolean {
+  if (orderType) return orderType === "Sporadic";
+  return code.trim().toUpperCase().startsWith("ESP");
+}
+
+/**
+ * Tipo de envío en la nomenclatura de mostrador: P = puerta, S = sucursal.
+ * `P2S` es "sale de un domicilio y lo retiran en mostrador". En la guía va UNO
+ * solo —el que corresponde—, no las cuatro combinaciones.
+ */
+function shipmentTypeCode(
+  origin?: ServicePointType | string | null,
+  destination?: ServicePointType | string | null
+): string {
+  // El origen es mostrador salvo que el envío haya nacido de un recojo, así que
+  // sin dato la suposición correcta es `Branch`; el destino más común es puerta.
+  const side = (value: ServicePointType | string | null | undefined, fallback: ServicePointType) =>
+    (value ?? fallback) === "Door" ? "P" : "S";
+  return `${side(origin, "Branch")}2${side(destination, "Door")}`;
 }
 
 interface WaybillLine {
@@ -26,6 +62,8 @@ interface WaybillLine {
 
 interface ShipmentWaybillProps {
   code: string;
+  /** Si no se pasa, se deduce del prefijo del código (ESP-/COR-). */
+  orderType?: OrderType | null;
   originDepartment: string;
   destinationDepartment: string;
   senderFullName: string;
@@ -34,7 +72,13 @@ interface ShipmentWaybillProps {
   clientFullName: string;
   clientPhone: string;
   clientAddress: string;
-  deliveryType: string;
+  paymentType: PaymentType | string;
+  // Modalidad de cada punta: juntas arman el tipo de envío (P2P/P2S/S2P/S2S).
+  originPointType?: ServicePointType | string | null;
+  destinationPointType?: ServicePointType | string | null;
+  // Solo se imprimen en la guía corporativa, como en el formato del callcenter.
+  destinationLocationUrl?: string | null;
+  destinationAddressReference?: string | null;
   isExpress: boolean;
   packageCount: number;
   packageDescription: string;
@@ -44,18 +88,123 @@ interface ShipmentWaybillProps {
   createdBy: string;
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+// ─── Piezas del formato ──────────────────────────────────────────────────────
+
+function Divider() {
+  return <div className="my-1.5 border-t border-dashed border-black" />;
+}
+
+function Field({
+  label,
+  value,
+  missing = false,
+}: {
+  label: string;
+  value?: string | null;
+  missing?: boolean;
+}) {
   return (
-    <p className="text-[10px] font-black uppercase tracking-widest text-black">
-      {children}
+    <p className="text-[10px] leading-snug text-black break-words">
+      <span className="font-bold">{label}:</span>{" "}
+      <span className={missing ? "font-bold" : ""}>{missing ? FALTA : value || ""}</span>
     </p>
   );
 }
 
-// Reproduce el formato de una guía física de envío: angosta (ancho de ticket de 80mm),
-// con contrastes altos para impresoras térmicas.
+/** Renglón de dos columnas: rótulo a la izquierda, valor pegado a la derecha. */
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-[10px] leading-snug text-black">
+      <span className="font-bold uppercase">{label}</span>
+      <span className="text-right font-black">{value}</span>
+    </div>
+  );
+}
+
+/** Renglón punteado para completar a mano (dirección de entrega, condiciones). */
+function BlankLine() {
+  return <div className="mt-2 border-b border-dotted border-black" />;
+}
+
+function SignatureLine({ label }: { label: string }) {
+  return (
+    <div className="mt-4 flex items-end gap-1">
+      <span className="whitespace-nowrap text-[10px] font-bold text-black">{label}:</span>
+      <span className="flex-1 border-b border-black" />
+    </div>
+  );
+}
+
+/**
+ * QR DE EJEMPLO. Es un dibujo, no un código legible: se reemplaza por el QR real
+ * cuando se decida la librería —y apunta a distinto lugar según la variante: la
+ * ubicación de entrega en la corporativa, el contrato en la esporádica—. Se arma
+ * con un patrón fijo (sin azar) para que no cambie entre renders ni entre lo que
+ * se ve en pantalla y lo que sale impreso.
+ */
+function PlaceholderQr({ size = 78 }: { size?: number }) {
+  const modules = 21;
+  const cells: React.ReactElement[] = [];
+
+  const inBox = (r: number, c: number, r0: number, c0: number) =>
+    r >= r0 && r < r0 + 7 && c >= c0 && c < c0 + 7;
+
+  for (let r = 0; r < modules; r++) {
+    for (let c = 0; c < modules; c++) {
+      const finder =
+        inBox(r, c, 0, 0) || inBox(r, c, 0, modules - 7) || inBox(r, c, modules - 7, 0);
+
+      let on: boolean;
+      if (finder) {
+        // Ojo de posicionamiento: marco de 7x7 con un cuadrado de 3x3 adentro.
+        const rr = r < 7 ? r : r - (modules - 7);
+        const cc = c < 7 ? c : c - (modules - 7);
+        const edge = rr === 0 || rr === 6 || cc === 0 || cc === 6;
+        const core = rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4;
+        on = edge || core;
+      } else {
+        on = (r * 7 + c * 13 + ((r * c) % 5)) % 3 === 0;
+      }
+
+      if (on) {
+        cells.push(<rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill="#000" />);
+      }
+    }
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${modules} ${modules}`}
+      width={size}
+      height={size}
+      shapeRendering="crispEdges"
+      role="img"
+      aria-label="QR de ejemplo"
+    >
+      <rect x={0} y={0} width={modules} height={modules} fill="#fff" />
+      {cells}
+    </svg>
+  );
+}
+
+// ─── Guía ────────────────────────────────────────────────────────────────────
+
+/**
+ * Guía de envío en el formato del callcenter, para ticket de 8 cm x 20 cm.
+ *
+ * Hay DOS variantes de la misma hoja y las separa el tipo de orden:
+ *   esporádico  → valor declarado, detalle SIN precios y términos del contrato
+ *                 (con el QR que lleva al contrato completo); el total es lo
+ *                 que el cliente paga por el envío.
+ *   corporativo → ubicación y observación del destinatario, detalle CON precio
+ *                 por artículo y bloque de ubicación de entrega con QR. El
+ *                 total es la mercadería, que es lo que se cobra contra la
+ *                 guía: el flete no aparece acá, se le descuenta a la empresa
+ *                 cuando AirCargo le liquida.
+ */
 export default function ShipmentWaybill({
   code,
+  orderType,
   originDepartment,
   destinationDepartment,
   senderFullName,
@@ -64,7 +213,11 @@ export default function ShipmentWaybill({
   clientFullName,
   clientPhone,
   clientAddress,
-  deliveryType,
+  paymentType,
+  originPointType,
+  destinationPointType,
+  destinationLocationUrl,
+  destinationAddressReference,
   isExpress,
   packageCount,
   packageDescription,
@@ -73,134 +226,249 @@ export default function ShipmentWaybill({
   hora,
   createdBy,
 }: ShipmentWaybillProps) {
+  const isSporadic = isSporadicWaybill(code, orderType);
+
   const totalWeight = lines.reduce((acc, l) => acc + (l.weight || 0), 0);
   const totalShippingCost = lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0);
+  const totalGoods = lines.reduce(
+    (acc, l) => acc + (l.unitPrice || 0) * (l.quantity || 0),
+    0
+  );
 
   return (
-    <div 
-      className="bg-white text-black font-sans" 
-      style={{ width: "302px", margin: "0 auto", padding: "20px 0", display: "flex", justifyContent: "center" }}
+    <div
+      className="bg-white font-sans text-black"
+      style={{
+        width: "80mm",
+        minHeight: "200mm",
+        padding: "4mm",
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
-      <div style={{ width: "260px" }}>
-        {/* Logo + referencia */}
-        <div className="flex flex-col items-center gap-1" style={{ paddingTop: "24px", paddingBottom: "24px" }}>
-          <img 
-            src="/images/logo/logoaircargoazul.png" 
-            alt="AirCargo" 
-            style={{ height: "48px", width: "auto", maxWidth: "180px", filter: "grayscale(100%) contrast(1.25) brightness(0)" }} 
-          />
-          <p className="text-[12px] font-bold text-black mt-1">
-            Callcenter: {CALLCENTER_PHONE}
-          </p>
-          {isExpress && (
-            <div style={{ marginTop: "16px", marginBottom: "8px" }}>
-              <span className="inline-block border-2 border-black px-3 py-0.5 text-[11px] font-extrabold uppercase tracking-widest text-black">
-                ENVÍO EXPRESO
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Ruta: origen -> destino */}
-        <div className="flex items-center justify-between border-y-2 border-dashed border-black py-3">
-          <div className="text-center w-[40%]">
-            <SectionLabel>ORIGEN</SectionLabel>
-            <p className="text-[15px] font-black uppercase text-black">{originDepartment || "—"}</p>
-          </div>
-          <div className="flex-1 text-center font-bold text-black">→</div>
-          <div className="text-center w-[40%]">
-            <SectionLabel>DESTINO</SectionLabel>
-            <p className="text-[15px] font-black uppercase text-black">{destinationDepartment || "—"}</p>
-          </div>
-        </div>
-
-        {/* Emisor / Destinatario */}
-        <div className="space-y-3 py-3">
-          <div>
-            <SectionLabel>EMISOR</SectionLabel>
-            <p className="text-[13px] font-bold leading-tight uppercase text-black">{senderFullName || "—"}</p>
-            <p className="text-[11px] font-medium text-black">{senderPhone || "—"}</p>
-            {senderAddress && <p className="text-[11px] font-medium text-black leading-tight">{senderAddress}</p>}
-          </div>
-          <div>
-            <SectionLabel>DESTINATARIO</SectionLabel>
-            <p className="text-[13px] font-bold leading-tight uppercase text-black">{clientFullName || "—"}</p>
-            <p className="text-[11px] font-medium text-black">{clientPhone || "—"}</p>
-            {clientAddress && <p className="text-[11px] font-medium text-black leading-tight">{clientAddress}</p>}
-          </div>
-        </div>
-
-        {/* Resumen: tipo de entrega, paquetes, peso, costo */}
-        <div className="border-y-2 border-dashed border-black py-2">
-          <div className="flex justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase">TIPO:</span>
-            <span className="text-[11px] font-black uppercase">{DELIVERY_TYPE_LABELS[deliveryType] ?? deliveryType}</span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase">PAQUETES:</span>
-            <span className="text-[11px] font-black uppercase">{packageCount}</span>
-          </div>
-          <div className="flex justify-between mb-1">
-            <span className="text-[11px] font-bold uppercase">PESO:</span>
-            <span className="text-[11px] font-black uppercase">{totalWeight.toFixed(2)} kg</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[11px] font-bold uppercase">ENVÍO:</span>
-            <span className="text-[11px] font-black uppercase">Bs {totalShippingCost.toFixed(2)}</span>
-          </div>
-        </div>
-
-        {packageDescription && (
-          <div className="py-2 border-b-2 border-dashed border-black">
-            <SectionLabel>DESCRIPCIÓN</SectionLabel>
-            <p className="text-[11px] font-bold leading-tight text-black">{packageDescription}</p>
-          </div>
+      {/* Encabezado: marca, callcenter y dirección de la sucursal que emite */}
+      <div className="flex flex-col items-center">
+        <img
+          src="/images/logo/logoaircargoazul.png"
+          alt="AirCargo"
+          style={{
+            height: "34px",
+            width: "auto",
+            maxWidth: "150px",
+            filter: "grayscale(100%) contrast(1.25) brightness(0)",
+          }}
+        />
+        <p className="mt-1 text-[10px] font-bold text-black">Callcenter: {CALLCENTER_PHONE}</p>
+        {isExpress && (
+          <span className="mt-1 inline-block border-2 border-black px-2 text-[9px] font-extrabold uppercase tracking-widest text-black">
+            Envío expreso
+          </span>
         )}
+      </div>
 
-        {/* Código de guía */}
-        <div className="py-4 text-center border-b-2 border-dashed border-black">
-          <SectionLabel>CÓDIGO DE GUÍA</SectionLabel>
-          <p className="mt-1 text-[22px] font-black tracking-widest break-all text-black">{code}</p>
-          <div
-            className="mx-auto mt-2 h-8 w-full"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(90deg, #000 0px, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 5px, transparent 5px, transparent 8px, #000 8px, #000 12px, transparent 12px, transparent 14px)",
-            }}
-          />
-        </div>
+      {/* La dirección de la sucursal emisora no viaja en el envío: queda pendiente. */}
+      <div className="mt-2">
+        <Field label="Direccion" missing />
+      </div>
 
-        {/* Detalle del envío, línea por línea */}
-        <div className="py-3">
-          <SectionLabel>DETALLE</SectionLabel>
-          <table className="mt-1 w-full text-left text-[10px]">
-            <thead>
-              <tr className="border-b border-black">
-                <th className="pb-1 font-bold text-black uppercase">Cant</th>
-                <th className="pb-1 font-bold text-black uppercase">Art.</th>
-                <th className="pb-1 text-right font-bold text-black uppercase">Bs</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/20">
-              {lines.map((l, i) => (
-                <tr key={i}>
-                  <td className="py-1 font-bold text-black align-top">{l.quantity}</td>
-                  <td className="py-1 pr-2 font-bold text-black uppercase leading-tight">{l.articleName}</td>
-                  <td className="py-1 text-right font-bold text-black align-top">{l.unitPrice?.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <Divider />
 
-        <div className="border-t-2 border-black py-3 text-[10px] text-center font-bold text-black uppercase leading-tight">
-          <p>FECHA: {fecha} {hora}</p>
-          <p className="mt-0.5">GENERADO POR: {formatCreatedBy(createdBy)}</p>
+      {/* Código de guía: uno solo, ESP- o COR- según de dónde salió el envío */}
+      <p className="break-all text-center text-[15px] font-black tracking-widest text-black">
+        {code || "—"}
+      </p>
+
+      <Divider />
+
+      {/* Remitente */}
+      <div>
+        <Field label="Remitente" value={senderFullName} />
+        <Field label="Nit/Ci" missing />
+        <Field label="Telefono" value={senderPhone} />
+        {senderAddress && <Field label="Direccion" value={senderAddress} />}
+      </div>
+
+      {/* Destinatario */}
+      <div className="mt-2">
+        <Field label="Destinatario" value={clientFullName} />
+        <Field label="Nit/Ci" missing />
+        <Field label="Telefono" value={clientPhone} />
+        <Field label="Email" missing />
+        {!isSporadic && (
+          <>
+            <Field label="Ubicacion" value={destinationLocationUrl || clientAddress} />
+            <Field label="Observacion" value={destinationAddressReference} />
+          </>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* Ruta */}
+      <p className="text-center text-[11px] font-black uppercase text-black">
+        {originDepartment || "—"} &rarr; {destinationDepartment || "—"}
+      </p>
+
+      <Divider />
+
+      {/* Resumen de la carga */}
+      <div>
+        {isSporadic && <Row label="Valor declarado" value={FALTA} />}
+        <Row label="Peso/vol" value={`${totalWeight.toFixed(2)} kg`} />
+      </div>
+
+      <table className="mt-1.5 w-full text-left text-[10px] text-black">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="w-[20%] pb-0.5 font-bold uppercase">Pieza</th>
+            <th className="pb-0.5 font-bold uppercase">Descripcion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="pt-0.5 align-top font-bold">{packageCount}</td>
+            <td className="pt-0.5 font-bold leading-snug">{packageDescription || "—"}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <Divider />
+
+      {/* Detalle: el corporativo lleva el precio de cada artículo, el esporádico no */}
+      <p className="text-[10px] font-bold uppercase text-black">Detalle de la guia</p>
+      <table className="mt-1 w-full text-left text-[10px] text-black">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="w-[18%] pb-0.5 font-bold uppercase">Cant</th>
+            <th className="pb-0.5 font-bold uppercase">Descripcion</th>
+            {!isSporadic && (
+              <th className="w-[26%] pb-0.5 text-right font-bold uppercase">Precio</th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/20">
+          {lines.map((l, i) => (
+            <tr key={i}>
+              <td className="py-0.5 align-top font-bold">{l.quantity}</td>
+              <td className="py-0.5 pr-1 font-bold leading-snug">{l.articleName}</td>
+              {!isSporadic && (
+                <td className="py-0.5 text-right align-top font-bold">
+                  {((l.unitPrice || 0) * (l.quantity || 0)).toFixed(2)}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <Divider />
+
+      {/*
+        El total dice cosas distintas según la variante:
+        esporádico  → lo que el cliente paga por el envío;
+        corporativo → la mercadería, que es lo que se cobra contra esta guía. El
+                      flete NO va acá: se le descuenta a la empresa cuando
+                      AirCargo le liquida (orden 1500 con envío 100 → 1400).
+      */}
+      <Row
+        label={isSporadic ? "Total precio de envio" : "Total productos"}
+        value={`${(isSporadic ? totalShippingCost : totalGoods).toFixed(2)} Bs`}
+      />
+
+      <Divider />
+
+      {/* Tipo de guía y de envío: solo el valor que corresponde, no el menú */}
+      <Row label="Tipo de guia" value={paymentTypeLabel(paymentType)} />
+      <Row
+        label="Tipo de envio"
+        value={shipmentTypeCode(originPointType, destinationPointType)}
+      />
+
+      <Divider />
+
+      {/*
+        Bloque libre. Las dos variantes llevan QR, pero apuntan a cosas
+        distintas: en el corporativo a la UBICACIÓN de entrega, en el
+        esporádico al CONTRATO —los términos completos no entran en 8 cm de
+        ancho, así que el ticket solo deja el enlace y unos renglones—.
+      */}
+      {isSporadic ? (
+        <div>
+          <p className="text-[10px] font-bold uppercase text-black">
+            Terminos y condiciones del contrato
+          </p>
+          <div className="mt-1 flex items-start gap-2">
+            <div className="shrink-0">
+              <PlaceholderQr />
+              <p className="mt-0.5 text-center text-[7px] font-bold uppercase text-black">
+                QR de ejemplo
+              </p>
+            </div>
+            <div className="min-w-0 flex-1">
+              <BlankLine />
+              <BlankLine />
+              <BlankLine />
+            </div>
+          </div>
+          <BlankLine />
+          <BlankLine />
         </div>
-        
-        <div className="text-[9px] text-center font-bold text-black">
-          <p>¡GRACIAS POR SU PREFERENCIA!</p>
+      ) : (
+        <div>
+          <p className="text-[10px] font-bold uppercase text-black">Ubicacion de entrega</p>
+          <div className="mt-1 flex items-start gap-2">
+            <div className="shrink-0">
+              <PlaceholderQr />
+              <p className="mt-0.5 text-center text-[7px] font-bold uppercase text-black">
+                QR de ejemplo
+              </p>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="break-words text-[10px] font-bold leading-snug text-black">
+                {clientAddress || ""}
+              </p>
+              <BlankLine />
+              <BlankLine />
+              <BlankLine />
+            </div>
+          </div>
         </div>
+      )}
+
+      <Divider />
+
+      {/* Datos de entrega: se completan a mano al momento de entregar */}
+      <p className="text-center text-[10px] font-bold uppercase text-black">Datos de entrega</p>
+      <div className="mt-1 flex items-end gap-1">
+        <span className="whitespace-nowrap text-[10px] font-bold text-black">
+          Fecha de entrega:
+        </span>
+        <span className="flex-1 border-b border-black" />
+      </div>
+      <div className="mt-2 flex items-end gap-1">
+        <span className="whitespace-nowrap text-[10px] font-bold text-black">
+          Hora de entrega:
+        </span>
+        <span className="flex-1 border-b border-black" />
+      </div>
+
+      <Divider />
+
+      {/* Firmas */}
+      <div>
+        <SignatureLine label="Firma remitente" />
+        <SignatureLine label="Firma de AirCargo" />
+        <SignatureLine label="Firma de Destinatario" />
+      </div>
+
+      {/* Pie: se empuja al final de los 20 cm */}
+      <div className="mt-auto pt-4 text-center text-[9px] font-bold text-black">
+        <p>
+          Emitida: {fecha} {hora}
+        </p>
+        <p className="mt-1">Guia generada por: {formatCreatedBy(createdBy)}</p>
+        <p className="mt-1">{SITE_URL}</p>
+        <p className="mt-1 uppercase tracking-widest">Guia Original</p>
       </div>
     </div>
   );

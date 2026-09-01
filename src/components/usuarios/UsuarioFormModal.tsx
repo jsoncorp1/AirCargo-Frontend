@@ -243,6 +243,14 @@ export default function UsuarioFormModal({
               </option>
             ))}
           </select>
+          {/* Sin roles el campo es obligatorio e imposible de completar: hay que
+              decir que faltó la lista, no dejar un selector vacío sin explicación. */}
+          {roles.length === 0 && (
+            <p className="mt-2 text-xs text-warning-600 dark:text-orange-400">
+              No se pudo cargar la lista de roles. Recargá la página; si sigue
+              vacía, es que tu usuario no tiene permiso para listarlos.
+            </p>
+          )}
         </div>
 
         {/* Supplier (conditional) */}

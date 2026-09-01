@@ -54,19 +54,57 @@ export default function UsuariosTable() {
   const isFiltering = searchTerm.trim().length > 0 || roleFilter !== "";
 
   // 1. Cargar metadatos básicos
+  //
+  // Son tres listas INDEPENDIENTES, así que van con `allSettled` y no con
+  // `all`: con `all` un solo rechazo (proveedores o sucursales) descartaba
+  // también los roles que sí habían respondido, y el alta de usuario quedaba
+  // con el selector de rol vacío como si nunca se hubieran pedido. El error
+  // además solo iba a la consola, así que desde la pantalla no se veía nada.
   useEffect(() => {
-    Promise.all([
-      roleService.getRoles(1, 100),
-      supplierService.getSuppliers(1, 100),
-      branchOfficeService.getBranchOffices(1, 100),
-    ])
-      .then(([rolesRes, suppRes, branchRes]) => {
-        setRoles(rolesRes.data);
-        setSuppliers(suppRes.data);
-        setBranchOffices(branchRes.data);
-      })
-      .catch((err) => console.error("Error fetching metadata:", err));
-  }, []);
+    let cancelled = false;
+
+    (async () => {
+      const [rolesRes, suppRes, branchRes] = await Promise.allSettled([
+        roleService.getRoles(1, 100),
+        supplierService.getSuppliers(1, 100),
+        branchOfficeService.getBranchOffices(1, 100),
+      ]);
+
+      if (cancelled) return;
+
+      const failed: string[] = [];
+
+      if (rolesRes.status === "fulfilled") setRoles(rolesRes.value.data);
+      else {
+        console.error("Error cargando roles:", rolesRes.reason);
+        failed.push("los roles");
+      }
+
+      if (suppRes.status === "fulfilled") setSuppliers(suppRes.value.data);
+      else {
+        console.error("Error cargando proveedores:", suppRes.reason);
+        failed.push("los proveedores");
+      }
+
+      if (branchRes.status === "fulfilled") setBranchOffices(branchRes.value.data);
+      else {
+        console.error("Error cargando sucursales:", branchRes.reason);
+        failed.push("las sucursales");
+      }
+
+      if (failed.length > 0) {
+        showToast(
+          "error",
+          "Datos incompletos",
+          `No se pudieron cargar ${failed.join(" ni ")}. El formulario de usuario va a quedar sin esas opciones.`
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   // 2. Fetch paginado normal
   const fetchPage = useCallback(async () => {

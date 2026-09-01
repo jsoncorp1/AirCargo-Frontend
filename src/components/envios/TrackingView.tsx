@@ -9,9 +9,9 @@ import Badge from "@/components/ui/badge/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { manifestStatusBadge, manifestStatusLabel } from "@/services/manifestService";
 import {
-  assignmentStatusBadge,
-  assignmentStatusLabel,
-} from "@/services/shipmentAssignmentService";
+  driverTaskStatusBadge,
+  driverTaskStatusLabel,
+} from "@/services/driverTaskService";
 import {
   shipmentService,
   Shipment,
@@ -78,7 +78,10 @@ export default function TrackingView() {
       envio.destinationBranchOfficeId &&
       envio.originBranchOfficeId === envio.destinationBranchOfficeId
   );
-  const timeline = buildShipmentTimeline(envio.status, isLocal);
+  const timeline = buildShipmentTimeline(envio.status, {
+    isLocal,
+    destinationPointType: envio.destinationPointType,
+  });
 
   // Cada rol vive en su propio árbol de rutas: el admin de sucursal bajo /admin,
   // el superadmin en la raíz. Linkear al árbol equivocado rebota en el layout.
@@ -165,8 +168,8 @@ export default function TrackingView() {
                   <p className="font-semibold text-gray-800 dark:text-white">
                     {envio.currentAssignment.driverFullName}
                   </p>
-                  <Badge size="sm" color={assignmentStatusBadge(envio.currentAssignment.status)}>
-                    {assignmentStatusLabel(envio.currentAssignment.status)}
+                  <Badge size="sm" color={driverTaskStatusBadge(envio.currentAssignment.status)}>
+                    {driverTaskStatusLabel(envio.currentAssignment.status)}
                   </Badge>
                 </div>
                 {envio.currentAssignment.driverPhoneNumber && (
@@ -355,14 +358,18 @@ export default function TrackingView() {
           clientFullName={envio.clientFullName}
           clientPhone={envio.clientPhone || ""}
           clientAddress={envio.clientAddress}
-          deliveryType={(envio as any).deliveryType || "Prepaid"}
+          paymentType={envio.paymentType ?? "Prepaid"}
+          originPointType={envio.originPointType}
+          destinationPointType={envio.destinationPointType}
+          destinationLocationUrl={envio.destinationLocationUrl}
+          destinationAddressReference={envio.destinationAddressReference}
           isExpress={false}
           packageCount={envio.packageCount}
           packageDescription={envio.packageDescription || ""}
           lines={envio.details || []}
           fecha={formatDate(envio.createdAt)}
           hora={formatTime(envio.createdAt)}
-          createdBy={envio.senderFullName}
+          createdBy={envio.createdBy}
         />
       </div>
 

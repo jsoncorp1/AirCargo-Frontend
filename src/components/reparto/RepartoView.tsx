@@ -22,22 +22,26 @@ import {
   SHIPMENT_OBSERVATION_LABELS,
 } from "@/services/shipmentService";
 import {
-  shipmentAssignmentService,
-  ShipmentAssignment,
-  assignmentStatusLabel,
-  assignmentStatusBadge,
-  isAssignmentOpen,
-  getAssignmentErrorMessage,
-} from "@/services/shipmentAssignmentService";
+  driverTaskService,
+  DriverTask,
+  driverTaskStatusLabel,
+  driverTaskStatusBadge,
+  driverTaskKindLabel,
+  driverTaskKindBadge,
+  isDriverTaskOpen,
+  getDriverTaskErrorMessage,
+} from "@/services/driverTaskService";
 import AssignShipmentsModal from "./AssignShipmentsModal";
+import ShipmentHandoverModal from "@/components/envios/ShipmentHandoverModal";
 import { formatDateTime } from "@/utils/datetime";
 
 const DEFAULT_PER_PAGE = 10;
 
-// Dos caras del mismo mostrador de la sucursal DESTINO:
-//   pool   → envíos que llegaron y todavía no tienen conductor.
-//   ruta   → los intentos ya repartidos, para seguirlos y poder desasignar.
-type Vista = "pool" | "ruta";
+// Tres caras del mismo mostrador de la sucursal DESTINO:
+//   pool   → envíos a domicilio que llegaron y todavía no tienen conductor.
+//   ruta   → las tareas ya repartidas, para seguirlas y poder desasignar.
+//   retiro → los que terminan en sucursal y esperan que el cliente los busque.
+type Vista = "pool" | "ruta" | "retiro";
 
 // Un envío es asignable si está en `AtDestinationBranch` (primer intento) o en
 // `Observed` (reintento tras una entrega fallida).
@@ -50,6 +54,7 @@ export default function RepartoView() {
   const { showToast } = useToast();
   const { branchOfficeId, branchOfficeCode, branchOfficeCity, isSuperAdminUser } = useAuth();
   const assignModal = useModal();
+  const handoverModal = useModal();
   const { pending: cancelling, run: runCancel } = useSubmitLock();
 
   const [vista, setVista] = useState<Vista>("pool");
@@ -83,40 +88,70 @@ export default function RepartoView() {
     }
   }, [poolPage, poolPerPage, poolStatus, branchOfficeId]);
 
-  // ─── Asignaciones en curso ────────────────────────────────────────────────
-  const [assignments, setAssignments] = useState<ShipmentAssignment[]>([]);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(true);
-  const [assignmentsPage, setAssignmentsPage] = useState(1);
-  const [assignmentsPerPage, setAssignmentsPerPage] = useState(DEFAULT_PER_PAGE);
-  const [assignmentsTotalPages, setAssignmentsTotalPages] = useState(1);
-  const [assignmentsCount, setAssignmentsCount] = useState(0);
+  // ─── Tareas en curso ──────────────────────────────────────────────────────
+  const [tasks, setTasks] = useState<DriverTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksPage, setTasksPage] = useState(1);
+  const [tasksPerPage, setTasksPerPage] = useState(DEFAULT_PER_PAGE);
+  const [tasksTotalPages, setTasksTotalPages] = useState(1);
+  const [tasksCount, setTasksCount] = useState(0);
   const [onlyOpen, setOnlyOpen] = useState(true);
 
-  const fetchAssignments = useCallback(async () => {
-    setAssignmentsLoading(true);
+  const fetchTasks = useCallback(async () => {
+    setTasksLoading(true);
     try {
-      const res = await shipmentAssignmentService.getAssignments(
-        assignmentsPage,
-        assignmentsPerPage,
+      const res = await driverTaskService.getTasks(
+        tasksPage,
+        tasksPerPage,
         onlyOpen ? { onlyOpen: true } : {}
       );
-      setAssignments(res.data);
-      setAssignmentsTotalPages(res.totalPages);
-      setAssignmentsCount(res.count);
+      setTasks(res.data);
+      setTasksTotalPages(res.totalPages);
+      setTasksCount(res.count);
     } catch (err) {
-      console.error("Error fetching assignments", err);
+      console.error("Error fetching driver tasks", err);
     } finally {
-      setAssignmentsLoading(false);
+      setTasksLoading(false);
     }
-  }, [assignmentsPage, assignmentsPerPage, onlyOpen]);
+  }, [tasksPage, tasksPerPage, onlyOpen]);
+
+  // ─── Cola de retiro en mostrador ──────────────────────────────────────────
+  const [pickups, setPickups] = useState<ShipmentPaginatedItem[]>([]);
+  const [pickupsLoading, setPickupsLoading] = useState(true);
+  const [pickupsPage, setPickupsPage] = useState(1);
+  const [pickupsPerPage, setPickupsPerPage] = useState(DEFAULT_PER_PAGE);
+  const [pickupsTotalPages, setPickupsTotalPages] = useState(1);
+  const [pickupsCount, setPickupsCount] = useState(0);
+  const [handoverTarget, setHandoverTarget] = useState<ShipmentPaginatedItem | null>(null);
+
+  const fetchPickups = useCallback(async () => {
+    setPickupsLoading(true);
+    try {
+      const res = await shipmentService.getShipments(pickupsPage, pickupsPerPage, {
+        status: "AwaitingCustomerPickup",
+        ...(branchOfficeId ? { destinationBranchOfficeId: branchOfficeId } : {}),
+      });
+      setPickups(res.data);
+      setPickupsTotalPages(res.totalPages);
+      setPickupsCount(res.count);
+    } catch (err) {
+      console.error("Error fetching shipments awaiting pickup", err);
+    } finally {
+      setPickupsLoading(false);
+    }
+  }, [pickupsPage, pickupsPerPage, branchOfficeId]);
 
   useEffect(() => {
     fetchPool();
   }, [fetchPool]);
 
   useEffect(() => {
-    fetchAssignments();
-  }, [fetchAssignments]);
+    fetchTasks();
+  }, [fetchTasks]);
+
+  useEffect(() => {
+    fetchPickups();
+  }, [fetchPickups]);
 
   // Cambiar de bandeja o de página invalida la selección: los ids marcados ya no
   // están en pantalla y asignarlos a ciegas sería una sorpresa.
@@ -141,72 +176,60 @@ export default function RepartoView() {
     [pool, selected]
   );
 
-  const handleCancelAssignment = (assignment: ShipmentAssignment) => {
+  const handleCancelTask = (task: DriverTask) => {
     runCancel(async () => {
       try {
-        await shipmentAssignmentService.changeStatus(assignment.id, { status: "Cancelled" });
+        await driverTaskService.changeStatus(task.id, { status: "Cancelled" });
         showToast(
           "success",
-          "Asignación anulada",
-          `${assignment.shipmentCode} volvió al pool de la sucursal.`
+          "Tarea anulada",
+          task.kind === "Pickup"
+            ? `${task.pickupOrderCode ?? "La solicitud"} volvió a quedar confirmada.`
+            : `${task.shipmentCode ?? "El envío"} volvió al pool de la sucursal.`
         );
-        fetchAssignments();
+        fetchTasks();
         fetchPool();
       } catch (err: unknown) {
-        showToast(
-          "error",
-          "Error",
-          getAssignmentErrorMessage(err, "No se pudo anular la asignación.")
-        );
+        showToast("error", "Error", getDriverTaskErrorMessage(err, "No se pudo anular la tarea."));
       }
     });
+  };
+
+  const openHandover = (shipment: ShipmentPaginatedItem) => {
+    setHandoverTarget(shipment);
+    handoverModal.openModal();
   };
 
   const branchLabel = [branchOfficeCode, branchOfficeCity].filter(Boolean).join(" — ");
 
   const vistaTabs: TabItem[] = [
-    { value: "pool", label: "Por asignar" },
-    { value: "ruta", label: "En reparto" },
+    { value: "pool", label: "Por asignar", count: poolLoading ? undefined : poolCount },
+    { value: "ruta", label: "En calle", count: tasksLoading ? undefined : tasksCount },
+    {
+      value: "retiro",
+      label: "Esperando retiro",
+      count: pickupsLoading ? undefined : pickupsCount,
+    },
   ];
 
   return (
     <div>
       <PageBreadcrumb pageTitle="Reparto" />
+      <p className="-mt-3 mb-6 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
+        Los envíos a domicilio se le entregan a un conductor; si un intento falla, el envío vuelve
+        acá para reasignarse. Los que terminan en sucursal no se asignan: esperan que el cliente
+        los venga a buscar.
+      </p>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Esperando conductor</p>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white/90">
-            {poolLoading ? "—" : poolCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-            {onlyOpen ? "Repartos en curso" : "Repartos en total"}
-          </p>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white/90">
-            {assignmentsLoading ? "—" : assignmentsCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-            {isSuperAdminUser ? "Alcance" : "Mi sucursal"}
-          </p>
-          <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white/90">
+      <ComponentCard>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs items={vistaTabs} value={vista} onChange={(v) => setVista(v as Vista)} />
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             {isSuperAdminUser ? "Todas las sucursales" : branchLabel || "Sin sucursal"}
           </p>
         </div>
-      </div>
 
-      <ComponentCard
-        title="Reparto de última milla"
-        desc="Los envíos que llegaron a la sucursal se entregan a un conductor. Si un intento falla, el envío vuelve acá para reasignarse."
-      >
-        <div className="mb-5">
-          <Tabs items={vistaTabs} value={vista} onChange={(v) => setVista(v as Vista)} />
-        </div>
-
-        {vista === "pool" ? (
+        {vista === "pool" && (
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Tabs
@@ -252,13 +275,13 @@ export default function RepartoView() {
                   <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {poolLoading ? (
                       <TableRow>
-                        <TableCell className="px-5 py-10 text-center text-sm text-gray-500">
+                        <TableCell colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
                           Cargando envíos…
                         </TableCell>
                       </TableRow>
                     ) : pool.length === 0 ? (
                       <TableRow>
-                        <TableCell className="px-5 py-10 text-center text-sm text-gray-500">
+                        <TableCell colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
                           {poolStatus === "Observed"
                             ? "No hay envíos esperando un segundo intento."
                             : "No hay envíos esperando conductor."}
@@ -270,7 +293,7 @@ export default function RepartoView() {
                           key={shipment.id}
                           className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/20"
                         >
-                          <TableCell className="px-5 py-3">
+                          <TableCell className="px-5 py-3 align-middle">
                             <input
                               type="checkbox"
                               checked={selected.has(shipment.id)}
@@ -279,26 +302,26 @@ export default function RepartoView() {
                               className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20"
                             />
                           </TableCell>
-                          <TableCell className="px-5 py-3">
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle">
                             <span className="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                               {shipment.code}
                             </span>
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-gray-200">
+                          <TableCell className="px-5 py-3 align-middle text-sm font-medium text-gray-800 dark:text-gray-200">
                             {shipment.clientFullName}
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          <TableCell className="px-5 py-3 align-middle text-sm text-gray-600 dark:text-gray-300">
                             {shipment.packageCount}
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle text-sm tabular-nums text-gray-600 dark:text-gray-300">
                             {shipment.totalWeight} kg
                           </TableCell>
-                          <TableCell className="px-5 py-3">
+                          <TableCell className="px-5 py-3 align-middle">
                             <Badge size="sm" color={shipmentStatusBadge(shipment.status)}>
                               {shipmentStatusLabel(shipment.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          <TableCell className="px-5 py-3 align-middle text-sm text-gray-600 dark:text-gray-300">
                             {shipment.observation
                               ? SHIPMENT_OBSERVATION_LABELS[shipment.observation] ??
                                 shipment.observation
@@ -324,7 +347,9 @@ export default function RepartoView() {
               </div>
             )}
           </>
-        ) : (
+        )}
+
+        {vista === "ruta" && (
           <>
             <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
               <input
@@ -332,11 +357,11 @@ export default function RepartoView() {
                 checked={onlyOpen}
                 onChange={(e) => {
                   setOnlyOpen(e.target.checked);
-                  setAssignmentsPage(1);
+                  setTasksPage(1);
                 }}
                 className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500/20"
               />
-              Solo los repartos en curso
+              Solo las tareas en curso
             </label>
 
             <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
@@ -344,75 +369,81 @@ export default function RepartoView() {
                 <Table>
                   <TableHeader className="border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/40">
                     <TableRow>
-                      {["Guía", "Conductor", "Estado", "Envío", "Asignado", ""].map((h, i) => (
-                        <TableCell
-                          key={`${h}-${i}`}
-                          isHeader
-                          className="px-5 py-3 text-start text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
-                        >
-                          {h}
-                        </TableCell>
-                      ))}
+                      {["Tipo", "Referencia", "Conductor", "Estado", "Destino", "Asignada", ""].map(
+                        (h, i) => (
+                          <TableCell
+                            key={`${h}-${i}`}
+                            isHeader
+                            className="px-5 py-3 text-start text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+                          >
+                            {h}
+                          </TableCell>
+                        )
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {assignmentsLoading ? (
+                    {tasksLoading ? (
                       <TableRow>
-                        <TableCell className="px-5 py-10 text-center text-sm text-gray-500">
-                          Cargando repartos…
+                        <TableCell colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
+                          Cargando tareas…
                         </TableCell>
                       </TableRow>
-                    ) : assignments.length === 0 ? (
+                    ) : tasks.length === 0 ? (
                       <TableRow>
-                        <TableCell className="px-5 py-10 text-center text-sm text-gray-500">
-                          No hay repartos para mostrar.
+                        <TableCell colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
+                          No hay tareas para mostrar.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      assignments.map((assignment) => (
+                      tasks.map((task) => (
                         <TableRow
-                          key={assignment.id}
+                          key={task.id}
                           className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/20"
                         >
-                          <TableCell className="px-5 py-3">
+                          <TableCell className="px-5 py-3 align-middle">
+                            <Badge size="sm" color={driverTaskKindBadge(task.kind)}>
+                              {driverTaskKindLabel(task.kind)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle">
                             <span className="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                              {assignment.shipmentCode}
+                              {(task.kind === "Pickup" ? task.pickupOrderCode : task.shipmentCode) ??
+                                "—"}
                             </span>
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm font-medium text-gray-800 dark:text-gray-200">
-                            {assignment.driverFullName}
+                          <TableCell className="px-5 py-3 align-middle text-sm font-medium text-gray-800 dark:text-gray-200">
+                            {task.driverFullName}
                           </TableCell>
-                          <TableCell className="px-5 py-3">
-                            <Badge size="sm" color={assignmentStatusBadge(assignment.status)}>
-                              {assignmentStatusLabel(assignment.status)}
+                          <TableCell className="px-5 py-3 align-middle">
+                            <Badge size="sm" color={driverTaskStatusBadge(task.status)}>
+                              {driverTaskStatusLabel(task.status)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="px-5 py-3">
-                            <Badge size="sm" color={shipmentStatusBadge(assignment.shipmentStatus)}>
-                              {shipmentStatusLabel(assignment.shipmentStatus)}
-                            </Badge>
+                          <TableCell className="px-5 py-3 align-middle text-sm text-gray-600 dark:text-gray-300">
+                            {task.contactName}
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300">
-                            {formatDateTime(assignment.assignedAt)}
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle text-sm text-gray-600 dark:text-gray-300">
+                            {formatDateTime(task.assignedAt)}
                           </TableCell>
-                          <TableCell className="px-5 py-3 text-right">
-                            {/* Solo antes del recojo: una vez que el conductor
-                                salió, el cierre lo reporta él. */}
-                            {assignment.status === "Assigned" && (
+                          <TableCell className="whitespace-nowrap px-5 py-3 text-right align-middle">
+                            {/* Solo antes de que salga: una vez en la calle, el
+                                cierre lo reporta el conductor. */}
+                            {task.status === "Assigned" && (
                               <button
                                 type="button"
                                 disabled={cancelling}
-                                onClick={() => handleCancelAssignment(assignment)}
+                                onClick={() => handleCancelTask(task)}
                                 className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 dark:hover:bg-error-500/10"
                               >
                                 Desasignar
                               </button>
                             )}
-                            {assignment.status === "PickedUp" && (
+                            {task.status === "EnRoute" && (
                               <span className="text-xs text-gray-400">En la calle</span>
                             )}
-                            {!isAssignmentOpen(assignment.status) && (
-                              <span className="text-xs text-gray-400">Cerrado</span>
+                            {!isDriverTaskOpen(task.status) && (
+                              <span className="text-xs text-gray-400">Cerrada</span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -423,14 +454,106 @@ export default function RepartoView() {
               </div>
             </div>
 
-            {assignmentsTotalPages > 1 && (
+            {tasksTotalPages > 1 && (
               <div className="mt-4 flex justify-end">
                 <Pagination
-                  currentPage={assignmentsPage}
-                  totalPages={assignmentsTotalPages}
-                  onPageChange={setAssignmentsPage}
-                  perPage={assignmentsPerPage}
-                  onPerPageChange={setAssignmentsPerPage}
+                  currentPage={tasksPage}
+                  totalPages={tasksTotalPages}
+                  onPageChange={setTasksPage}
+                  perPage={tasksPerPage}
+                  onPerPageChange={setTasksPerPage}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {vista === "retiro" && (
+          <>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              Estos envíos terminan en mostrador: no se le asignan a ningún conductor. Al
+              entregarlos hay que registrar quién los retiró.
+            </p>
+
+            <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+              <div className="max-w-full overflow-x-auto">
+                <Table>
+                  <TableHeader className="border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/40">
+                    <TableRow>
+                      {["Guía", "Cliente", "Bultos", "Peso", "Importe", ""].map((h, i) => (
+                        <TableCell
+                          key={`${h}-${i}`}
+                          isHeader
+                          className={`px-5 py-3 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 ${
+                            h === "Importe" ? "text-right" : "text-start"
+                          }`}
+                        >
+                          {h}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {pickupsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
+                          Cargando envíos…
+                        </TableCell>
+                      </TableRow>
+                    ) : pickups.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
+                          No hay envíos esperando que los retiren.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pickups.map((shipment) => (
+                        <TableRow
+                          key={shipment.id}
+                          className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/20"
+                        >
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle">
+                            <span className="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                              {shipment.code}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-5 py-3 align-middle text-sm font-medium text-gray-800 dark:text-gray-200">
+                            {shipment.clientFullName}
+                          </TableCell>
+                          <TableCell className="px-5 py-3 align-middle text-sm text-gray-600 dark:text-gray-300">
+                            {shipment.packageCount}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap px-5 py-3 align-middle text-sm tabular-nums text-gray-600 dark:text-gray-300">
+                            {shipment.totalWeight} kg
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap px-5 py-3 text-right align-middle text-sm tabular-nums text-gray-600 dark:text-gray-300">
+                            Bs {shipment.shippingPrice.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap px-5 py-3 text-right align-middle">
+                            <button
+                              type="button"
+                              onClick={() => openHandover(shipment)}
+                              className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600"
+                            >
+                              Registrar retiro
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {pickupsTotalPages > 1 && (
+              <div className="mt-4 flex justify-end">
+                <Pagination
+                  currentPage={pickupsPage}
+                  totalPages={pickupsTotalPages}
+                  onPageChange={setPickupsPage}
+                  perPage={pickupsPerPage}
+                  onPerPageChange={setPickupsPerPage}
                 />
               </div>
             )}
@@ -438,7 +561,11 @@ export default function RepartoView() {
         )}
       </ComponentCard>
 
-      <Modal isOpen={assignModal.isOpen} onClose={assignModal.closeModal} className="m-4 max-w-[560px] z-50">
+      <Modal
+        isOpen={assignModal.isOpen}
+        onClose={assignModal.closeModal}
+        className="m-4 max-w-[560px] z-50"
+      >
         {assignModal.isOpen && selectedShipments.length > 0 && (
           <AssignShipmentsModal
             shipments={selectedShipments}
@@ -446,8 +573,25 @@ export default function RepartoView() {
             onSaved={() => {
               setSelected(new Set());
               fetchPool();
-              fetchAssignments();
+              fetchTasks();
             }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={handoverModal.isOpen}
+        onClose={handoverModal.closeModal}
+        className="m-4 max-w-[480px] z-50"
+      >
+        {handoverModal.isOpen && handoverTarget && (
+          <ShipmentHandoverModal
+            key={handoverTarget.id}
+            shipmentId={handoverTarget.id}
+            shipmentCode={handoverTarget.code}
+            clientFullName={handoverTarget.clientFullName}
+            onClose={handoverModal.closeModal}
+            onSaved={fetchPickups}
           />
         )}
       </Modal>

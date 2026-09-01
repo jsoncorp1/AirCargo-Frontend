@@ -9,6 +9,7 @@ import {
   BoxIcon,
   CalenderIcon,
   ChevronDownIcon,
+  DollarLineIcon,
   GridIcon,
   GroupIcon,
   HorizontaLDots,
@@ -61,6 +62,16 @@ const baseNavItems: NavItem[] = [
     path: "/conductores",
   },
   {
+    icon: <UserCircleIcon />,
+    name: "Perfiles de Conductor",
+    path: "/conductores/perfiles",
+  },
+  {
+    icon: <TaskIcon />,
+    name: "Solicitudes de Recojo",
+    path: "/recojos",
+  },
+  {
     icon: <BoxCubeIcon />,
     name: "Envío Esporádico",
     path: "/envios/esporadico",
@@ -81,6 +92,21 @@ const baseNavItems: NavItem[] = [
     path: "/reparto",
   },
   {
+    icon: <DollarLineIcon />,
+    name: "Cotizador",
+    path: "/cotizador",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Cobranzas",
+    path: "/cuenta-corriente",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Liquidaciones",
+    path: "/liquidaciones",
+  },
+  {
     icon: <GroupIcon />,
     name: "Clientes Potenciales",
     path: "/leads",
@@ -92,6 +118,9 @@ const baseNavItems: NavItem[] = [
       { name: "Roles", path: "/roles", pro: false },
       { name: "Usuarios", path: "/usuarios", pro: false },
       { name: "Sucursales", path: "/sucursales", pro: false },
+      // El tarifario es exclusivo del superadmin: sin tarifas cargadas no
+      // funciona ni el cotizador ni el alta de envíos.
+      { name: "Tarifas", path: "/tarifas", pro: false },
     ],
   },
 ];

@@ -26,6 +26,21 @@ const navItems: NavItem[] = [
     path: "/proveedor/envios",
   },
   {
+    icon: <PageIcon />,
+    name: "Solicitar Recojo",
+    path: "/proveedor/recojos",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Cotizador",
+    path: "/proveedor/cotizador",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Estado de Cuenta",
+    path: "/proveedor/cuenta-corriente",
+  },
+  {
     icon: <BoxIcon />,
     name: "Artículos",
     path: "/proveedor/articulos",

@@ -1,18 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Button from "@/components/ui/button/Button";
 import Label from "@/components/form/Label";
+import Badge from "@/components/ui/badge/Badge";
 import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useAuth } from "@/context/AuthContext";
-import { userService, User } from "@/services/userService";
-import { ROLE_NAMES, normalizeRoleName } from "@/services/userScope";
+import { driverService, Driver, driverTypeLabel } from "@/services/driverService";
+import { vehicleTypeLabel } from "@/services/logisticsEnums";
 import { ShipmentPaginatedItem } from "@/services/shipmentService";
-import {
-  shipmentAssignmentService,
-  getAssignmentErrorMessage,
-} from "@/services/shipmentAssignmentService";
+import { driverTaskService, getDriverTaskErrorMessage } from "@/services/driverTaskService";
 
 interface AssignShipmentsModalProps {
   shipments: ShipmentPaginatedItem[];
@@ -23,21 +21,16 @@ interface AssignShipmentsModalProps {
 const selectClassName =
   "h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90";
 
-// `GET /users` no filtra por rol, así que se trae una página y se filtra acá.
-// Para el admin el backend ya devuelve solo los conductores de su sucursal; para
-// el superadmin devuelve todos y hay que acotarlos a la sucursal de los envíos.
-const USERS_PER_PAGE = 100;
-
 export default function AssignShipmentsModal({
   shipments,
   onClose,
   onSaved,
 }: AssignShipmentsModalProps) {
   const { showToast } = useToast();
-  const { isSuperAdminUser } = useAuth();
+  const { isSuperAdminUser, branchOfficeId } = useAuth();
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
-  const [drivers, setDrivers] = useState<User[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(true);
   const [driverUserId, setDriverUserId] = useState("");
 
@@ -49,13 +42,22 @@ export default function AssignShipmentsModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await userService.getUsers(1, USERS_PER_PAGE);
-        if (cancelled) return;
-        setDrivers(
-          res.data.filter((u) => normalizeRoleName(u.roleName) === ROLE_NAMES.conductor)
-        );
+        // Solo los que PUEDEN recibir la tarea ahora: el backend exige perfil
+        // (`drivertask.driver.noprofile`) y, si es esporádico, que esté en línea
+        // (`drivertask.driver.offline`). Ofrecer los demás es ofrecer un error.
+        const res = await driverService.getDrivers(1, 100, {
+          availableOnly: true,
+          // El admin ya viene acotado server-side; mandarlo evita que el
+          // superadmin vea conductores de otras sucursales mezclados.
+          ...(destinationBranchOfficeId
+            ? { branchOfficeId: destinationBranchOfficeId }
+            : branchOfficeId
+            ? { branchOfficeId }
+            : {}),
+        });
+        if (!cancelled) setDrivers(res.data);
       } catch (err) {
-        console.error("Error fetching drivers", err);
+        console.error("Error fetching available drivers", err);
       } finally {
         if (!cancelled) setLoadingDrivers(false);
       }
@@ -63,16 +65,10 @@ export default function AssignShipmentsModal({
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // El backend exige que el conductor pertenezca a la sucursal destino del envío
-  // (`assignment.shipment.branchmismatch`): no ofrecer los que no cumplen.
-  const eligibleDrivers = useMemo(() => {
-    if (!destinationBranchOfficeId) return drivers;
-    return drivers.filter((d) => d.branchOfficeId === destinationBranchOfficeId);
-  }, [drivers, destinationBranchOfficeId]);
+  }, [destinationBranchOfficeId, branchOfficeId]);
 
   const totalWeight = shipments.reduce((sum, s) => sum + s.totalWeight, 0);
+  const selectedDriver = drivers.find((d) => d.driverUserId === driverUserId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +79,7 @@ export default function AssignShipmentsModal({
 
     runSubmit(async () => {
       try {
-        const res = await shipmentAssignmentService.createAssignments({
+        const res = await driverTaskService.createTasks({
           driverUserId,
           shipmentIds: shipments.map((s) => s.id),
         });
@@ -99,7 +95,7 @@ export default function AssignShipmentsModal({
         showToast(
           "error",
           "No se asignó ninguno",
-          getAssignmentErrorMessage(err, "No se pudieron asignar los envíos.")
+          getDriverTaskErrorMessage(err, "No se pudieron asignar los envíos.")
         );
       }
     });
@@ -108,7 +104,9 @@ export default function AssignShipmentsModal({
   return (
     <div className="flex max-h-[85vh] flex-col">
       <div className="border-b border-gray-100 px-6 py-5 dark:border-gray-800">
-        <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">Asignar a un conductor</h4>
+        <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+          Asignar a un conductor
+        </h4>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {shipments.length} envío(s) · {totalWeight.toFixed(2)} kg
         </p>
@@ -121,22 +119,43 @@ export default function AssignShipmentsModal({
             className={selectClassName}
             value={driverUserId}
             onChange={(e) => setDriverUserId(e.target.value)}
-            disabled={loadingDrivers || eligibleDrivers.length === 0}
+            disabled={loadingDrivers || drivers.length === 0}
             required
           >
             <option value="" disabled>
               {loadingDrivers ? "Cargando conductores…" : "Selecciona el conductor"}
             </option>
-            {eligibleDrivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.fullName}
-                {isSuperAdminUser && d.branchOfficeCode ? ` — ${d.branchOfficeCode}` : ""}
+            {drivers.map((d) => (
+              <option key={d.driverUserId} value={d.driverUserId}>
+                {d.fullName} — {vehicleTypeLabel(d.vehicleType)} {d.plateNumber}
+                {isSuperAdminUser && d.branchOfficeCode ? ` · ${d.branchOfficeCode}` : ""}
               </option>
             ))}
           </select>
-          {!loadingDrivers && eligibleDrivers.length === 0 && (
+
+          {selectedDriver && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Badge size="sm" color="light">
+                {driverTypeLabel(selectedDriver.driverType)}
+              </Badge>
+              <Badge size="sm" color="light">
+                {vehicleTypeLabel(selectedDriver.vehicleType)}
+              </Badge>
+              {selectedDriver.phoneNumber && (
+                <a
+                  href={`tel:${selectedDriver.phoneNumber}`}
+                  className="font-mono text-xs text-brand-500 hover:underline"
+                >
+                  {selectedDriver.phoneNumber}
+                </a>
+              )}
+            </div>
+          )}
+
+          {!loadingDrivers && drivers.length === 0 && (
             <p className="mt-2 text-xs text-error-500">
-              No hay conductores registrados en la sucursal de destino de estos envíos.
+              No hay conductores disponibles en esta sucursal. Revisa que tengan perfil cargado y,
+              si son esporádicos, que estén en línea.
             </p>
           )}
         </div>

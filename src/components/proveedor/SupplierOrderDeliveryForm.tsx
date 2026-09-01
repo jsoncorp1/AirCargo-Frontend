@@ -14,10 +14,21 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/context/ToastContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
+import { useAuth } from "@/context/AuthContext";
 import { TrashBinIcon, PlusIcon } from "@/icons";
 import { articleService, Article } from "@/services/articleService";
-import { BolivianDepartment } from "@/services/supplierService";
+import {
+  BolivianDepartment,
+  BOLIVIAN_DEPARTMENT_LABELS,
+} from "@/services/supplierService";
+import {
+  PaymentType,
+  ServicePointType,
+  SERVICE_POINT_TYPE_OPTIONS,
+  paymentTypeOptions,
+} from "@/services/logisticsEnums";
 import { useDestinationBranchOffices } from "@/hooks/useDestinationBranchOffices";
+import { useSupplierCreditAccount } from "@/hooks/useSupplierCreditAccount";
 import {
   orderDeliveryService,
   CreateOrderDeliveryRequest,
@@ -37,24 +48,12 @@ interface LineFormState {
 
 const PRICE_PATTERN = /^\d*\.?\d*$/;
 
-// El value es el nombre del enum tal como lo devuelve el backend (BolivianDepartment);
-// el label es solo para mostrar. El índice en este arreglo es lo que se manda como
-// destinationDepartment (number) al crear/editar.
-const DEPARTAMENTOS: { value: string; label: string }[] = [
-  { value: "Beni", label: "Beni" },
-  { value: "Chuquisaca", label: "Chuquisaca" },
-  { value: "Cochabamba", label: "Cochabamba" },
-  { value: "LaPaz", label: "La Paz" },
-  { value: "Oruro", label: "Oruro" },
-  { value: "Pando", label: "Pando" },
-  { value: "Potosi", label: "Potosí" },
-  { value: "SantaCruz", label: "Santa Cruz" },
-  { value: "Tarija", label: "Tarija" },
-];
-const TIPOS_ENTREGA = [
-  { value: "Prepaid", label: "Pagada" },
-  { value: "CashOnDelivery", label: "Por Pagar" },
-];
+// El departamento viaja como NOMBRE del enum ("LaPaz"), igual que en el resto de
+// la API. Antes se mandaba el índice de este arreglo, lo que ataba el contrato
+// al orden de una lista del front.
+const DEPARTAMENTOS = (
+  Object.entries(BOLIVIAN_DEPARTMENT_LABELS) as [BolivianDepartment, string][]
+).map(([value, label]) => ({ value, label }));
 
 interface SupplierOrderDeliveryFormProps {
   mode: "create" | "edit";
@@ -85,14 +84,20 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
     city: string | null;
   } | null>(null);
 
-  const [department, setDepartment] = useState<number>(0);
+  const [department, setDepartment] = useState<BolivianDepartment | "">("");
+  // Modalidad de destino: a domicilio va un conductor, en sucursal el cliente
+  // retira. Cambia qué campos son obligatorios y cuáles ni se muestran.
+  const [destinationPointType, setDestinationPointType] = useState<ServicePointType>("Door");
   const [clientFullName, setClientFullName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientPhoneAlt, setClientPhoneAlt] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [destinationLocationUrl, setDestinationLocationUrl] = useState("");
+  const [destinationAddressReference, setDestinationAddressReference] = useState("");
   // Quién registró la orden y cuándo. Se muestra al pie del detalle.
   const [createdByEmail, setCreatedByEmail] = useState("");
   const [createdAt, setCreatedAt] = useState<string | null>(null);
-  const [deliveryType, setDeliveryType] = useState<number>(0);
+  const [paymentType, setPaymentType] = useState<PaymentType>("Prepaid");
   const [isExpress, setIsExpress] = useState(false);
   const [lines, setLines] = useState<LineFormState[]>([]);
 
@@ -121,7 +126,10 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
       const order = await orderDeliveryService.getDeliveryById(orderId);
       setCreatedByEmail(order.createdBy);
       setCreatedAt(order.createdAt);
-      setDepartment(DEPARTAMENTOS.findIndex((d) => d.value === order.destinationDepartment));
+      setDepartment(order.destinationDepartment as BolivianDepartment);
+      // Las órdenes anteriores al campo no traen modalidad: eran todas a
+      // domicilio, que es lo único que existía.
+      setDestinationPointType(order.destinationPointType ?? "Door");
       // Se precarga y se vuelve a mandar en el PUT: omitirla borra la sucursal
       // que declaró quien creó la orden.
       setDestinationBranchOfficeId(order.destinationBranchOfficeId ?? "");
@@ -136,8 +144,11 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
       );
       setClientFullName(order.clientFullName);
       setClientPhone(order.clientPhone);
+      setClientPhoneAlt(order.clientPhoneAlt ?? "");
       setClientAddress(order.clientAddress);
-      setDeliveryType(TIPOS_ENTREGA.findIndex((t) => t.value === order.deliveryType));
+      setDestinationLocationUrl(order.destinationLocationUrl ?? "");
+      setDestinationAddressReference(order.destinationAddressReference ?? "");
+      setPaymentType(order.paymentType);
       setIsExpress(order.isExpress);
       setSenderInfo({
         originDepartment: order.originDepartment,
@@ -172,19 +183,34 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
   // Segundo nivel de la cascada. El reset va en el handler y no en un efecto:
   // un efecto sobre `department` también dispararía al cargar una orden para
   // editar, borrando la sucursal que acabamos de precargar.
-  const selectedDepartment = DEPARTAMENTOS[department]?.value as
-    | BolivianDepartment
-    | undefined;
+  const selectedDepartment = department || undefined;
   const {
     branches: branchesInDepartment,
     loading: loadingBranches,
     unavailable: branchesUnavailable,
   } = useDestinationBranchOffices(selectedDepartment);
 
-  const handleDepartmentChange = (value: number) => {
+  const handleDepartmentChange = (value: BolivianDepartment | "") => {
     setDepartment(value);
     setDestinationBranchOfficeId("");
   };
+
+  // `OnAccount` solo se ofrece si la empresa tiene cuenta corriente habilitada;
+  // el backend igual lo rechaza con `orderdelivery.payment.creditnotallowed`.
+  const { companyId } = useAuth();
+  const { hasCreditAccount } = useSupplierCreditAccount(companyId);
+  const formaDePagoOptions = paymentTypeOptions(hasCreditAccount);
+
+  // Si la empresa deja de tener crédito con una orden ya cargada "a cuenta", el
+  // selector se queda sin esa opción: hay que sacarla del estado o el `<select>`
+  // muestra vacío y manda un valor que el backend va a rechazar.
+  useEffect(() => {
+    if (paymentType === "OnAccount" && !hasCreditAccount) {
+      setPaymentType("Prepaid");
+    }
+  }, [hasCreditAccount, paymentType]);
+
+  const destinationIsBranch = destinationPointType === "Branch";
 
   // Si la sucursal guardada ya no está en el listado (la dieron de baja después
   // de crear la orden), se muestra igual para que se vea qué decía la orden.
@@ -240,6 +266,20 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
       showToast("error", "Error", "Todos los artículos deben tener una cantidad válida.");
       return;
     }
+    if (!department) {
+      showToast("error", "Error", "Selecciona el departamento de destino.");
+      return;
+    }
+    // Las mismas dos reglas que valida el backend, para no perder la carga en un
+    // 400: `orderdelivery.destinationbranch.required` y `.destinationaddress.required`.
+    if (destinationIsBranch && !destinationBranchOfficeId) {
+      showToast("error", "Error", "Si el cliente retira en sucursal, indica en cuál.");
+      return;
+    }
+    if (!destinationIsBranch && !clientAddress.trim()) {
+      showToast("error", "Error", "Si la entrega es a domicilio, indica la dirección.");
+      return;
+    }
 
     runSubmit(async () => {
       try {
@@ -253,15 +293,23 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
         // backend espera ausencia, no un id vacío.
         const branchOfficeId = destinationBranchOfficeId || null;
 
+        const destinationFields = {
+          destinationDepartment: department,
+          destinationPointType,
+          destinationBranchOfficeId: branchOfficeId,
+          clientFullName,
+          clientPhone,
+          clientPhoneAlt: clientPhoneAlt.trim() || null,
+          clientAddress,
+          destinationLocationUrl: destinationLocationUrl.trim() || null,
+          destinationAddressReference: destinationAddressReference.trim() || null,
+          paymentType,
+          isExpress,
+        };
+
         if (mode === "create") {
           const payload: CreateOrderDeliveryRequest = {
-            destinationDepartment: department,
-            destinationBranchOfficeId: branchOfficeId,
-            clientFullName,
-            clientPhone,
-            clientAddress,
-            deliveryType,
-            isExpress,
+            ...destinationFields,
             lines: submittedLines,
           };
           // Crear/editar una orden descuenta stock: el backend protege
@@ -273,13 +321,7 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
         } else if (mode === "edit" && orderId) {
           await withConcurrencyRetry(() =>
             orderDeliveryService.updateDelivery(orderId, {
-              destinationDepartment: department,
-              destinationBranchOfficeId: branchOfficeId,
-              clientFullName,
-              clientPhone,
-              clientAddress,
-              deliveryType,
-              isExpress,
+              ...destinationFields,
               lines: submittedLines,
             })
           );
@@ -383,24 +425,61 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
               </div>
 
               <div>
+                <Label required={false}>
+                  Teléfono alternativo
+                  <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  value={clientPhoneAlt}
+                  onChange={(e) => setClientPhoneAlt(e.target.value)}
+                  placeholder="Otro número por si no contesta"
+                />
+              </div>
+
+              <div>
                 <Label required>Departamento de Destino</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                   value={department}
-                  onChange={(e) => handleDepartmentChange(Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDepartmentChange(e.target.value as BolivianDepartment | "")
+                  }
                   required
                 >
-                  {DEPARTAMENTOS.map((dep, idx) => (
-                    <option key={dep.value} value={idx}>{dep.label}</option>
+                  <option value="">Selecciona el departamento</option>
+                  {DEPARTAMENTOS.map((dep) => (
+                    <option key={dep.value} value={dep.value}>{dep.label}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Segundo paso de la cascada. Es opcional: si el departamento no
-                  tiene sucursales, la orden se crea igual y el admin elige al
-                  despachar. */}
+              {/* La modalidad decide el resto del bloque: en sucursal el cliente
+                  retira del mostrador y no hay conductor; a domicilio va uno. */}
               <div>
-                <Label>Sucursal de Destino</Label>
+                <Label required>¿Cómo lo recibe?</Label>
+                <select
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
+                  value={destinationPointType}
+                  onChange={(e) =>
+                    setDestinationPointType(e.target.value as ServicePointType)
+                  }
+                  required
+                >
+                  {SERVICE_POINT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                  {destinationIsBranch
+                    ? "El envío espera en la sucursal hasta que el cliente lo retire."
+                    : "Un conductor lo lleva hasta la dirección del cliente."}
+                </p>
+              </div>
+
+              {/* Obligatoria si el cliente retira; opcional si va a domicilio,
+                  donde solo indica desde qué sucursal sale el reparto. */}
+              <div className={destinationIsBranch ? "sm:col-span-2" : ""}>
+                <Label required={destinationIsBranch}>Sucursal de Destino</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
                   value={destinationBranchOfficeId}
@@ -439,19 +518,54 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
                     ? "La sucursal declarada ya no está activa: elegí otra para poder guardar."
                     : branchesInDepartment.length === 0
                     ? "La entrega se coordina desde la sucursal más cercana."
-                    : "Sucursal donde se recibe el paquete en destino."}
+                    : destinationIsBranch
+                    ? "Sucursal donde el cliente va a retirar el paquete."
+                    : "Sucursal desde la que sale el reparto."}
                 </p>
               </div>
 
-              <div className="sm:col-span-2">
-                <Label required>Dirección Exacta</Label>
-                <Input
-                  value={clientAddress}
-                  onChange={(e) => setClientAddress(e.target.value)}
-                  required
-                  placeholder="Ej. Av. Principal #123, Zona Sur"
-                />
-              </div>
+              {/* Los datos del domicilio solo tienen sentido si va un conductor.
+                  En un retiro en mostrador el backend los rechaza. */}
+              {!destinationIsBranch && (
+                <>
+                  <div className="sm:col-span-2">
+                    <Label required>Dirección Exacta</Label>
+                    <Input
+                      value={clientAddress}
+                      onChange={(e) => setClientAddress(e.target.value)}
+                      required
+                      placeholder="Ej. Av. Principal #123, Zona Sur"
+                    />
+                  </div>
+
+                  <div>
+                    <Label required={false}>
+                      Enlace de mapa
+                      <span className="ml-1 text-xs font-normal text-gray-400">(recomendado)</span>
+                    </Label>
+                    <Input
+                      value={destinationLocationUrl}
+                      onChange={(e) => setDestinationLocationUrl(e.target.value)}
+                      placeholder="https://maps.app.goo.gl/…"
+                    />
+                    <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                      No es obligatorio, pero es lo que más ayuda al conductor a llegar.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label required={false}>
+                      Referencia
+                      <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+                    </Label>
+                    <Input
+                      value={destinationAddressReference}
+                      onChange={(e) => setDestinationAddressReference(e.target.value)}
+                      placeholder="Ej. Portón verde, frente a la plaza"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -461,17 +575,22 @@ export default function SupplierOrderDeliveryForm({ mode, orderId, onClose, onSa
             <h5 className="mb-4 text-sm font-semibold text-brand-500 uppercase tracking-wider">Configuración de la Orden</h5>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div>
-                <Label required>Tipo de Entrega</Label>
+                <Label required>Forma de Pago</Label>
                 <select
                   className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 disabled:opacity-50"
-                  value={deliveryType}
-                  onChange={(e) => setDeliveryType(Number(e.target.value))}
+                  value={paymentType}
+                  onChange={(e) => setPaymentType(e.target.value as PaymentType)}
                   required
                 >
-                  {TIPOS_ENTREGA.map((tipo, idx) => (
-                    <option key={idx} value={idx}>{tipo.label}</option>
+                  {formaDePagoOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                {paymentType === "OnAccount" && (
+                  <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                    El importe se suma a tu estado de cuenta del mes y se cobra al cierre.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-end pb-2.5">
