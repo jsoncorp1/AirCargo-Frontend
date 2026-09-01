@@ -65,6 +65,7 @@ interface ShipmentWaybillProps {
   /** Si no se pasa, se deduce del prefijo del código (ESP-/COR-). */
   orderType?: OrderType | null;
   originDepartment: string;
+  originBranchAddress?: string | null;
   destinationDepartment: string;
   senderFullName: string;
   senderPhone: string;
@@ -206,6 +207,7 @@ export default function ShipmentWaybill({
   code,
   orderType,
   originDepartment,
+  originBranchAddress,
   destinationDepartment,
   senderFullName,
   senderPhone,
@@ -266,9 +268,9 @@ export default function ShipmentWaybill({
         )}
       </div>
 
-      {/* La dirección de la sucursal emisora no viaja en el envío: queda pendiente. */}
+      {/* La dirección de la sucursal emisora viaja como originBranchAddress si está en el backend */}
       <div className="mt-2">
-        <Field label="Direccion" missing />
+        <Field label="Direccion" value={originBranchAddress || "-"} />
       </div>
 
       <Divider />
@@ -283,7 +285,7 @@ export default function ShipmentWaybill({
       {/* Remitente */}
       <div>
         <Field label="Remitente" value={senderFullName} />
-        <Field label="Nit/Ci" missing />
+        <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={senderPhone} />
         {senderAddress && <Field label="Direccion" value={senderAddress} />}
       </div>
@@ -291,9 +293,9 @@ export default function ShipmentWaybill({
       {/* Destinatario */}
       <div className="mt-2">
         <Field label="Destinatario" value={clientFullName} />
-        <Field label="Nit/Ci" missing />
+        <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={clientPhone} />
-        <Field label="Email" missing />
+        <Field label="Email" value="-" />
         {!isSporadic && (
           <>
             <Field label="Ubicacion" value={destinationLocationUrl || clientAddress} />
@@ -313,7 +315,7 @@ export default function ShipmentWaybill({
 
       {/* Resumen de la carga */}
       <div>
-        {isSporadic && <Row label="Valor declarado" value={FALTA} />}
+        {isSporadic && <Row label="Valor declarado" value={`${totalGoods.toFixed(2)} Bs`} />}
         <Row label="Peso/vol" value={`${totalWeight.toFixed(2)} kg`} />
       </div>
 
@@ -367,8 +369,8 @@ export default function ShipmentWaybill({
         El total dice cosas distintas según la variante:
         esporádico  → lo que el cliente paga por el envío;
         corporativo → la mercadería, que es lo que se cobra contra esta guía. El
-                      flete NO va acá: se le descuenta a la empresa cuando
-                      AirCargo le liquida (orden 1500 con envío 100 → 1400).
+        flete NO va acá: se le descuenta a la empresa cuando
+        AirCargo le liquida (orden 1500 con envío 100 → 1400).
       */}
       <Row
         label={isSporadic ? "Total precio de envio" : "Total productos"}
@@ -400,9 +402,6 @@ export default function ShipmentWaybill({
           <div className="mt-1 flex items-start gap-2">
             <div className="shrink-0">
               <PlaceholderQr />
-              <p className="mt-0.5 text-center text-[7px] font-bold uppercase text-black">
-                QR de ejemplo
-              </p>
             </div>
             <div className="min-w-0 flex-1">
               <BlankLine />
@@ -419,9 +418,6 @@ export default function ShipmentWaybill({
           <div className="mt-1 flex items-start gap-2">
             <div className="shrink-0">
               <PlaceholderQr />
-              <p className="mt-0.5 text-center text-[7px] font-bold uppercase text-black">
-                QR de ejemplo
-              </p>
             </div>
             <div className="min-w-0 flex-1">
               <p className="break-words text-[10px] font-bold leading-snug text-black">

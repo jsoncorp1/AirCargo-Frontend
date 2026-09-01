@@ -634,6 +634,7 @@ export default function ShipmentForm({
               code={guia}
               orderType={orderInfo?.orderType}
               originDepartment={orderInfo?.originDepartment ?? ""}
+              originBranchAddress={(orderInfo as any)?.originBranchOfficeAddress || (orderInfo as any)?.originAddress || null}
               destinationDepartment={orderInfo?.destinationDepartment ?? ""}
               senderFullName={orderInfo?.senderFullName ?? ""}
               senderPhone={orderInfo?.senderPhone ?? ""}

@@ -351,6 +351,7 @@ export default function TrackingView() {
         <ShipmentWaybill 
           code={envio.code}
           originDepartment={envio.originDepartment}
+          originBranchAddress={(envio as any).originBranchOfficeAddress || (envio as any).originAddress || null}
           destinationDepartment={envio.destinationDepartment}
           senderFullName={envio.senderFullName}
           senderPhone={envio.senderPhone}
