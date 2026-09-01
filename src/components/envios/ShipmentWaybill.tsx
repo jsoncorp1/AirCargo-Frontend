@@ -255,7 +255,7 @@ export default function ShipmentWaybill({
             height: "34px",
             width: "auto",
             maxWidth: "150px",
-            filter: "grayscale(100%) contrast(1.25) brightness(0)",
+            filter: "grayscale(100%) contrast(1.25)",
           }}
         />
         <p className="mt-1 text-[10px] font-bold text-black">Callcenter: {CALLCENTER_PHONE}</p>
