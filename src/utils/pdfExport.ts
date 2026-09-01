@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf';
 
 export interface PDFExportOptions {
   filename?: string;
-  format?: 'a4' | 'letter';
+  format?: 'a4' | 'letter' | [number, number];
   orientation?: 'portrait' | 'landscape';
 }
 

@@ -58,9 +58,16 @@ export default function SporadicShipmentSuccess({
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col sm:flex-row justify-center gap-3">
           <Button onClick={onReset} className="px-8 shadow-sm hover:shadow-md">
             Registrar Nuevo Envío
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => window.open(`/envios/${result.shipmentId}`, '_blank')} 
+            className="px-8 shadow-sm hover:shadow-md"
+          >
+            Ver Guía Creada
           </Button>
         </div>
       </div>

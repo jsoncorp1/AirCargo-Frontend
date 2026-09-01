@@ -528,9 +528,16 @@ export default function ShipmentForm({
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
+              .page-break { page-break-after: always; }
             </style>
           </head>
           <body onload="setTimeout(function() { window.print(); window.close(); }, 500)">
+            ${waybillHtml}
+            <div class="page-break"></div>
+            ${waybillHtml}
+            <div class="page-break"></div>
+            ${waybillHtml}
+            <div class="page-break"></div>
             ${waybillHtml}
           </body>
         </html>`);
@@ -549,7 +556,7 @@ export default function ShipmentForm({
       setExporting("pdf");
       await exportElementToPDF(pdfRef.current, {
         filename: `Guia_${guia || "Envio"}.pdf`,
-        format: 'letter'
+        format: [80, 200]
       });
     } catch (error) {
       console.error(error);
