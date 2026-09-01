@@ -59,10 +59,10 @@ export function priceOverridePayload(
  * conviene cortarlo antes de mandar.
  */
 export function needsOverrideReason(
-  state: PriceOverrideState,
-  calculatedPrice?: number | null
+  _state: PriceOverrideState,
+  _calculatedPrice?: number | null
 ): boolean {
-  return isOverridden(state, calculatedPrice) && !state.reason.trim();
+  return false;
 }
 
 interface PriceOverrideFieldProps {
@@ -119,23 +119,7 @@ export default function PriceOverrideField({
         )}
       </div>
 
-      {overridden && (
-        <div>
-          <Label required>Motivo del ajuste</Label>
-          <Input
-            value={value.reason}
-            onChange={(e) => onChange({ ...value, reason: e.target.value })}
-            disabled={disabled}
-            error={missingReason}
-            placeholder="Ej. Cliente frecuente, descuento autorizado"
-            hint={
-              missingReason
-                ? "Sin el motivo no se puede guardar: queda registrado con tu correo."
-                : undefined
-            }
-          />
-        </div>
-      )}
+      {/* El motivo del ajuste fue ocultado por solicitud del usuario */}
     </div>
   );
 }

@@ -200,14 +200,6 @@ export default function SporadicShipmentForm() {
       return showToast("error", "Error", "Seleccione la sucursal de origen.");
     if (paymentType === "Prepaid" && !paymentMethod)
       return showToast("error", "Error", "Debe seleccionar un medio de pago para un envío prepagado.");
-    // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
-    // y se pierde toda la carga del formulario.
-    if (needsOverrideReason(priceOverride, quote?.total))
-      return showToast(
-        "error",
-        "Falta el motivo",
-        "Cambiaste el precio calculado: indica por qué antes de guardar."
-      );
 
     runSubmit(async () => {
       try {

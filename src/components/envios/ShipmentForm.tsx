@@ -434,16 +434,6 @@ export default function ShipmentForm({
       showToast("error", "Error", "Debe seleccionar un medio de pago para un envío prepagado.");
       return;
     }
-    // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
-    // y se pierde toda la carga; cortarlo acá deja el formulario intacto.
-    if (needsOverrideReason(priceOverride, quote?.total)) {
-      showToast(
-        "error",
-        "Falta el motivo",
-        "Cambiaste el precio calculado: indica por qué antes de guardar."
-      );
-      return;
-    }
 
     runSubmit(async () => {
       try {

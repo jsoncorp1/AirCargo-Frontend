@@ -94,16 +94,6 @@ export default function RecibirRecojoModal({
       showToast("error", "Faltan datos", "Describí los bultos que estás recibiendo.");
       return;
     }
-    // Sin el motivo el backend responde `shipment.priceoverride.reasonrequired`
-    // y se pierde toda la carga.
-    if (needsOverrideReason(priceOverride, quote?.total)) {
-      showToast(
-        "error",
-        "Falta el motivo",
-        "Cambiaste el precio calculado: indicá por qué antes de guardar."
-      );
-      return;
-    }
 
     if (pickupOrder.paymentType === "Prepaid" && !paymentMethod) {
       showToast(
