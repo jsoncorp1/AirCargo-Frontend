@@ -99,25 +99,27 @@ function Field({
   label,
   value,
   missing = false,
+  boldValue = false,
 }: {
   label: string;
   value?: string | null;
   missing?: boolean;
+  boldValue?: boolean;
 }) {
   return (
     <p className="text-[10px] leading-snug text-black break-words">
       <span className="font-bold">{label}:</span>{" "}
-      <span className={missing ? "font-bold" : ""}>{missing ? FALTA : value || ""}</span>
+      <span className={missing ? "font-bold" : boldValue ? "font-extrabold uppercase text-[11px]" : ""}>{missing ? FALTA : value || ""}</span>
     </p>
   );
 }
 
 /** Renglón de dos columnas: rótulo a la izquierda, valor pegado a la derecha. */
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value, highlight = false }: { label: string; value: React.ReactNode; highlight?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 text-[10px] leading-snug text-black">
+    <div className={`flex items-baseline justify-between gap-2 leading-snug text-black ${highlight ? 'text-[13px] my-1' : 'text-[10px]'}`}>
       <span className="font-bold uppercase">{label}</span>
-      <span className="text-right font-black">{value}</span>
+      <span className={`text-right ${highlight ? 'font-black' : 'font-bold'}`}>{value}</span>
     </div>
   );
 }
@@ -284,7 +286,7 @@ export default function ShipmentWaybill({
 
       {/* Remitente */}
       <div>
-        <Field label="Remitente" value={senderFullName} />
+        <Field label="Remitente" value={senderFullName} boldValue />
         <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={senderPhone} />
         {senderAddress && <Field label="Direccion" value={senderAddress} />}
@@ -292,7 +294,7 @@ export default function ShipmentWaybill({
 
       {/* Destinatario */}
       <div className="mt-2">
-        <Field label="Destinatario" value={clientFullName} />
+        <Field label="Destinatario" value={clientFullName} boldValue />
         <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={clientPhone} />
         <Field label="Email" value="-" />
@@ -316,7 +318,7 @@ export default function ShipmentWaybill({
       {/* Resumen de la carga */}
       <div>
         {isSporadic && <Row label="Valor declarado" value={`${totalGoods.toFixed(2)} Bs`} />}
-        <Row label="Peso/vol" value={`${totalWeight.toFixed(2)} kg`} />
+        <Row label="Peso/vol" value={`${totalWeight.toFixed(2)} kg`} highlight />
       </div>
 
       <table className="mt-1.5 w-full text-left text-[10px] text-black">
@@ -375,6 +377,7 @@ export default function ShipmentWaybill({
       <Row
         label={isSporadic ? "Total precio de envio" : "Total productos"}
         value={`${(isSporadic ? totalShippingCost : totalGoods).toFixed(2)} Bs`}
+        highlight
       />
 
       <Divider />
@@ -395,22 +398,18 @@ export default function ShipmentWaybill({
         ancho, así que el ticket solo deja el enlace y unos renglones—.
       */}
       {isSporadic ? (
-        <div>
-          <p className="text-[10px] font-bold uppercase text-black">
+        <div className="flex flex-col items-center text-center w-full">
+          <p className="text-[10px] font-bold uppercase text-black mb-2">
             Terminos y condiciones del contrato
           </p>
-          <div className="mt-1 flex items-start gap-2">
-            <div className="shrink-0">
-              <PlaceholderQr />
-            </div>
-            <div className="min-w-0 flex-1">
-              <BlankLine />
-              <BlankLine />
-              <BlankLine />
-            </div>
+          <div className="shrink-0 mb-2">
+            <PlaceholderQr />
           </div>
-          <BlankLine />
-          <BlankLine />
+          <div className="w-full">
+            <BlankLine />
+            <BlankLine />
+            <BlankLine />
+          </div>
         </div>
       ) : (
         <div>
