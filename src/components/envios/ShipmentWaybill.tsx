@@ -5,6 +5,8 @@ import {
   PaymentType,
   ServicePointType,
   paymentTypeLabel,
+  PaymentMethod,
+  paymentMethodLabel,
 } from "@/services/logisticsEnums";
 import type { OrderType } from "@/services/orderDeliveryService";
 
@@ -74,6 +76,7 @@ interface ShipmentWaybillProps {
   clientPhone: string;
   clientAddress: string;
   paymentType: PaymentType | string;
+  paymentMethod?: PaymentMethod | string | null;
   // Modalidad de cada punta: juntas arman el tipo de envío (P2P/P2S/S2P/S2S).
   originPointType?: ServicePointType | string | null;
   destinationPointType?: ServicePointType | string | null;
@@ -218,6 +221,7 @@ export default function ShipmentWaybill({
   clientPhone,
   clientAddress,
   paymentType,
+  paymentMethod,
   originPointType,
   destinationPointType,
   destinationLocationUrl,
@@ -384,6 +388,9 @@ export default function ShipmentWaybill({
 
       {/* Tipo de guía y de envío: solo el valor que corresponde, no el menú */}
       <Row label="Tipo de guia" value={paymentTypeLabel(paymentType)} />
+      {paymentType === "Prepaid" && paymentMethod && (
+        <Row label="Tipo de pago" value={paymentMethodLabel(paymentMethod)} />
+      )}
       <Row
         label="Tipo de envio"
         value={shipmentTypeCode(originPointType, destinationPointType)}

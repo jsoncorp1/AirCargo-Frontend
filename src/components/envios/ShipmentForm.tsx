@@ -650,6 +650,7 @@ export default function ShipmentForm({
               clientPhone={orderInfo?.clientPhone ?? ""}
               clientAddress={orderInfo?.clientAddress ?? ""}
               paymentType={orderInfo?.paymentType ?? "Prepaid"}
+              paymentMethod={paymentMethod || undefined}
               originPointType={orderInfo?.originPointType}
               destinationPointType={orderInfo?.destinationPointType}
               destinationLocationUrl={orderInfo?.destinationLocationUrl}

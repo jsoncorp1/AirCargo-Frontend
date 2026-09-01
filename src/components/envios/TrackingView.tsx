@@ -360,6 +360,7 @@ export default function TrackingView() {
           clientPhone={envio.clientPhone || ""}
           clientAddress={envio.clientAddress}
           paymentType={envio.paymentType ?? "Prepaid"}
+          paymentMethod={envio.paymentMethod}
           originPointType={envio.originPointType}
           destinationPointType={envio.destinationPointType}
           destinationLocationUrl={envio.destinationLocationUrl}
