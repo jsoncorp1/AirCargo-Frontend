@@ -62,6 +62,11 @@ export default function SporadicShipmentForm() {
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const [result, setResult] = useState<SporadicShipmentResponse | null>(null);
+  // Momento en que el backend confirmó la guía. Se guarda una sola vez y no se
+  // recalcula en cada render: si no, la hora impresa se iba corriendo mientras
+  // la pantalla de éxito quedaba abierta y dos copias de la misma guía salían
+  // con horas distintas. (La respuesta del alta todavía no trae `createdAt`.)
+  const [issuedAt, setIssuedAt] = useState<Date | null>(null);
   const [branchOffices, setBranchOffices] = useState<BranchOffice[]>([]);
 
   // Sender State
@@ -236,6 +241,7 @@ export default function SporadicShipmentForm() {
         };
         const response = await shipmentService.createSporadicShipment(payload);
         setResult(response);
+        setIssuedAt(new Date());
         showToast("success", "Envío registrado", `Guía generada: ${response.code}`);
       } catch (error: unknown) {
         showToast("error", "Error", getShipmentErrorMessage(error, "No se pudo registrar el envío."));
@@ -259,15 +265,16 @@ export default function SporadicShipmentForm() {
     const destinationBranchName = destinationBranch?.city ?? destinationBranch?.code;
     
     // Fecha de emisión en hora de Bolivia, no la del navegador.
-    const today = new Date();
-    const fechaStr = formatDate(today);
-    const horaStr = formatTime(today);
+    const emitted = issuedAt ?? new Date();
+    const fechaStr = formatDate(emitted);
+    const horaStr = formatTime(emitted);
 
     return (
       <SporadicShipmentSuccess
         result={result}
         onReset={() => {
           setResult(null);
+          setIssuedAt(null);
           resetForm();
         }}
         waybillElement={
@@ -275,7 +282,6 @@ export default function SporadicShipmentForm() {
             code={result.code}
             orderType="Sporadic"
             originDepartment={originDepartment || ""}
-            originBranchAddress={originBranch?.address || null}
             destinationDepartment={destinationDepartment}
             originBranchName={originBranchName}
             destinationBranchName={destinationBranchName}

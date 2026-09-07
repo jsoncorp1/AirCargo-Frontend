@@ -20,8 +20,9 @@ const SITE_URL = "www.aircargo.com";
  * confunde con un dato que el operador no cargó.
  *
  * Hoy no lo usa ningún renglón. Los que estaban así —Nit/Ci del remitente,
- * Nit/Ci y correo del destinatario— se sacaron de la guía: salían siempre en
- * "-" y esos 20 cm de ticket no dan para renglones que no dicen nada.
+ * Nit/Ci y correo del destinatario, y la dirección de la sucursal emisora— se
+ * sacaron de la guía: salían siempre en "-" y esos 20 cm de ticket no dan para
+ * renglones que no dicen nada.
  */
 const FALTA = "FALTA";
 
@@ -67,7 +68,6 @@ interface ShipmentWaybillProps {
   /** Si no se pasa, se deduce del prefijo del código (ESP-/COR-). */
   orderType?: OrderType | null;
   originDepartment: string;
-  originBranchAddress?: string | null;
   destinationDepartment: string;
   /**
    * Sucursal de cada punta. Es lo que va en la ruta impresa: el departamento
@@ -220,7 +220,6 @@ export default function ShipmentWaybill({
   code,
   orderType,
   originDepartment,
-  originBranchAddress,
   destinationDepartment,
   originBranchName,
   destinationBranchName,
@@ -247,6 +246,24 @@ export default function ShipmentWaybill({
   const isSporadic = isSporadicWaybill(code, orderType);
   // Sin dato la entrega se asume a domicilio, igual que en `shipmentTypeCode`.
   const isDoorDelivery = (destinationPointType ?? "Door") === "Door";
+
+  /**
+   * Qué dice el renglón "Ubicacion", que se imprime siempre:
+   *   a domicilio → la dirección del receptor (en la corporativa el enlace de
+   *                 mapa si lo hay; en la esporádica la calle, porque una URL
+   *                 no entra en 8 cm y al repartidor le sirve la dirección);
+   *   en sucursal → no hay dirección de entrega porque la retira el cliente, y
+   *                 el backend tampoco manda la de la sucursal, así que se dice
+   *                 eso y en cuál. Dejar el renglón afuera hacía dudar de si
+   *                 faltaba el dato o si de verdad no había entrega a domicilio.
+   */
+  const deliveryLocation = isDoorDelivery
+    ? isSporadic
+      ? clientAddress
+      : destinationLocationUrl || clientAddress
+    : ["Recojo en sucursal", destinationBranchName || destinationDepartment]
+        .filter(Boolean)
+        .join(" ");
 
   /**
    * El esporádico de mostrador que no carga artículos manda UNA línea armada
@@ -304,11 +321,6 @@ export default function ShipmentWaybill({
         )}
       </div>
 
-      {/* La dirección de la sucursal emisora viaja como originBranchAddress si está en el backend */}
-      <div className="mt-2">
-        <Field label="Direccion" value={originBranchAddress || "-"} />
-      </div>
-
       <Divider />
 
       {/* Código de guía: uno solo, ESP- o COR- según de dónde salió el envío */}
@@ -329,27 +341,13 @@ export default function ShipmentWaybill({
       <div className="mt-2">
         <Field label="Destinatario" value={clientFullName} boldValue />
         <Field label="Telefono" value={clientPhone} />
-        {/*
-          La ubicación cierra los datos del destinatario en las dos variantes.
-          En la corporativa siempre; en la esporádica solo si la entrega es a
-          domicilio —si el cliente retira en mostrador no hay dirección que
-          imprimir— y sale la dirección exacta, no el enlace de mapa: la URL no
-          entra en 8 cm de ancho y al repartidor le sirve la calle.
-        */}
-        {!isSporadic ? (
-          <>
-            <Field label="Ubicacion" value={destinationLocationUrl || clientAddress} />
-            <Field label="Observacion" value={destinationAddressReference} />
-          </>
-        ) : (
-          isDoorDelivery && (
-            <>
-              <Field label="Ubicacion" value={clientAddress} />
-              {destinationAddressReference && (
-                <Field label="Referencia" value={destinationAddressReference} />
-              )}
-            </>
-          )
+        {/* La ubicación de entrega cierra los datos del destinatario. */}
+        <Field label="Ubicacion" value={deliveryLocation} />
+        {isDoorDelivery && destinationAddressReference && (
+          <Field
+            label={isSporadic ? "Referencia" : "Observacion"}
+            value={destinationAddressReference}
+          />
         )}
       </div>
 
@@ -503,8 +501,15 @@ export default function ShipmentWaybill({
 
       <Divider />
 
-      {/* Firmas */}
-      <div className="flex-1 flex flex-col justify-end">
+      {/*
+        Firmas. El bloque NO lleva `flex-1 justify-end`: con eso todo el espacio
+        que sobraba del ticket se juntaba en un solo hueco entre "Hora de
+        entrega" y la primera firma, que quedaba enorme apenas la guía traía
+        pocos renglones. Sin eso las tres firmas se separan siempre igual entre
+        sí y de la fecha de entrega, y el sobrante cae al final, donde el pie ya
+        se empuja solo con `mt-auto`.
+      */}
+      <div className="flex flex-col">
         <br />
         <SignatureLine label="Firma remitente" />
         <br />
