@@ -138,17 +138,16 @@ function Row({ label, value, highlight = false }: { label: string; value: React.
 /**
  * Renglón para completar a mano (dirección de entrega, condiciones).
  *
- * Va rayado, igual que `Divider`: con dos estilos de línea distintos conviviendo
- * en 8 cm de ancho, el punteado se leía como una banda sucia debajo del QR en
- * vez de como un renglón para escribir.
+ * Va con línea LLENA, no rayada. En el ticket hay un solo lenguaje de líneas:
+ * llena = "escribí acá" (fecha y hora de entrega, firmas), rayada = separador de
+ * sección. Cuando estos renglones también eran rayados no se distinguían del
+ * `Divider` que viene después y parecía que hubiera cuatro separadores seguidos.
  */
 function BlankLine() {
   // La separación va en línea: en la ventana de impresión las clases de margen
   // de Tailwind no llegan (ver el reset en `printWaybill.ts`), y sin ella los
   // renglones se apilaban uno encima de otro formando una banda ilegible.
-  return (
-    <div className="border-b border-dashed border-black" style={{ marginTop: "11px" }} />
-  );
+  return <div className="border-b border-black" style={{ marginTop: "11px" }} />;
 }
 
 function SignatureLine({ label }: { label: string }) {
@@ -462,7 +461,7 @@ export default function ShipmentWaybill({
         Bloque libre. Las dos variantes llevan QR, pero apuntan a cosas
         distintas: en el corporativo a la UBICACIÓN de entrega, en el
         esporádico al CONTRATO —los términos completos no entran en 8 cm de
-        ancho, así que el ticket solo deja el enlace y unos renglones—.
+        ancho, así que el ticket solo deja el enlace—.
       */}
       {isSporadic ? (
         <div className="flex flex-col items-center text-center w-full">
@@ -472,14 +471,10 @@ export default function ShipmentWaybill({
           <div className="shrink-0 mb-2">
             <PlaceholderQr />
           </div>
-          {/* El margen de abajo va en línea: sin él el último renglón queda
-              pegado al separador que sigue y los dos se leen como una raya
-              doble más gruesa que el resto. */}
-          <div className="w-full" style={{ marginBottom: "8px" }}>
-            <BlankLine />
-            <BlankLine />
-            <BlankLine />
-          </div>
+          {/* Sin renglones para escribir debajo del QR: entre el QR y la
+              sección siguiente va UN solo separador. Los tres renglones que
+              había antes se leían como más separadores y no los usaba nadie
+              —lo que hay que firmar está más abajo y el contrato va en el QR—. */}
         </div>
       ) : (
         <div>
