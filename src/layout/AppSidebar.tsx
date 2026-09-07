@@ -98,6 +98,11 @@ const baseNavItems: NavItem[] = [
   },
   {
     icon: <DollarLineIcon />,
+    name: "Caja",
+    path: "/caja",
+  },
+  {
+    icon: <DollarLineIcon />,
     name: "Cobranzas",
     path: "/cuenta-corriente",
   },

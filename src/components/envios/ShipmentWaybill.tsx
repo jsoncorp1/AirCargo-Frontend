@@ -90,6 +90,8 @@ interface ShipmentWaybillProps {
   fecha: string;
   hora: string;
   createdBy: string;
+  validity?: string | null;
+  annulmentReason?: string | null;
 }
 
 // ─── Piezas del formato ──────────────────────────────────────────────────────
@@ -233,6 +235,8 @@ export default function ShipmentWaybill({
   fecha,
   hora,
   createdBy,
+  validity,
+  annulmentReason,
 }: ShipmentWaybillProps) {
   const isSporadic = isSporadicWaybill(code, orderType);
 
@@ -254,6 +258,16 @@ export default function ShipmentWaybill({
         flexDirection: "column",
       }}
     >
+      {validity === "Annulled" && (
+        <div className="mb-3 p-2 border-2 border-dashed border-red-600 bg-red-50 text-center">
+          <p className="text-[11px] font-black uppercase tracking-wider text-red-700">*** GUÍA ANULADA ***</p>
+          <p className="text-[9px] font-bold text-red-600">DOCUMENTO SIN VALIDEZ</p>
+          {annulmentReason && (
+            <p className="text-[8px] text-red-700 mt-0.5 italic">Motivo: {annulmentReason}</p>
+          )}
+        </div>
+      )}
+
       {/* Encabezado: marca, callcenter y dirección de la sucursal que emite */}
       <div className="flex flex-col items-center">
         <img

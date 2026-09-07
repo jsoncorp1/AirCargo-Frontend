@@ -61,6 +61,7 @@ export default function EnviosToolbar({
     filters.supplierId ||
     filters.originBranchOfficeId ||
     filters.destinationBranchOfficeId ||
+    filters.validity ||
     filters.dateFrom ||
     filters.dateTo
   );
@@ -166,6 +167,18 @@ export default function EnviosToolbar({
           >
             <option value="">Destino: Todos</option>
             {branchOptions}
+          </select>
+        </div>
+
+        <div className="w-full sm:w-36">
+          <select
+            className={selectClassName}
+            value={filters.validity ?? ""}
+            onChange={(e) => setFilter({ validity: (e.target.value as any) || undefined })}
+          >
+            <option value="">Validez: Todas</option>
+            <option value="Valid">Solo válidas</option>
+            <option value="Annulled">Solo anuladas</option>
           </select>
         </div>
 

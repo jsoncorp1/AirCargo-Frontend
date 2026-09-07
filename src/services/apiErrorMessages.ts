@@ -318,6 +318,54 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   'lead.contactemail.toolong': 'El correo supera los 150 caracteres.',
   'lead.contactphone.toolong': 'El teléfono supera los 30 caracteres.',
 
+  // ─── Caja (mostrador + gastos: un solo cajón) ───────────────────────────
+  // El prefijo `pettycash.*` ya no existe: la caja chica se disolvió en la
+  // sesión de caja. Ver `caja-unificada-lo-que-hizo-el-back.md`, sección 9.
+  'cashregister.session.notopen': 'No hay una caja abierta en tu sucursal. Abre la caja para poder operar.',
+  'cashregister.session.alreadyopen': 'Ya hay una caja abierta en esta sucursal; ciérrala primero.',
+  'cashregister.session.closed': 'La caja ya está cerrada: no admite más cambios ni movimientos.',
+  'cashregister.session.notfound': 'La caja indicada no existe.',
+  'cashregister.access.forbidden': 'No tienes permisos para operar o consultar la caja de esta sucursal.',
+  'cashregister.user.notfound': 'El usuario indicado no existe.',
+
+  // Apertura: el desvío contra lo arrastrado del cierre anterior se explica.
+  'cashregister.openingcash.invalid': 'El monto de apertura no puede ser negativo.',
+  'cashregister.openingnotes.required': 'Lo que contaste no coincide con lo que dejó el cierre anterior. Explica la diferencia.',
+  'cashregister.openingnotes.toolong': 'La explicación de la apertura supera los 300 caracteres.',
+
+  // Cierre.
+  'cashregister.countedcash.invalid': 'El monto contado no puede ser negativo.',
+  'cashregister.closingnotes.required': 'Debes explicar el motivo de la diferencia al cerrar la caja.',
+
+  // Movimientos.
+  'cashregister.movement.notfound': 'El movimiento de caja no existe.',
+  'cashregister.movement.amount.invalid': 'El monto del movimiento debe ser mayor a cero.',
+  'cashregister.movement.description.required': 'Debes ingresar una descripción para el movimiento.',
+  'cashregister.movement.description.toolong': 'La descripción supera el límite de 300 caracteres.',
+  'cashregister.movement.access.notowner': 'Solo quien registró este movimiento puede modificarlo o eliminarlo.',
+  'cashregister.movement.driver.notfound': 'El conductor indicado no existe.',
+  'cashregister.movement.driver.invalid': 'El usuario indicado no es un conductor.',
+
+  // Comprobantes.
+  'cashregister.receipt.required': 'Debes adjuntar un archivo de recibo.',
+  'cashregister.receipt.invalidtype': 'Solo se aceptan comprobantes en formato JPG, PNG o WEBP.',
+  'cashregister.receipt.toolarge': 'El comprobante supera el tamaño máximo permitido (10 MB).',
+
+  'cashregister.daterange.invalid': 'La fecha "desde" no puede ser mayor que la fecha "hasta".',
+
+  // La guía entró a una caja ya cerrada: su total quedó congelado al arquear.
+  'shipment.cashregister.closed': 'La caja del día en que se emitió esta guía ya fue cerrada. No se puede modificar ni anular.',
+
+  // ─── Anulación de Guías ───────────────────────────────────────────────────
+  'shipment.annul.reason.required': 'Debes indicar el motivo de la anulación.',
+  'shipment.annul.reason.toolong': 'El motivo de la anulación no puede superar los 300 caracteres.',
+  'shipment.annul.alreadyannulled': 'Esta guía ya fue anulada previamente.',
+  'shipment.annul.notatorigin': 'Solo se puede anular un envío mientras se encuentre en la sucursal de origen.',
+  'shipment.annul.inmanifest': 'El envío ya fue asignado a un manifiesto. Debes sacarlo del lote antes de anularlo.',
+  'billing.period.closed': 'La guía era fiada y el período de facturación ya está cerrado. No se puede anular directamente.',
+  'shipment.annul.forbidden': 'Solo puedes anular envíos emitidos en tu propia sucursal.',
+  'manifest.shipment.annulled': 'No se puede agregar una guía anulada a un manifiesto.',
+
   // Token huérfano: el usuario autenticado ya no existe en BD.
   'article.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
   'articlereceipt.user.notfound': 'Tu sesión ya no es válida. Vuelve a iniciar sesión.',

@@ -122,10 +122,10 @@ export default function AdminOrdenesPage() {
 
   return (
     <div>
-      <PageBreadcrumb pageTitle="Órdenes de Entrega" />
+      <PageBreadcrumb pageTitle="Órdenes de Entrega Corporativas" />
 
       {/* La bajada sube al encabezado de la página: dentro de la tarjeta obligaba
-          a repetir el título "Órdenes de Entrega" solo para poder mostrarla. */}
+          a repetir el título "Órdenes de Entrega Corporativas" solo para mostrarla. */}
       <p className="-mt-3 mb-6 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
         Solo las órdenes cuyo departamento de origen coincide con el de tu sucursal.
         Desde aquí se atienden convirtiéndolas en envío.

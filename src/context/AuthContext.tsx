@@ -135,7 +135,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isSupplierRole(sessionUser.role)) {
         router.push('/proveedor/ordenes');
       } else if (isAdminRole(sessionUser.role)) {
-        router.push('/dashboard');
+        // A `/admin`, no a `/dashboard`: el layout de `(admin)` es el del
+        // superadmin y rebota al admin de vuelta a `/admin`. Mandarlo ahí
+        // directo evita el salto en blanco entre las dos pantallas.
+        router.push('/admin');
       } else if (isConductorRole(sessionUser.role)) {
         router.push('/conductor/envios');
       } else {

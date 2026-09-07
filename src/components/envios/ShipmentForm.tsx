@@ -181,6 +181,13 @@ export default function ShipmentForm({
   const [createdBy, setCreatedBy] = useState("");
   const [orderInfo, setOrderInfo] = useState<OrderHeaderInfo | null>(null);
 
+  // Anulación y cobro
+  const [validity, setValidity] = useState<string | null>(null);
+  const [annulmentReason, setAnnulmentReason] = useState<string | null>(null);
+  const [annulledAt, setAnnulledAt] = useState<string | null>(null);
+  const [annulledBy, setAnnulledBy] = useState<string | null>(null);
+  const [collectedBy, setCollectedBy] = useState<string | null>(null);
+
   const fetchOrders = useCallback(async () => {
     try {
       // Solo las órdenes sin atender se pueden convertir en envío. El backend
@@ -291,6 +298,11 @@ export default function ShipmentForm({
       setObservation(shipment.observation ?? null);
       setDeliveryComment(shipment.deliveryComment ?? null);
       setPaymentMethod(shipment.paymentMethod ?? "");
+      setValidity(shipment.validity ?? "Valid");
+      setAnnulmentReason(shipment.annulmentReason ?? null);
+      setAnnulledAt(shipment.annulledAt ?? null);
+      setAnnulledBy(shipment.annulledBy ?? null);
+      setCollectedBy(shipment.collectedBy ?? null);
       setOrderInfo((prev) => ({
         clientPhone: prev?.clientPhone ?? "",
         destinationDepartment: shipment.destinationDepartment,
@@ -610,12 +622,35 @@ export default function ShipmentForm({
         </div>
 
         <div className="overflow-y-auto bg-gray-100 px-6 py-6 custom-scrollbar dark:bg-gray-900/60">
-          {(status || originBranchLabel || destinationBranchLabel) && (
+          {validity === "Annulled" && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white">
+                  GUÍA ANULADA
+                </span>
+                <span className="font-semibold text-red-700 dark:text-red-400">
+                  Esta guía fue anulada y no tiene validez legal ni operativa.
+                </span>
+              </div>
+              {annulmentReason && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                  <span className="font-medium">Motivo:</span> {annulmentReason}
+                </p>
+              )}
+              {annulledAt && (
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  Anulada el {formatDate(annulledAt)} {formatTime(annulledAt)} {annulledBy ? `por ${annulledBy}` : ""}
+                </p>
+              )}
+            </div>
+          )}
+
+          {(status || originBranchLabel || destinationBranchLabel || collectedBy) && (
             <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="flex flex-wrap items-center gap-3">
                 {status && (
-                  <Badge size="sm" color={SHIPMENT_STATUS_BADGE[status] ?? "light"}>
-                    {SHIPMENT_STATUS_LABELS[status] ?? status}
+                  <Badge size="sm" color={validity === "Annulled" ? "dark" : (SHIPMENT_STATUS_BADGE[status] ?? "light")}>
+                    {validity === "Annulled" ? "Anulada" : (SHIPMENT_STATUS_LABELS[status] ?? status)}
                   </Badge>
                 )}
                 {observation && (
@@ -626,6 +661,11 @@ export default function ShipmentForm({
                 {(originBranchLabel || destinationBranchLabel) && (
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     {originBranchLabel ?? "—"} &rarr; {destinationBranchLabel ?? "—"}
+                  </span>
+                )}
+                {collectedBy && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Cobrado por: <strong className="font-medium text-gray-700 dark:text-gray-300">{collectedBy}</strong>
                   </span>
                 )}
               </div>
@@ -662,6 +702,8 @@ export default function ShipmentForm({
               fecha={fecha}
               hora={hora}
               createdBy={createdBy}
+              validity={validity}
+              annulmentReason={annulmentReason}
             />
           </div>
           <div className="absolute top-[-9999px] left-[-9999px]">

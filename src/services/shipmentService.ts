@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, apiDownload, saveBlob } from './apiClient';
 import { getApiErrorMessage } from './apiErrorMessages';
 // `import type` a propósito: manifestService y driverTaskService importan
 // `ShipmentStatus` de acá. Al ser solo tipos, el import se borra al compilar y no
@@ -44,6 +44,42 @@ export type ShipmentStatus =
   | 'Delivered'
   | 'Rejected'
   | 'Returned';
+
+export type ShipmentValidity = 'Valid' | 'Annulled';
+
+export const SHIPMENT_VALIDITY_LABELS: Record<ShipmentValidity, string> = {
+  Valid: 'Válida',
+  Annulled: 'Anulada',
+};
+
+export const shipmentValidityLabel = (validity: ShipmentValidity | string): string =>
+  SHIPMENT_VALIDITY_LABELS[validity as ShipmentValidity] ?? validity;
+
+export interface ShipmentLockFields {
+  status: ShipmentStatus | string;
+  manifestId?: string | null;
+  validity?: ShipmentValidity | string;
+  // `true` cuando la guía entró a una caja que ya se cerró: su monto quedó
+  // congelado en ese arqueo y el backend rechaza editarla o anularla con
+  // `shipment.cashregister.closed`.
+  cashRegisterClosed?: boolean;
+}
+
+export const canAnnulShipment = (shipment: ShipmentLockFields): boolean =>
+  shipment.status === 'AtOriginBranch' &&
+  !shipment.manifestId &&
+  shipment.validity !== 'Annulled' &&
+  !shipment.cashRegisterClosed;
+
+/**
+ * Editar toca el precio, y el precio es lo que sumó el arqueo. Una vez que la
+ * caja de ese día cerró, el total quedó congelado contra los billetes que se
+ * contaron: si la guía se pudiera editar, el cierre de ayer dejaría de
+ * explicarse. Las guías que no cobraron nada no entraron al arqueo y siguen
+ * editables.
+ */
+export const canEditShipment = (shipment: ShipmentLockFields): boolean =>
+  !shipment.cashRegisterClosed;
 
 export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
   AtOriginBranch: 'En sucursal origen',
@@ -359,6 +395,14 @@ export interface Shipment {
   handoverToName?: string | null;
   handoverToDocument?: string | null;
   handoverAt?: string | null;
+
+  // ─── Anulación y Arqueo ────────────────────────────────────────────────────
+  validity?: ShipmentValidity;
+  annulmentReason?: string | null;
+  annulledAt?: string | null;
+  annulledBy?: string | null;
+  collectedBy?: string | null;
+  cashRegisterClosed?: boolean;
 }
 
 // Resumen de la tarea de reparto vigente que viene embebida en `GET /shipments/{id}`.
@@ -401,6 +445,12 @@ export interface ShipmentPaginatedItem {
   pickupOrderId?: string | null;
   calculatedPrice?: number | null;
   handoverAt?: string | null;
+  validity?: ShipmentValidity;
+  annulmentReason?: string | null;
+  annulledAt?: string | null;
+  annulledBy?: string | null;
+  collectedBy?: string | null;
+  cashRegisterClosed?: boolean;
 }
 
 /**
@@ -431,6 +481,7 @@ export interface ShipmentListFilters {
   dateFrom?: string;
   dateTo?: string;
   searchTerm?: string;
+  validity?: ShipmentValidity | '';
 }
 
 export interface ShipmentsPaginatedResponse {
@@ -629,6 +680,18 @@ export interface ChangeShipmentStatusResponse {
   deliveryComment?: string | null;
 }
 
+// ─── DTOs: Anulación de Guía ─────────────────────────────────────────────────
+
+export interface AnnulShipmentResponse {
+  id: string;
+  code: string;
+  validity: ShipmentValidity;
+  annulmentReason: string;
+  annulledAt: string;
+  annulledBy: string;
+  removedFromBillingAccount: boolean;
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export const shipmentService = {
@@ -649,7 +712,39 @@ export const shipmentService = {
     if (filters.unmanifested) query.append('unmanifested', 'true');
     if (filters.dateFrom) query.append('dateFrom', filters.dateFrom);
     if (filters.dateTo) query.append('dateTo', filters.dateTo);
+    if (filters.validity) query.append('validity', filters.validity);
     return apiClient<ShipmentsPaginatedResponse>(`/shipments?${query.toString()}`);
+  },
+
+  /**
+   * Baja el Excel del listado con los filtros que se estén viendo.
+   *
+   * Lo arma el backend. Antes se armaba acá con ExcelJS sobre
+   * `getShipments(1, 300, filters)`, y eso **cortaba en 300 filas sin avisar**:
+   * cualquier mes con más envíos bajaba un archivo incompleto que parecía
+   * completo. El endpoint no pagina y comparte el código de filtrado con
+   * `GET /shipments`, así que lo exportado coincide con lo que está en pantalla.
+   *
+   * `searchTerm` no viaja: no existe en `GET /shipments` ni en el export.
+   */
+  exportShipments: async (filters: ShipmentListFilters = {}): Promise<void> => {
+    const query = new URLSearchParams();
+    if (filters.supplierId) query.append('supplierId', filters.supplierId);
+    if (filters.originBranchOfficeId) query.append('originBranchOfficeId', filters.originBranchOfficeId);
+    if (filters.destinationBranchOfficeId) query.append('destinationBranchOfficeId', filters.destinationBranchOfficeId);
+    if (filters.status) query.append('status', filters.status);
+    if (filters.manifestId) query.append('manifestId', filters.manifestId);
+    if (filters.unmanifested) query.append('unmanifested', 'true');
+    if (filters.dateFrom) query.append('dateFrom', filters.dateFrom);
+    if (filters.dateTo) query.append('dateTo', filters.dateTo);
+    if (filters.validity) query.append('validity', filters.validity);
+
+    const queryString = query.toString();
+    const { blob, filename } = await apiDownload(
+      `/shipments/export${queryString ? `?${queryString}` : ''}`,
+      'envios.xlsx'
+    );
+    saveBlob(blob, filename);
   },
 
   getShipmentById: async (id: string): Promise<Shipment> => {
@@ -711,6 +806,21 @@ export const shipmentService = {
     return apiClient<HandoverShipmentResponse>(`/shipments/${id}/handover`, {
       method: 'PATCH',
       data,
+    });
+  },
+
+  /**
+   * Anula una guía que fue cargada mal o duplicada.
+   * Quema el correlativo y deja de contar en manifiestos y arqueo.
+   * Solo disponible en AtOriginBranch y sin manifiesto.
+   */
+  annulShipment: async (
+    id: string,
+    reason: string
+  ): Promise<AnnulShipmentResponse> => {
+    return apiClient<AnnulShipmentResponse>(`/shipments/${id}/annul`, {
+      method: 'POST',
+      data: { reason },
     });
   },
 };

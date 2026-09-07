@@ -236,6 +236,17 @@ export default function SporadicShipmentForm() {
         setResult(response);
         showToast("success", "Envío registrado", `Guía generada: ${response.code}`);
       } catch (error: unknown) {
+        // Sin caja abierta la sucursal no está atendiendo y el backend rechaza
+        // toda emisión. No es un error del formulario —los datos están bien—,
+        // así que se dice qué falta hacer en vez de un "no se pudo" a secas.
+        if ((error as { errorKey?: string })?.errorKey === "cashregister.session.notopen") {
+          showToast(
+            "warning",
+            "No hay caja abierta",
+            "Abre la caja de tu sucursal para poder emitir guías. Tus datos quedan cargados."
+          );
+          return;
+        }
         showToast("error", "Error", getShipmentErrorMessage(error, "No se pudo registrar el envío."));
       }
     });

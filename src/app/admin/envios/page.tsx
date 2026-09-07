@@ -9,13 +9,11 @@ import {
   ShipmentListFilters,
   ShipmentStatus,
   SHIPMENT_STATUS_FILTER_OPTIONS,
-  SHIPMENT_STATUS_LABELS,
+  ShipmentValidity,
 } from "@/services/shipmentService";
 import { orderDeliveryService } from "@/services/orderDeliveryService";
+import { getApiErrorMessage } from "@/services/apiErrorMessages";
 import AdminShipmentsTable from "@/components/admin/AdminShipmentsTable";
-import { formatDate, formatTime } from "@/utils/datetime";
-import { paymentTypeLabel, paymentMethodLabel } from "@/services/logisticsEnums";
-import ExcelJS from "exceljs";
 import Tabs, { TabItem } from "@/components/ui/tabs/Tabs";
 import ShipmentDateRangeFilter, {
   DateRange,
@@ -47,12 +45,14 @@ export default function AdminEnviosPage() {
 
   const [bandeja, setBandeja] = useState<Bandeja>("outgoing");
   const [status, setStatus] = useState<ShipmentStatus | "">("");
+  const [validity, setValidity] = useState<ShipmentValidity | "">("");
   const [dateRange, setDateRange] = useState<DateRange>(() => lastWeekRange());
   const [exporting, setExporting] = useState(false);
 
   const filters: ShipmentListFilters = useMemo(() => {
     const base: ShipmentListFilters = {
       ...(status ? { status } : {}),
+      ...(validity ? { validity } : {}),
       ...(dateRange.from ? { dateFrom: dateRange.from } : {}),
       ...(dateRange.to ? { dateTo: dateRange.to } : {}),
     };
@@ -60,7 +60,7 @@ export default function AdminEnviosPage() {
     return bandeja === "outgoing"
       ? { ...base, originBranchOfficeId: branchOfficeId }
       : { ...base, destinationBranchOfficeId: branchOfficeId };
-  }, [bandeja, status, dateRange.from, dateRange.to, branchOfficeId]);
+  }, [bandeja, status, validity, dateRange.from, dateRange.to, branchOfficeId]);
 
   const fetchShipments = useCallback(async () => {
     setLoading(true);
@@ -114,82 +114,22 @@ export default function AdminEnviosPage() {
     ...SHIPMENT_STATUS_FILTER_OPTIONS,
   ];
 
+  const validityTabs: TabItem[] = [
+    { value: "", label: "Todas" },
+    { value: "Valid", label: "Solo válidas" },
+    { value: "Annulled", label: "Solo anuladas" },
+  ];
+
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const res = await shipmentService.getShipments(1, 300, filters);
-      const data = res.data;
-      if (data.length === 0) {
-        alert("No hay datos para exportar con los filtros actuales.");
-        return;
-      }
-      
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Envíos');
-
-      // Define columns
-      worksheet.columns = [
-        { header: 'Fecha', key: 'fecha', width: 12 },
-        { header: 'Hora', key: 'hora', width: 10 },
-        { header: 'Guía', key: 'guia', width: 15 },
-        { header: 'Cliente', key: 'cliente', width: 30 },
-        { header: 'Origen', key: 'origen', width: 20 },
-        { header: 'Destino', key: 'destino', width: 20 },
-        { header: 'Estado', key: 'estado', width: 18 },
-        { header: 'Tipo de Pago', key: 'tipo_pago', width: 15 },
-        { header: 'Medio de Pago', key: 'medio_pago', width: 15 },
-        { header: 'Peso (kg)', key: 'peso', width: 12 },
-        { header: 'Costo (Bs)', key: 'costo', width: 15 }
-      ];
-
-      // Style headers
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF1F2937' } // dark gray background
-      };
-      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-      
-      // Add data
-      data.forEach(s => {
-        worksheet.addRow({
-          fecha: formatDate(s.createdAt),
-          hora: formatTime(s.createdAt),
-          guia: s.code,
-          cliente: s.clientFullName,
-          origen: s.originBranchOfficeCode || "-",
-          destino: s.destinationBranchOfficeCode || "-",
-          estado: SHIPMENT_STATUS_LABELS[s.status] || s.status,
-          tipo_pago: s.paymentType ? paymentTypeLabel(s.paymentType) : "-",
-          medio_pago: s.paymentMethod ? paymentMethodLabel(s.paymentMethod) : "-",
-          peso: s.totalWeight,
-          costo: s.shippingPrice
-        });
-      });
-
-      // Style data rows
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-          row.alignment = { vertical: 'middle', horizontal: 'left' };
-          row.getCell('peso').alignment = { vertical: 'middle', horizontal: 'right' };
-          row.getCell('costo').alignment = { vertical: 'middle', horizontal: 'right' };
-        }
-      });
-      
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Envios_${new Date().toISOString().split('T')[0]}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // El archivo lo arma el backend con los mismos filtros que el listado.
+      // Antes se armaba acá sobre `getShipments(1, 300, filters)`: cortaba en
+      // 300 filas sin avisar y bajaba un Excel incompleto que parecía completo.
+      await shipmentService.exportShipments(filters);
     } catch (err) {
       console.error("Error al exportar:", err);
-      alert("Ocurrió un error al generar el archivo.");
+      alert(getApiErrorMessage(err, "Ocurrió un error al generar el archivo."));
     } finally {
       setExporting(false);
     }
@@ -279,36 +219,50 @@ export default function AdminEnviosPage() {
             )}
           </button>
         </div>
-        <div className="mb-6 flex flex-col xl:flex-row xl:items-end gap-5 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800">
-          <div className="flex-1">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Bandeja de Sucursal
-            </p>
-            <Tabs
-              items={bandejaTabs}
-              value={bandeja}
-              onChange={(value) => setBandeja(value as Bandeja)}
-            />
+        <div className="mb-6 flex flex-col gap-4 p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="flex flex-col xl:flex-row xl:items-end gap-5">
+            <div className="flex-1">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Bandeja de Sucursal
+              </p>
+              <Tabs
+                items={bandejaTabs}
+                value={bandeja}
+                onChange={(value) => setBandeja(value as Bandeja)}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Estado de Envío
+              </p>
+              <Tabs
+                items={statusTabs}
+                value={status}
+                onChange={(value) => setStatus(value as ShipmentStatus | "")}
+              />
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Estado de Envío
-            </p>
-            <Tabs
-              items={statusTabs}
-              value={status}
-              onChange={(value) => setStatus(value as ShipmentStatus | "")}
-            />
-          </div>
-          <div className="xl:w-72">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Rango de Fechas
-            </p>
-            <ShipmentDateRangeFilter
-              className="w-full"
-              value={dateRange}
-              onChange={setDateRange}
-            />
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5 pt-3 border-t border-gray-200/60 dark:border-gray-700/60">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Validez de Guía
+              </p>
+              <Tabs
+                items={validityTabs}
+                value={validity}
+                onChange={(value) => setValidity(value as ShipmentValidity | "")}
+              />
+            </div>
+            <div className="sm:w-72 sm:ml-auto">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Rango de Fechas
+              </p>
+              <ShipmentDateRangeFilter
+                className="w-full"
+                value={dateRange}
+                onChange={setDateRange}
+              />
+            </div>
           </div>
         </div>
         <AdminShipmentsTable
