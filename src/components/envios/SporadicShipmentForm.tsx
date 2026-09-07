@@ -32,6 +32,7 @@ import PriceOverrideField, {
 } from "@/components/pricing/PriceOverrideField";
 import { useAuth } from "@/context/AuthContext";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
+import { formatDate, formatTime } from "@/utils/datetime";
 
 import SporadicShipmentSuccess from "./esporadico/SporadicShipmentSuccess";
 import ShipmentWaybill from "./ShipmentWaybill";
@@ -56,7 +57,8 @@ const emptyLine = (): SporadicLineFormState => ({
 export default function SporadicShipmentForm() {
   const { showToast } = useToast();
   // El superadmin es global: elige desde qué sucursal atiende el mostrador.
-  const { isSuperAdminUser, branchOfficeLabel } = useAuth();
+  const { isSuperAdminUser, branchOfficeLabel, branchOfficeCity, branchOfficeCode } =
+    useAuth();
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
   const [result, setResult] = useState<SporadicShipmentResponse | null>(null);
@@ -242,13 +244,24 @@ export default function SporadicShipmentForm() {
   };
 
   if (result) {
-    // Obtenemos la dirección de la sucursal de origen si fue seleccionada
+    // La guía imprime la sucursal de cada punta, no el departamento: "Beni" no
+    // le dice al que recibe si la carga va a Trinidad o a Riberalta.
+    //
+    // El origen solo está en `originBranchOfficeId` cuando lo eligió un
+    // superadmin; al admin de mostrador se le asigna su propia sucursal y el
+    // formulario nunca la guarda en el estado, así que sale de la sesión.
     const originBranch = branchOffices.find((b) => b.id === originBranchOfficeId);
+    const destinationBranch = branchOffices.find(
+      (b) => b.id === destinationBranchOfficeId
+    );
+    const originBranchName =
+      originBranch?.city ?? originBranch?.code ?? branchOfficeCity ?? branchOfficeCode;
+    const destinationBranchName = destinationBranch?.city ?? destinationBranch?.code;
     
-    // Obtenemos la fecha actual para la impresión
+    // Fecha de emisión en hora de Bolivia, no la del navegador.
     const today = new Date();
-    const fechaStr = today.toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const horaStr = today.toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const fechaStr = formatDate(today);
+    const horaStr = formatTime(today);
 
     return (
       <SporadicShipmentSuccess
@@ -264,6 +277,8 @@ export default function SporadicShipmentForm() {
             originDepartment={originDepartment || ""}
             originBranchAddress={originBranch?.address || null}
             destinationDepartment={destinationDepartment}
+            originBranchName={originBranchName}
+            destinationBranchName={destinationBranchName}
             senderFullName={senderFullName}
             senderPhone={senderPhone}
             senderAddress=""

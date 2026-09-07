@@ -69,6 +69,14 @@ interface ShipmentWaybillProps {
   originDepartment: string;
   originBranchAddress?: string | null;
   destinationDepartment: string;
+  /**
+   * Sucursal de cada punta. Es lo que va en la ruta impresa: el departamento
+   * solo dice "Beni" cuando la carga puede ir a Trinidad, Riberalta o
+   * Guayaramerín, y quien recibe el ticket necesita saber a cuál. El
+   * departamento queda de respaldo para los envíos que no traen sucursal.
+   */
+  originBranchName?: string | null;
+  destinationBranchName?: string | null;
   senderFullName: string;
   senderPhone: string;
   senderAddress: string;
@@ -214,6 +222,8 @@ export default function ShipmentWaybill({
   originDepartment,
   originBranchAddress,
   destinationDepartment,
+  originBranchName,
+  destinationBranchName,
   senderFullName,
   senderPhone,
   senderAddress,
@@ -235,6 +245,8 @@ export default function ShipmentWaybill({
   createdBy,
 }: ShipmentWaybillProps) {
   const isSporadic = isSporadicWaybill(code, orderType);
+  // Sin dato la entrega se asume a domicilio, igual que en `shipmentTypeCode`.
+  const isDoorDelivery = (destinationPointType ?? "Door") === "Door";
 
   const totalWeight = lines.reduce((acc, l) => acc + (l.weight || 0), 0);
   const totalShippingCost = lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0);
@@ -302,19 +314,36 @@ export default function ShipmentWaybill({
         <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={clientPhone} />
         <Field label="Email" value="-" />
-        {!isSporadic && (
+        {/*
+          La ubicación va debajo del correo en las dos variantes. En la
+          corporativa siempre; en la esporádica solo si la entrega es a
+          domicilio —si el cliente retira en mostrador no hay dirección que
+          imprimir— y sale la dirección exacta, no el enlace de mapa: la URL no
+          entra en 8 cm de ancho y al repartidor le sirve la calle.
+        */}
+        {!isSporadic ? (
           <>
             <Field label="Ubicacion" value={destinationLocationUrl || clientAddress} />
             <Field label="Observacion" value={destinationAddressReference} />
           </>
+        ) : (
+          isDoorDelivery && (
+            <>
+              <Field label="Ubicacion" value={clientAddress} />
+              {destinationAddressReference && (
+                <Field label="Referencia" value={destinationAddressReference} />
+              )}
+            </>
+          )
         )}
       </div>
 
       <Divider />
 
-      {/* Ruta */}
+      {/* Ruta: sucursal a sucursal, con el departamento solo como respaldo */}
       <p className="text-center text-[11px] font-black uppercase text-black">
-        {originDepartment || "—"} &rarr; {destinationDepartment || "—"}
+        {originBranchName || originDepartment || "—"} &rarr;{" "}
+        {destinationBranchName || destinationDepartment || "—"}
       </p>
 
       <Divider />

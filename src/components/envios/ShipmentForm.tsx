@@ -53,6 +53,7 @@ import PriceOverrideField, {
 } from "@/components/pricing/PriceOverrideField";
 import { useAuth } from "@/context/AuthContext";
 import ShipmentWaybill from "./ShipmentWaybill";
+import { printWaybill } from "./printWaybill";
 import ShipmentLetterPdf from "./ShipmentLetterPdf";
 import { exportElementToPDF } from "@/utils/pdfExport";
 import { formatDate, formatTime } from "@/utils/datetime";
@@ -166,6 +167,11 @@ export default function ShipmentForm({
   // Multisucursal / estado (solo lectura, viene del backend)
   const [originBranchLabel, setOriginBranchLabel] = useState<string | null>(null);
   const [destinationBranchLabel, setDestinationBranchLabel] = useState<string | null>(null);
+  // La guía imprime solo la ciudad de la sucursal, sin el código: en el ticket
+  // lo que importa es a qué sucursal llega la carga ("El Alto", "Riberalta"),
+  // no el departamento —que se repite entre varias— ni el código interno.
+  const [originBranchCity, setOriginBranchCity] = useState<string | null>(null);
+  const [destinationBranchCity, setDestinationBranchCity] = useState<string | null>(null);
   const [status, setStatus] = useState<ShipmentStatus | null>(null);
   const [observation, setObservation] = useState<ShipmentObservation | null>(null);
   const [deliveryComment, setDeliveryComment] = useState<string | null>(null);
@@ -286,6 +292,12 @@ export default function ShipmentForm({
         shipment.destinationBranchOfficeCode
           ? [shipment.destinationBranchOfficeCode, shipment.destinationBranchOfficeCity].filter(Boolean).join(" — ")
           : null
+      );
+      setOriginBranchCity(
+        shipment.originBranchOfficeCity || shipment.originBranchOfficeCode || null
+      );
+      setDestinationBranchCity(
+        shipment.destinationBranchOfficeCity || shipment.destinationBranchOfficeCode || null
       );
       setStatus(shipment.status ?? null);
       setObservation(shipment.observation ?? null);
@@ -492,56 +504,10 @@ export default function ShipmentForm({
   const handlePrint = () => {
     setExporting("print");
     try {
-      if (!waybillRef.current) return;
-      const printWindow = window.open("", "_blank", "width=800,height=900");
-      if (!printWindow) {
+      const result = printWaybill(waybillRef.current, { title: guia || "envío" });
+      if (result === "blocked") {
         showToast("error", "Error", "El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.");
-        return;
       }
-
-      // Obtener los estilos de Tailwind actuales
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(style => style.outerHTML)
-        .join('\n');
-
-      const waybillHtml = waybillRef.current.outerHTML;
-
-      printWindow.document.write(`<!DOCTYPE html>
-        <html>
-          <head>
-            <title>Guía ${guia || "envío"}</title>
-            ${styles}
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              @page {
-                size: 80mm 200mm;
-                margin: 0;
-              }
-              html, body {
-                width: 80mm;
-                background: white;
-                margin: 0;
-                padding: 0;
-              }
-              /* Forzar impresión de fondos (necesario para bg-black etc en Tailwind) */
-              * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .page-break { page-break-after: always; }
-            </style>
-          </head>
-          <body onload="setTimeout(function() { window.print(); window.close(); }, 500)">
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-          </body>
-        </html>`);
-      printWindow.document.close();
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "No se pudo generar la vista de impresión.");
@@ -643,6 +609,8 @@ export default function ShipmentForm({
               originDepartment={orderInfo?.originDepartment ?? ""}
               originBranchAddress={(orderInfo as any)?.originBranchOfficeAddress || (orderInfo as any)?.originAddress || null}
               destinationDepartment={orderInfo?.destinationDepartment ?? ""}
+              originBranchName={originBranchCity}
+              destinationBranchName={destinationBranchCity}
               senderFullName={orderInfo?.senderFullName ?? ""}
               senderPhone={orderInfo?.senderPhone ?? ""}
               senderAddress={orderInfo?.senderAddress ?? ""}

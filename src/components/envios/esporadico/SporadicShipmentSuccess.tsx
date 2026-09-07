@@ -6,6 +6,7 @@ import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
 import { CheckCircleIcon } from "@/icons";
 import { SporadicShipmentResponse } from "@/services/shipmentService";
+import { printWaybill } from "../printWaybill";
 
 interface SporadicShipmentSuccessProps {
   result: SporadicShipmentResponse;
@@ -23,57 +24,10 @@ export default function SporadicShipmentSuccess({
 
   const handlePrint = () => {
     try {
-      if (!waybillRef.current) return;
-      const printWindow = window.open("", "_blank", "width=800,height=900");
-      if (!printWindow) {
+      const printed = printWaybill(waybillRef.current, { title: result.code || "envío" });
+      if (printed === "blocked") {
         showToast("error", "Error", "El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.");
-        return;
       }
-
-      // Obtener los estilos de Tailwind actuales
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map((style) => style.outerHTML)
-        .join("\n");
-
-      // Tomamos el innerHTML para no incluir el contenedor hidden de esta pantalla
-      const waybillHtml = waybillRef.current.innerHTML;
-
-      printWindow.document.write(`<!DOCTYPE html>
-        <html>
-          <head>
-            <title>Guía ${result.code || "envío"}</title>
-            ${styles}
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              @page {
-                size: 80mm 200mm;
-                margin: 0;
-              }
-              html, body {
-                width: 80mm;
-                background: white;
-                margin: 0;
-                padding: 0;
-              }
-              /* Forzar impresión de fondos */
-              * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .page-break { page-break-after: always; }
-            </style>
-          </head>
-          <body onload="setTimeout(function() { window.print(); window.close(); }, 500)">
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-            <div class="page-break"></div>
-            ${waybillHtml}
-          </body>
-        </html>`);
-      printWindow.document.close();
     } catch (err) {
       console.error(err);
       showToast("error", "Error", "Hubo un error al preparar la impresión.");
@@ -148,7 +102,7 @@ export default function SporadicShipmentSuccess({
       </div>
 
       {waybillElement && (
-        <div ref={waybillRef} className="hidden print:hidden">
+        <div ref={waybillRef} className="hidden">
           {waybillElement}
         </div>
       )}
