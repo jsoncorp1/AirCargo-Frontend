@@ -57,7 +57,7 @@ const emptyLine = (): SporadicLineFormState => ({
 export default function SporadicShipmentForm() {
   const { showToast } = useToast();
   // El superadmin es global: elige desde qué sucursal atiende el mostrador.
-  const { isSuperAdminUser, branchOfficeLabel, branchOfficeCity, branchOfficeCode } =
+  const { user, isSuperAdminUser, branchOfficeLabel, branchOfficeCity, branchOfficeCode } =
     useAuth();
   const { pending: submitting, run: runSubmit } = useSubmitLock();
 
@@ -297,7 +297,11 @@ export default function SporadicShipmentForm() {
             lines={result.details}
             fecha={fechaStr}
             hora={horaStr}
-            createdBy="Sistema AirCargo"
+            createdBy={
+              // El correo de quien emite, igual que sale al reimprimir la guía
+              // desde el listado: la autoría se muestra siempre por correo.
+              user?.email ?? "Sistema AirCargo"
+            }
           />
         }
       />
