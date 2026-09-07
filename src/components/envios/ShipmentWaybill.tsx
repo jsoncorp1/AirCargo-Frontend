@@ -248,6 +248,24 @@ export default function ShipmentWaybill({
   // Sin dato la entrega se asume a domicilio, igual que en `shipmentTypeCode`.
   const isDoorDelivery = (destinationPointType ?? "Door") === "Door";
 
+  /**
+   * El esporádico de mostrador que no carga artículos manda UNA línea armada
+   * con la descripción y la cantidad de bultos (lo hace `SporadicShipmentForm`
+   * para que la orden no viaje sin detalle). Impresa, esa línea repite palabra
+   * por palabra el cuadro de piezas de más arriba.
+   *
+   * En la corporativa el detalle igual vale aunque coincida, porque lleva el
+   * precio por artículo; en la esporádica no lleva precio, así que un detalle
+   * que repite las piezas no agrega NADA y gasta renglones de un ticket que
+   * mide 20 cm justos.
+   */
+  const detailEchoesPackages =
+    lines.length === 1 &&
+    lines[0].quantity === packageCount &&
+    lines[0].articleName.trim().toLowerCase() ===
+      packageDescription.trim().toLowerCase();
+  const showDetail = lines.length > 0 && !(isSporadic && detailEchoesPackages);
+
   const totalWeight = lines.reduce((acc, l) => acc + (l.weight || 0), 0);
   const totalShippingCost = lines.reduce((acc, l) => acc + (l.shippingCost || 0), 0);
   const totalGoods = lines.reduce(
@@ -366,34 +384,37 @@ export default function ShipmentWaybill({
         </tbody>
       </table>
 
-      <Divider />
-
       {/* Detalle: el corporativo lleva el precio de cada artículo, el esporádico no */}
-      <p className="text-[10px] font-bold uppercase text-black">Detalle de la guia</p>
-      <table className="mt-1 w-full text-left text-[10px] text-black">
-        <thead>
-          <tr className="border-b border-black">
-            <th className="w-[18%] pb-0.5 font-bold uppercase">Cant</th>
-            <th className="pb-0.5 font-bold uppercase">Descripcion</th>
-            {!isSporadic && (
-              <th className="w-[26%] pb-0.5 text-right font-bold uppercase">Precio</th>
-            )}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-black/20">
-          {lines.map((l, i) => (
-            <tr key={i}>
-              <td className="py-0.5 align-top font-bold">{l.quantity}</td>
-              <td className="py-0.5 pr-1 font-bold leading-snug">{l.articleName}</td>
-              {!isSporadic && (
-                <td className="py-0.5 text-right align-top font-bold">
-                  {((l.unitPrice || 0) * (l.quantity || 0)).toFixed(2)}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {showDetail && (
+        <>
+          <Divider />
+          <p className="text-[10px] font-bold uppercase text-black">Detalle de la guia</p>
+          <table className="mt-1 w-full text-left text-[10px] text-black">
+            <thead>
+              <tr className="border-b border-black">
+                <th className="w-[18%] pb-0.5 font-bold uppercase">Cant</th>
+                <th className="pb-0.5 font-bold uppercase">Descripcion</th>
+                {!isSporadic && (
+                  <th className="w-[26%] pb-0.5 text-right font-bold uppercase">Precio</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/20">
+              {lines.map((l, i) => (
+                <tr key={i}>
+                  <td className="py-0.5 align-top font-bold">{l.quantity}</td>
+                  <td className="py-0.5 pr-1 font-bold leading-snug">{l.articleName}</td>
+                  {!isSporadic && (
+                    <td className="py-0.5 text-right align-top font-bold">
+                      {((l.unitPrice || 0) * (l.quantity || 0)).toFixed(2)}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
       <Divider />
 
