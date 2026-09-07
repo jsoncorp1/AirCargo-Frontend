@@ -57,6 +57,23 @@ export function printWaybill(
         <base href="${document.baseURI}">
         ${styles}
         <style>
+          /*
+            OJO con este reset: Tailwind v4 publica sus utilidades dentro de
+            \`@layer\`, y una regla sin capa le gana a una con capa aunque su
+            especificidad sea menor. Es decir que este \`*\` pisa TODOS los
+            márgenes y padding de Tailwind dentro de la guía —\`my-1.5\`, \`mt-6\`,
+            \`pt-4\`, hasta el \`mt-auto\` del pie— y por eso lo impreso no se
+            espacia igual que lo que se ve en pantalla.
+
+            Se deja así a propósito: el formato del ticket se ajustó a mano
+            sobre este comportamiento y hoy entra justo en los 20 cm; sacarlo
+            devuelve todos los márgenes de golpe y la guía se va a 277 mm, o
+            sea dos hojas por copia. Si algún día se corrige, hay que rehacer el
+            alto de toda la guía junto con el cambio.
+
+            Consecuencia práctica: el espaciado que tenga que verse en el papel
+            va en \`style\` en línea, no en una clase.
+          */
           * { margin: 0; padding: 0; box-sizing: border-box; }
           @page {
             size: 80mm 200mm;

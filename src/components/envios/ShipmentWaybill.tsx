@@ -135,9 +135,20 @@ function Row({ label, value, highlight = false }: { label: string; value: React.
   );
 }
 
-/** Renglón punteado para completar a mano (dirección de entrega, condiciones). */
+/**
+ * Renglón para completar a mano (dirección de entrega, condiciones).
+ *
+ * Va rayado, igual que `Divider`: con dos estilos de línea distintos conviviendo
+ * en 8 cm de ancho, el punteado se leía como una banda sucia debajo del QR en
+ * vez de como un renglón para escribir.
+ */
 function BlankLine() {
-  return <div className="mt-2 border-b border-dotted border-black" />;
+  // La separación va en línea: en la ventana de impresión las clases de margen
+  // de Tailwind no llegan (ver el reset en `printWaybill.ts`), y sin ella los
+  // renglones se apilaban uno encima de otro formando una banda ilegible.
+  return (
+    <div className="border-b border-dashed border-black" style={{ marginTop: "11px" }} />
+  );
 }
 
 function SignatureLine({ label }: { label: string }) {
@@ -301,15 +312,19 @@ export default function ShipmentWaybill({
         flexDirection: "column",
       }}
     >
-      {/* Encabezado: marca, callcenter y dirección de la sucursal que emite */}
+      {/* Encabezado: marca y teléfono del callcenter */}
       <div className="flex flex-col items-center">
         <img
           src="/images/logo/logoaircargoazul.png"
           alt="AirCargo"
           style={{
-            height: "34px",
+            // 20% más grande que el original (34px / 150px). El alto va en el
+            // atributo `style` y no en una clase de Tailwind a propósito: la
+            // ventana de impresión inyecta un reset que pisa las utilidades, y
+            // el estilo en línea es lo único que llega intacto al papel.
+            height: "40.8px",
             width: "auto",
-            maxWidth: "150px",
+            maxWidth: "180px",
             filter: "grayscale(100%) contrast(1.25)",
           }}
         />
@@ -457,7 +472,10 @@ export default function ShipmentWaybill({
           <div className="shrink-0 mb-2">
             <PlaceholderQr />
           </div>
-          <div className="w-full">
+          {/* El margen de abajo va en línea: sin él el último renglón queda
+              pegado al separador que sigue y los dos se leen como una raya
+              doble más gruesa que el resto. */}
+          <div className="w-full" style={{ marginBottom: "8px" }}>
             <BlankLine />
             <BlankLine />
             <BlankLine />
@@ -492,7 +510,13 @@ export default function ShipmentWaybill({
         </span>
         <span className="flex-1 border-b border-black" />
       </div>
-      <div className="mt-2 flex items-end gap-1">
+      {/* El margen de abajo va en línea (las clases no llegan al papel): sin ese
+          aire el separador casi tocaba la raya sobre la que se escribe la hora
+          y las dos líneas se leían como una sola. */}
+      <div
+        className="flex items-end gap-1"
+        style={{ marginTop: "10px", marginBottom: "12px" }}
+      >
         <span className="whitespace-nowrap text-[10px] font-bold text-black">
           Hora de entrega:
         </span>
