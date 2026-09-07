@@ -15,13 +15,13 @@ const CALLCENTER_PHONE = "67723108";
 const SITE_URL = "www.aircargo.com";
 
 /**
- * Marca de los campos que el formato de guía pide pero el backend TODAVÍA NO
- * expone: Nit/Ci del remitente, Nit/Ci y correo del destinatario, valor
- * declarado del esporádico y la dirección de la sucursal que emite.
+ * Marca para un campo que el formato pide y el backend todavía no expone: se
+ * imprime la etiqueta con esta marca en vez de dejar el renglón vacío, que se
+ * confunde con un dato que el operador no cargó.
  *
- * Se imprime la etiqueta con esta marca en vez de dejar el renglón vacío para
- * que se vea de un vistazo qué falta cablear cuando el API los agregue: un
- * renglón en blanco se confunde con un dato que el operador no cargó.
+ * Hoy no lo usa ningún renglón. Los que estaban así —Nit/Ci del remitente,
+ * Nit/Ci y correo del destinatario— se sacaron de la guía: salían siempre en
+ * "-" y esos 20 cm de ticket no dan para renglones que no dicen nada.
  */
 const FALTA = "FALTA";
 
@@ -303,7 +303,6 @@ export default function ShipmentWaybill({
       {/* Remitente */}
       <div>
         <Field label="Remitente" value={senderFullName} boldValue />
-        <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={senderPhone} />
         {senderAddress && <Field label="Direccion" value={senderAddress} />}
       </div>
@@ -311,12 +310,10 @@ export default function ShipmentWaybill({
       {/* Destinatario */}
       <div className="mt-2">
         <Field label="Destinatario" value={clientFullName} boldValue />
-        <Field label="Nit/Ci" value="-" />
         <Field label="Telefono" value={clientPhone} />
-        <Field label="Email" value="-" />
         {/*
-          La ubicación va debajo del correo en las dos variantes. En la
-          corporativa siempre; en la esporádica solo si la entrega es a
+          La ubicación cierra los datos del destinatario en las dos variantes.
+          En la corporativa siempre; en la esporádica solo si la entrega es a
           domicilio —si el cliente retira en mostrador no hay dirección que
           imprimir— y sale la dirección exacta, no el enlace de mapa: la URL no
           entra en 8 cm de ancho y al repartidor le sirve la calle.
